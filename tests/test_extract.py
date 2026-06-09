@@ -72,6 +72,30 @@ def test_mention_context_returns_none_when_absent():
     assert mention_context(MOCK_NOT_MENTIONED, DESIGNER + SALON) is None
 
 
+def test_competitors_no_leading_junk():
+    # "추천됩니다. 라온살롱" 에서 "다 라온살롱" 처럼 앞 단어가 딸려오면 안 됨
+    comps = extract_competitors(MOCK_NOT_MENTIONED, DESIGNER + SALON)
+    assert "라온살롱" in comps
+    assert "청담스타일헤어" in comps
+    assert all(" " not in c for c in comps)  # 공백 섞인 후보 없음
+
+
+def test_competitors_dedup():
+    text = "미미헤어 추천. 또 미미헤어 가 좋고 라온살롱 도 있어요."
+    comps = extract_competitors(text, DESIGNER + SALON)
+    assert comps.count("미미헤어") == 1
+
+
+def test_citations_strip_trailing_punctuation():
+    from extract import extract_citations
+
+    text = "후기는 https://example.com/review, 그리고 (https://naver.com/x)."
+    cites = extract_citations(text, [])
+    assert "https://example.com/review" in cites
+    assert "https://naver.com/x" in cites
+    assert all(not c.endswith((",", ")", ".")) for c in cites)
+
+
 if __name__ == "__main__":
     import pytest
 

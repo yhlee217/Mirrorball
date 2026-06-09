@@ -119,7 +119,7 @@ def generate_report(
     # 출력이 길어질 수 있어 스트리밍 + get_final_message (타임아웃 보호)
     with client.messages.stream(
         model=model,
-        max_tokens=8000,
+        max_tokens=16000,
         thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
     ) as stream:

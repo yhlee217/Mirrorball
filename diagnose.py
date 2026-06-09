@@ -71,8 +71,13 @@ async def run_all(config: dict, models: dict) -> list[dict]:
     ]
 
     async def worker(question: str, engine: str, idx: int) -> dict:
-        async with sem:
-            result = await engines.call_engine(engine, question, models)
+        try:
+            async with sem:
+                result = await engines.call_engine(engine, question, models)
+        except Exception as exc:  # 한 호출의 사고가 전체 실행/저장을 막지 않게
+            result = {"text": "", "citations": [], "model": None,
+                      "error": f"{type(exc).__name__}: {exc}"}
+
         record = {
             "question": question,
             "engine": engine,
@@ -85,11 +90,15 @@ async def run_all(config: dict, models: dict) -> list[dict]:
             "extraction": None,
         }
         if not result.get("error"):
-            record["extraction"] = extract.analyze(
-                result["text"], designer_names, salon_names, result["citations"]
-            )
-            done = "○" if record["extraction"]["mentioned"] else "✕"
-            print(f"  [{done}] {engine:<10} | {question[:30]}")
+            try:
+                record["extraction"] = extract.analyze(
+                    result["text"], designer_names, salon_names, result["citations"]
+                )
+                done = "○" if record["extraction"]["mentioned"] else "✕"
+                print(f"  [{done}] {engine:<10} | {question[:30]}")
+            except Exception as exc:  # 추출 실패도 에러로 기록하고 계속
+                record["error"] = f"extract: {type(exc).__name__}: {exc}"
+                print(f"  [!] {engine:<10} | {question[:30]} — {record['error']}")
         else:
             print(f"  [!] {engine:<10} | {question[:30]} — {result['error']}")
         return record
@@ -97,7 +106,9 @@ async def run_all(config: dict, models: dict) -> list[dict]:
     return await asyncio.gather(*(worker(q, e, i) for q, e, i in jobs))
 
 
-def save_raw(run_dir: Path, config: dict, records: list[dict], models: dict) -> Path:
+def save_raw(
+    run_dir: Path, config: dict, records: list[dict], models: dict
+) -> tuple[Path, dict]:
     run_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "designer": config["designer"],
@@ -141,7 +152,7 @@ def main() -> None:
     config_path = sys.argv[1]
     config = load_config(config_path)
     slug = slug_from_path(config_path)
-    models = engines.DEFAULT_MODELS
+    models = engines.resolve_models()  # .env 로드 이후 호출되어야 오버라이드 반영
 
     if not confirm_cost(len(config["questions"]), int(config["sampling"])):
         print("취소했습니다.")
