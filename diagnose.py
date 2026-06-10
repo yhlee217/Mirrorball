@@ -4,9 +4,11 @@
 사용법:
     python diagnose.py targets/kimminji.yaml
 
-질문 × 엔진(3) × sampling 만큼 3개 AI 엔진에 질의하고, 각 답변에서
-디자이너/매장 언급·맥락·인용을 추출해 raw.json 으로 저장한 뒤,
-Anthropic API 로 고객용 마크다운 리포트(report.md)를 만든다.
+키가 설정된 AI 엔진(들)에 질문을 질의하고, 각 답변에서 디자이너/매장
+언급·맥락·인용을 추출해 raw.json 으로 저장한 뒤, REPORT_PROVIDER 로
+고객용 마크다운 리포트(report.md)를 만든다.
+
+초기 비용 0 원칙: 키 있는 provider만 자동 활성화. 활성 엔진 0개면 종료.
 """
 
 from __future__ import annotations
@@ -46,9 +48,27 @@ def _names(node: dict) -> list[str]:
     return names
 
 
-def confirm_cost(n_questions: int, sampling: int) -> bool:
-    total = n_questions * 3 * sampling
-    print(f"\n질문 {n_questions} × 엔진 3 × 샘플 {sampling} = 총 {total}회 호출 예정.")
+def resolve_report_provider(active: list[str]) -> str:
+    """REPORT_PROVIDER(기본 gemini) 검증. 미지원/키없음이면 명확히 종료."""
+    import os
+
+    provider = (os.getenv("REPORT_PROVIDER") or "gemini").strip()
+    if provider not in engines.PROVIDERS:
+        raise SystemExit(
+            f"REPORT_PROVIDER='{provider}' 는 지원하지 않습니다. "
+            f"({', '.join(engines.PROVIDERS)} 중 하나)"
+        )
+    if provider not in active:
+        raise SystemExit(
+            f"REPORT_PROVIDER={provider} 인데 {engines.KEY_ENV[provider]} 가 없습니다. "
+            "키를 설정하거나 활성 엔진 중 하나로 REPORT_PROVIDER 를 바꾸세요."
+        )
+    return provider
+
+
+def confirm_cost(n_questions: int, n_engines: int, sampling: int) -> bool:
+    total = n_questions * n_engines * sampling
+    print(f"\n질문 {n_questions} × 엔진 {n_engines} × 샘플 {sampling} = 총 {total}회 호출 예정.")
     try:
         ans = input("진행할까요? [y/N] ").strip().lower()
     except EOFError:
@@ -56,8 +76,8 @@ def confirm_cost(n_questions: int, sampling: int) -> bool:
     return ans in ("y", "yes")
 
 
-async def run_all(config: dict, models: dict) -> list[dict]:
-    """질문 × 엔진 × sampling 을 동시 3개 세마포어로 병렬 질의 + 추출."""
+async def run_all(config: dict, models: dict, engines_list: list[str]) -> list[dict]:
+    """질문 × (활성 엔진) × sampling 을 동시 3개 세마포어로 병렬 질의 + 추출."""
     designer_names = _names(config["designer"])
     salon_names = _names(config["salon"])
     sampling = int(config["sampling"])
@@ -66,7 +86,7 @@ async def run_all(config: dict, models: dict) -> list[dict]:
     jobs = [
         (q, eng, idx)
         for q in config["questions"]
-        for eng in ("openai", "gemini", "perplexity")
+        for eng in engines_list
         for idx in range(sampling)
     ]
 
@@ -107,7 +127,8 @@ async def run_all(config: dict, models: dict) -> list[dict]:
 
 
 def save_raw(
-    run_dir: Path, config: dict, records: list[dict], models: dict
+    run_dir: Path, config: dict, records: list[dict],
+    models: dict, engines_list: list[str], report_provider: str,
 ) -> tuple[Path, dict]:
     run_dir.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -117,7 +138,8 @@ def save_raw(
         "specialties": config.get("specialties", []),
         "sampling": config["sampling"],
         "run_at": datetime.now().isoformat(timespec="minutes"),
-        "models": models,
+        "models": {e: models[e] for e in engines_list},
+        "report_provider": report_provider,
         "records": records,
     }
     path = run_dir / "raw.json"
@@ -152,23 +174,34 @@ def main() -> None:
     config_path = sys.argv[1]
     config = load_config(config_path)
     slug = slug_from_path(config_path)
-    models = engines.resolve_models()  # .env 로드 이후 호출되어야 오버라이드 반영
 
-    if not confirm_cost(len(config["questions"]), int(config["sampling"])):
+    active = engines.active_engines()
+    if not active:
+        raise SystemExit(
+            "활성 엔진이 없습니다. .env 에 "
+            "OPENAI_API_KEY / GOOGLE_API_KEY / PERPLEXITY_API_KEY 중 "
+            "하나 이상을 설정하세요."
+        )
+    report_provider = resolve_report_provider(active)
+    models = engines.resolve_models()
+
+    print(f"활성 엔진: {', '.join(active)} / 리포트: {report_provider}")
+
+    if not confirm_cost(len(config["questions"]), len(active), int(config["sampling"])):
         print("취소했습니다.")
         return
 
     print("\n질의 중...")
-    records = asyncio.run(run_all(config, models))
+    records = asyncio.run(run_all(config, models, active))
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
     run_dir = Path("runs") / slug / stamp
-    raw_path, payload = save_raw(run_dir, config, records, models)
+    raw_path, payload = save_raw(run_dir, config, records, models, active, report_provider)
     print(f"\nraw 저장: {raw_path}")
 
     report_path = None
     try:
-        markdown = report.generate_report(payload)
+        markdown = report.generate_report(payload, provider=report_provider)
         report_path = report.write_report(markdown, run_dir)
     except Exception as exc:  # 리포트 실패해도 raw 는 남는다
         print(f"리포트 생성 실패 (raw 는 저장됨): {type(exc).__name__}: {exc}")

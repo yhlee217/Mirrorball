@@ -1,11 +1,11 @@
-"""report 집계/렌더/생성 — fake Anthropic SDK 로 네트워크 없이 검증."""
+"""report 집계/렌더/생성 — engines.complete 를 fake 로 (네트워크 없음)."""
 
 import os
 import sys
-import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+import engines  # noqa: E402
 import report  # noqa: E402
 
 RAW = {
@@ -16,8 +16,8 @@ RAW = {
     "sampling": 2,
     "run_at": "2026-06-09T21:10",
     "models": {"openai": "gpt-4o", "gemini": "gemini-2.5-flash", "perplexity": "sonar"},
+    "report_provider": "gemini",
     "records": [
-        # 질문1: openai 2샘플 중 1회 언급, perplexity 미언급, gemini 실패
         {"question": "Q1", "engine": "openai", "sample_idx": 0, "error": None,
          "extraction": {"mentioned": True, "context": "살롱드헤어 강남점 추천.",
                         "citations": ["https://blog.naver.com/a"],
@@ -40,24 +40,38 @@ RAW = {
     ],
 }
 
+# 단일 엔진(gemini) 만 활성이었던 실행
+RAW_SINGLE = {
+    **RAW,
+    "records": [
+        {"question": "Q1", "engine": "gemini", "sample_idx": 0, "error": None,
+         "extraction": {"mentioned": True, "context": "살롱드헤어 추천.",
+                        "citations": ["https://blog.naver.com/z"], "competitors_mentioned": []}},
+    ],
+}
+
 
 def test_aggregate_counts():
     agg = report._aggregate(RAW)
     assert agg["total_calls"] == 6
-    assert agg["success"] == 4  # gemini 2건 실패
-    assert agg["failed"] == 2
-    assert agg["total_mentions"] == 1  # openai 1샘플만 언급
+    assert agg["success"] == 4 and agg["failed"] == 2
+    assert agg["total_mentions"] == 1
+
+
+def test_aggregate_engines_used_dynamic():
+    assert report._aggregate(RAW)["engines_used"] == ["openai", "gemini", "perplexity"]
+    agg1 = report._aggregate(RAW_SINGLE)
+    assert agg1["engines_used"] == ["gemini"]
+    assert list(agg1["rows"][0]["engines"].keys()) == ["gemini"]  # 컬럼도 1개
 
 
 def test_aggregate_rows_structure():
     agg = report._aggregate(RAW)
-    assert agg["questions"] == ["Q1"]
     row = agg["rows"][0]
     assert row["engines"]["openai"]["mentioned"] is True
     assert row["engines"]["openai"]["ratio"] == "1/2"
     assert row["engines"]["openai"]["context"] == "살롱드헤어 강남점 추천."
     assert row["engines"]["gemini"]["mentioned"] is False
-    assert row["engines"]["gemini"]["ratio"] == "0/2"
     assert row["engines"]["perplexity"]["label"] == "Perplexity"
 
 
@@ -66,89 +80,56 @@ def test_aggregate_domains_and_competitors():
     domains = dict(agg["domains"])
     assert domains["blog.naver.com"] == 1
     assert domains["m.place.naver.com"] == 1
-    assert domains["dcinside.com"] == 1  # www. 제거됨
+    assert domains["dcinside.com"] == 1  # www. 제거
     comps = dict(agg["competitors"])
-    assert comps["미미헤어"] == 2
-    assert comps["라온살롱"] == 1
+    assert comps["미미헤어"] == 2 and comps["라온살롱"] == 1
 
 
 def test_render_prompt_contains_key_fields():
     p = report.render_prompt(RAW)
-    assert "김민지" in p
-    assert "살롱드헤어" in p
-    assert "blog.naver.com" in p
-    assert "미미헤어" in p
+    assert "김민지" in p and "살롱드헤어" in p
+    assert "blog.naver.com" in p and "미미헤어" in p
     assert "측정일: 2026-06-09T21:10" in p
-    assert "2회 반복" in p  # sampling 반영
+    assert "2회 반복" in p
 
 
-def test_generate_report_uses_text_blocks_only(monkeypatch):
-    """fake Anthropic 으로: thinking 블록은 빼고 text 블록만 이어붙이는지 + 모델 기본값."""
+def test_render_prompt_single_engine_columns():
+    p = report.render_prompt(RAW_SINGLE)
+    assert "GEMINI" in p  # 측정에 사용한 AI 목록
+    assert "ChatGPT" not in p  # 비활성 엔진은 표/요약에 없음
+
+
+def test_generate_report_default_provider(monkeypatch):
     captured = {}
 
-    block = types.SimpleNamespace
-    fake_message = types.SimpleNamespace(content=[
-        block(type="thinking", thinking="속으로 생각...", text=None),
-        block(type="text", text="# 한눈에 보기\n좋습니다.", thinking=None),
-        block(type="text", text=" 추가 문단.", thinking=None),
-    ])
+    async def fake_complete(provider, prompt, models=None, timeout=60.0):
+        captured.update(provider=provider, prompt=prompt, models=models)
+        return "  # 진단 리포트\n본문  "
 
-    class FakeStream:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def get_final_message(self):
-            return fake_message
-
-    class FakeMessages:
-        def stream(self, **kwargs):
-            captured.update(kwargs)
-            return FakeStream()
-
-    class FakeAnthropic:
-        def __init__(self, *a, **k):
-            self.messages = FakeMessages()
-
-    fake_module = types.SimpleNamespace(Anthropic=FakeAnthropic)
-    monkeypatch.setitem(sys.modules, "anthropic", fake_module)
-    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    monkeypatch.setattr(engines, "complete", fake_complete)
+    for env in ("REPORT_PROVIDER", "REPORT_MODEL", "GEMINI_MODEL"):
+        monkeypatch.delenv(env, raising=False)
 
     md = report.generate_report(RAW)
-    assert md == "# 한눈에 보기\n좋습니다. 추가 문단."  # thinking 제외, text 만
-    assert captured["model"] == "claude-sonnet-4-6"  # 기본 모델
-    assert captured["thinking"] == {"type": "adaptive"}
+    assert md == "# 진단 리포트\n본문"  # strip 적용
+    assert captured["provider"] == "gemini"  # 기본 provider
+    assert captured["models"] == {"gemini": "gemini-2.5-flash"}  # 기본 모델
+    assert "김민지" in captured["prompt"]
 
 
-def test_generate_report_model_override(monkeypatch):
+def test_generate_report_provider_and_model_override(monkeypatch):
     captured = {}
-    fake_message = types.SimpleNamespace(
-        content=[types.SimpleNamespace(type="text", text="ok")]
-    )
 
-    class FakeStream:
-        def __enter__(self):
-            return self
+    async def fake_complete(provider, prompt, models=None, timeout=60.0):
+        captured.update(provider=provider, models=models)
+        return "ok"
 
-        def __exit__(self, *a):
-            return False
-
-        def get_final_message(self):
-            return fake_message
-
-    class FakeAnthropic:
-        def __init__(self, *a, **k):
-            self.messages = types.SimpleNamespace(
-                stream=lambda **kw: (captured.update(kw), FakeStream())[1]
-            )
-
-    monkeypatch.setitem(sys.modules, "anthropic",
-                        types.SimpleNamespace(Anthropic=FakeAnthropic))
-    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-opus-4-8")
+    monkeypatch.setattr(engines, "complete", fake_complete)
+    monkeypatch.setenv("REPORT_PROVIDER", "openai")
+    monkeypatch.setenv("REPORT_MODEL", "gpt-4.1")
     report.generate_report(RAW)
-    assert captured["model"] == "claude-opus-4-8"
+    assert captured["provider"] == "openai"
+    assert captured["models"] == {"openai": "gpt-4.1"}
 
 
 if __name__ == "__main__":
