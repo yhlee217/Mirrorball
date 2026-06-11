@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>추가 서비스 미리보기 · 두 번째 5가지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F1EC; --paper:#FCFAF6; --ink:#2A2622; --muted:#8C8479;
+    --line:#E6DFD4; --accent:#6E5B47; --accent-d:#4E4031; --soft:#EFE9DF;
+    --good:#5C7A57; --good-bg:#EAF0E6; --bad:#B0574A; --bad-bg:#F3E6E2;
+    --star:#C99A3E;
+    --sans:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;
+    --serif:'Cormorant Garamond',serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:720px;margin:0 auto;padding:0 22px 80px;}
+
+  .top{text-align:center;padding:56px 0 30px;}
+  .top .kic{font-family:var(--serif);font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);font-weight:600;}
+  .top h1{font-family:var(--serif);font-size:34px;font-weight:600;margin:8px 0 6px;}
+  .top p{color:var(--muted);font-size:15px;margin:0;}
+
+  .svc{padding:36px 0;border-top:1px solid var(--line);}
+  .svc .num{font-family:var(--serif);font-size:26px;font-weight:600;color:var(--accent);line-height:1;}
+  .svc h2{font-size:21px;font-weight:700;margin:6px 0 4px;}
+  .svc .lead{color:var(--muted);font-size:14.5px;margin:0 0 20px;max-width:560px;}
+
+  .frame{background:var(--paper);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 10px 30px rgba(42,38,34,.06);overflow:hidden;}
+  .bar{display:flex;align-items:center;gap:7px;padding:11px 15px;border-bottom:1px solid var(--line);background:#F7F3EC;}
+  .bar i{width:10px;height:10px;border-radius:50%;background:#DACFBE;display:inline-block;}
+  .bar .ttl{margin-left:8px;font-size:12.5px;color:var(--muted);}
+  .body{padding:20px;}
+
+  .lab{font-size:13px;color:var(--muted);}
+  .chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:20px;}
+  .chip.up{background:var(--good-bg);color:var(--good);}
+  .chip.due{background:var(--bad-bg);color:var(--bad);}
+  .chip.soon{background:#F2EAD8;color:#9A7B33;}
+  .chip.neu{background:var(--soft);color:var(--accent-d);}
+  .btn{display:inline-block;font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:9px;
+    background:var(--accent);color:#fff;text-decoration:none;border:none;cursor:default;}
+  .btn.ghost{background:var(--soft);color:var(--accent-d);}
+  .why{font-size:13px;color:var(--accent-d);background:var(--soft);border-radius:9px;padding:11px 14px;margin-top:16px;}
+  .why b{color:var(--accent);}
+
+  /* 고객 리스트 (재방문 알림) */
+  .cust{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);}
+  .cust:last-of-type{border-bottom:none;}
+  .av{width:36px;height:36px;border-radius:50%;background:var(--soft);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:16px;flex:0 0 auto;}
+  .cust .nm{font-size:14px;font-weight:700;}
+  .cust .sub{font-size:12px;color:var(--muted);}
+  .cust .right{margin-left:auto;text-align:right;}
+  .msg{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:14px;font-size:13px;color:var(--ink);line-height:1.6;}
+  .msg .tag{font-size:11px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+
+  /* 후기 */
+  .rev-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+  .rev-head .score{font-family:var(--serif);font-size:38px;font-weight:600;line-height:1;}
+  .stars{color:var(--star);letter-spacing:1px;font-size:14px;}
+  .review{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;}
+  .review .q{font-size:13.5px;line-height:1.6;margin:5px 0;}
+  .review .by{font-size:12px;color:var(--muted);}
+  .toggle{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--accent-d);background:var(--soft);padding:6px 11px;border-radius:20px;margin-top:6px;}
+  .toggle .sw{width:30px;height:17px;border-radius:20px;background:var(--accent);position:relative;}
+  .toggle .sw::after{content:"";position:absolute;width:13px;height:13px;border-radius:50%;background:#fff;top:2px;right:2px;}
+
+  /* 챗봇 */
+  .chat{padding:4px 2px;}
+  .b{max-width:80%;padding:9px 13px;border-radius:14px;font-size:13.5px;margin:8px 0;line-height:1.55;}
+  .b.bot{background:var(--soft);color:var(--ink);border-bottom-left-radius:4px;}
+  .b.me{background:var(--accent);color:#fff;margin-left:auto;border-bottom-right-radius:4px;}
+  .b.cta{background:#fff;border:1px solid var(--line);}
+  .inbar{display:flex;gap:8px;margin-top:12px;}
+  .inbar .field{flex:1;background:var(--soft);border-radius:20px;padding:9px 14px;font-size:13px;color:var(--muted);}
+
+  /* 전환 퍼널 */
+  .funnel .step{margin:12px 0;}
+  .funnel .top2{display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:5px;}
+  .funnel .top2 b{font-weight:700;}
+  .track{height:30px;border-radius:8px;background:var(--soft);overflow:hidden;}
+  .track .fill{height:100%;background:var(--accent);border-radius:8px;display:flex;align-items:center;padding-left:12px;color:#fff;font-size:12.5px;font-weight:700;}
+  .srcs{display:flex;gap:8px;margin-top:14px;}
+  .srcs div{flex:1;text-align:center;background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 4px;}
+  .srcs .n{font-family:var(--serif);font-size:19px;font-weight:600;}
+  .srcs .l{font-size:11px;color:var(--muted);}
+
+  /* 대시보드 */
+  .sum{display:flex;gap:8px;margin-bottom:14px;}
+  .sum div{flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center;}
+  .sum .n{font-family:var(--serif);font-size:22px;font-weight:600;}
+  .sum .l{font-size:11px;color:var(--muted);}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);}
+  th{font-size:11.5px;color:var(--muted);font-weight:600;}
+  td .nm{font-weight:700;}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;}
+  .pill.on{background:var(--good-bg);color:var(--good);}
+  .pill.wait{background:#F2EAD8;color:#9A7B33;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="kic">Service Preview · 2</div>
+    <h1>겹치지 않는 5가지</h1>
+    <p>앞 5개(노출 측정·콘텐츠·발행·영업·알림)와 다른 영역 — 손님 유지·평판·상담·전환·운영</p>
+  </div>
+
+  <!-- 1 재방문 주기 알림 -->
+  <section class="svc">
+    <div class="num">01</div>
+    <h2>재방문 시기 알림</h2>
+    <p class="lead">시술마다 다시 올 시기가 다릅니다(뿌리펌 2개월, 펌 5~6개월 등). 그 시점이 오면 손님에게 보낼 안부 메시지를 자동으로 챙겨줍니다. 손님을 다시 오게 만드는 화면이에요.</p>
+
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span class="ttl">하예원 · 이번 주 재방문 대상 3명</span></div>
+      <div class="body">
+        <div class="cust">
+          <div class="av">김</div>
+          <div><div class="nm">김○○</div><div class="sub">뿌리펌 · 2개월 전 방문</div></div>
+          <div class="right"><span class="chip due">리터치 시기</span></div>
+        </div>
+        <div class="cust">
+          <div class="av">이</div>
+          <div><div class="nm">이○○</div><div class="sub">레이어드펌 · 5개월 전 방문</div></div>
+          <div class="right"><span class="chip soon">곧 풀릴 시기</span></div>
+        </div>
+        <div class="cust">
+          <div class="av">박</div>
+          <div><div class="nm">박○○</div><div class="sub">레이어드컷 · 7주 전 방문</div></div>
+          <div class="right"><span class="chip soon">정리 추천</span></div>
+        </div>
+        <div class="msg">
+          <div class="tag">보낼 메시지 (자동 작성)</div>
+          안녕하세요 김○○님, 하예원입니다 :) 뿌리펌 하신 지 두 달쯤 되어 슬슬 리터치 시기가 다가오네요. 편한 시간에 예약 도와드릴게요!
+          <div style="margin-top:10px;"><span class="btn">카톡으로 보내기</span> <span class="btn ghost">문구 수정</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="why"><b>왜 좋나:</b> 신규 유치보다 재방문이 훨씬 쌉니다. 시술 주기 데이터는 이미 프로필에 적혀 있어요.</div>
+  </section>
+
+  <!-- 2 후기 수집·표시 -->
+  <section class="svc">
+    <div class="num">02</div>
+    <h2>후기 모으고 보여주기</h2>
+    <p class="lead">시술 후 손님에게 후기 요청 링크를 보내고, 받은 후기를 별점과 함께 프로필에 자동으로 노출합니다. 처음 보는 손님에게 믿음을 주는 화면입니다.</p>
+
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span class="ttl">하예원 · 후기 모음</span></div>
+      <div class="body">
+        <div class="rev-head">
+          <div class="score">4.9</div>
+          <div>
+            <div class="stars">★★★★★</div>
+            <div class="lab">후기 37건 · 최근 30일 +6</div>
+          </div>
+          <div style="margin-left:auto;"><span class="toggle"><span class="sw"></span>시술 후 자동 요청</span></div>
+        </div>
+        <div class="review">
+          <div class="stars">★★★★★</div>
+          <div class="q">"레이어드컷 너무 만족해요. 얼굴형까지 봐주시고 관리법도 알려주셔서 좋았어요."</div>
+          <div class="by">김○○ · 레이어드컷</div>
+        </div>
+        <div class="review">
+          <div class="stars">★★★★★</div>
+          <div class="q">"퍼스널이미지컨설팅 받았는데 제 퍼스널컬러까지 정확히 알게 됐어요. 강추!"</div>
+          <div class="by">박○○ · 퍼스널이미지컨설팅</div>
+        </div>
+      </div>
+    </div>
+    <div class="why"><b>왜 좋나:</b> 후기는 손님 결정에 가장 큰 영향. 프로필(랜딩)에 바로 얹어 신뢰를 만듭니다.</div>
+  </section>
+
+  <!-- 3 상담 챗봇 -->
+  <section class="svc">
+    <div class="num">03</div>
+    <h2>프로필 상담 챗봇</h2>
+    <p class="lead">프로필 페이지에 "무엇이든 물어보세요" 챗봇을 넣습니다. 프로필에 적은 시술·FAQ 내용으로 손님 질문에 답하고 예약까지 자연스럽게 안내해요.</p>
+
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span class="ttl">하예원 프로필 · 상담 도우미</span></div>
+      <div class="body">
+        <div class="chat">
+          <div class="b bot">안녕하세요! 하예원 디자이너 상담 도우미예요 😊 궁금한 점 편하게 물어보세요.</div>
+          <div class="b me">머리숱 적은데 곱슬이에요. 레이어드펌 돼요?</div>
+          <div class="b bot">네, 가능해요! 레이어드펌은 열펌이라 결이 매끄럽고 유지력도 5~6개월로 길어 자연스러운 흐름을 원하시는 분께 잘 맞아요. 모발 상태는 방문 시 한 번 봐드릴게요.</div>
+          <div class="b bot cta">예약 도와드릴까요? <span class="btn" style="margin-left:6px;">예약하기</span></div>
+        </div>
+        <div class="inbar"><div class="field">메시지를 입력하세요…</div><span class="btn">전송</span></div>
+      </div>
+    </div>
+    <div class="why"><b>왜 좋나:</b> 자는 시간에도 손님 질문에 답하고 예약으로 연결. FAQ 데이터를 그대로 재사용합니다.</div>
+  </section>
+
+  <!-- 4 예약 전환 추적 -->
+  <section class="svc">
+    <div class="num">04</div>
+    <h2>예약 전환 추적</h2>
+    <p class="lead">프로필을 본 사람 중 몇 명이 예약 버튼을 누르고, 실제 예약으로 이어졌는지 보여줍니다. 어디서 들어온 손님이 잘 예약하는지도 알 수 있어요.</p>
+
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span class="ttl">하예원 · 6월 예약 전환</span></div>
+      <div class="body funnel">
+        <div class="step">
+          <div class="top2"><span>프로필 방문</span><b>320명</b></div>
+          <div class="track"><div class="fill" style="width:100%">100%</div></div>
+        </div>
+        <div class="step">
+          <div class="top2"><span>예약 버튼 클릭</span><b>48명</b></div>
+          <div class="track"><div class="fill" style="width:48%">15%</div></div>
+        </div>
+        <div class="step">
+          <div class="top2"><span>실제 예약 완료</span><b>19명</b></div>
+          <div class="track"><div class="fill" style="width:24%">5.9%</div></div>
+        </div>
+        <div class="srcs">
+          <div><div class="n">인스타</div><div class="l">유입 58% · 예약 11</div></div>
+          <div><div class="n">QR</div><div class="l">유입 27% · 예약 6</div></div>
+          <div><div class="n">검색</div><div class="l">유입 15% · 예약 2</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="why"><b>왜 좋나:</b> 노출(앞 서비스)이 늘어도 예약으로 이어지는지는 별개. 어느 채널에 힘쓸지 판단이 섭니다.</div>
+  </section>
+
+  <!-- 5 운영자 대시보드 -->
+  <section class="svc">
+    <div class="num">05</div>
+    <h2>운영자 대시보드 (여러 명 관리)</h2>
+    <p class="lead">컨시어지가 맡은 디자이너 전체의 상태를 한 화면에서 봅니다. 누구 발행이 밀렸고, 누구 노출이 떨어졌는지 바로 보여 관리가 편해져요.</p>
+
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span class="ttl">컨시어지 대시보드 · 관리 중 3명</span></div>
+      <div class="body">
+        <div class="sum">
+          <div><div class="n">3</div><div class="l">관리 중</div></div>
+          <div><div class="n">2</div><div class="l">발행 완료</div></div>
+          <div><div class="n">↑</div><div class="l">평균 노출</div></div>
+        </div>
+        <table>
+          <tr><th>디자이너</th><th>노출 점수</th><th>발행</th><th>다음 측정</th></tr>
+          <tr><td><span class="nm">하예원</span><br><span class="lab">꼼나나비앙 한남점</span></td><td>7 / 24</td><td><span class="pill on">발행</span></td><td>7/11</td></tr>
+          <tr><td><span class="nm">민지</span><br><span class="lab">살롱드헤어 강남</span></td><td>3 / 20</td><td><span class="pill wait">준비중</span></td><td>—</td></tr>
+          <tr><td><span class="nm">수아</span><br><span class="lab">라온살롱 청담</span></td><td>12 / 24</td><td><span class="pill on">발행</span></td><td>7/05</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="why"><b>왜 좋나:</b> "여러 명을 빠르게 찍어내는" 컨시어지 모델의 관제탑. 진단·발행·알림이 모두 여기로 모입니다.</div>
+  </section>
+
+</div>
+</body>
+</html>
