@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F1EC; --paper:#FCFAF6; --ink:#2A2622; --muted:#8C8479;
+    --line:#E6DFD4; --accent:#6E5B47; --accent-d:#4E4031; --soft:#EFE9DF;
+    --sans:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;
+    --serif:'Cormorant Garamond',serif;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:16px;line-height:1.75;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:600px;margin:0 auto;background:var(--paper);min-height:100vh;
+    box-shadow:0 0 60px rgba(42,38,34,.06);}
+  .pad{padding:0 30px;}
+
+  /* hero */
+  header{padding:54px 30px 36px;text-align:center;border-bottom:1px solid var(--line);}
+  .ava{width:120px;height:120px;border-radius:50%;object-fit:cover;margin:0 auto 20px;
+    display:block;background:var(--soft);border:1px solid var(--line);}
+  .ava-ph{width:120px;height:120px;border-radius:50%;margin:0 auto 20px;background:var(--soft);
+    display:flex;align-items:center;justify-content:center;font-family:var(--serif);
+    font-size:42px;color:var(--accent);border:1px solid var(--line);}
+  h1{font-family:var(--serif);font-size:40px;font-weight:600;margin:0;letter-spacing:.5px;}
+  .ko-name{font-size:15px;color:var(--muted);margin:2px 0 14px;letter-spacing:3px;}
+  .role{font-size:15px;font-weight:600;color:var(--accent);}
+  .salon{font-size:14px;color:var(--muted);margin-top:2px;}
+  .tagline{font-size:15px;color:var(--ink);margin:20px auto 0;max-width:440px;line-height:1.7;}
+
+  /* cta */
+  .cta-row{display:flex;gap:10px;padding:24px 30px 6px;}
+  .cta{flex:1;text-align:center;padding:14px 10px;border-radius:12px;font-size:15px;
+    font-weight:600;text-decoration:none;transition:transform .15s,opacity .15s;display:block;}
+  .cta:active{transform:scale(.98);}
+  .cta-primary{background:var(--accent);color:#fff;}
+  .cta-ghost{background:var(--soft);color:var(--accent-d);}
+
+  section{padding:34px 30px;border-top:1px solid var(--line);}
+  .eyebrow{font-family:var(--serif);font-size:13px;letter-spacing:3px;text-transform:uppercase;
+    color:var(--accent);margin-bottom:16px;font-weight:600;}
+  h2{font-size:19px;font-weight:700;margin:0 0 14px;}
+
+  /* specialties */
+  .spec{margin:0 0 16px;}
+  .spec:last-child{margin-bottom:0;}
+  .spec .name{font-weight:700;font-size:15.5px;margin-bottom:3px;}
+  .spec .name .badge{font-family:var(--serif);font-style:italic;font-size:13px;color:var(--accent);
+    margin-left:8px;letter-spacing:.5px;font-weight:500;}
+  .spec .desc{font-size:14.5px;color:var(--muted);line-height:1.6;}
+
+  /* about */
+  .about-list{list-style:none;padding:0;margin:0;}
+  .about-list li{position:relative;padding-left:18px;margin:9px 0;font-size:14.5px;color:var(--ink);}
+  .about-list li::before{content:"";position:absolute;left:0;top:11px;width:5px;height:5px;
+    border-radius:50%;background:var(--accent);}
+
+  /* gallery placeholder */
+  .gal{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+  .gal div{aspect-ratio:3/4;background:var(--soft);border-radius:6px;display:flex;
+    align-items:center;justify-content:center;color:var(--muted);font-size:11px;text-align:center;padding:6px;}
+
+  /* faq */
+  .faq{border-bottom:1px solid var(--line);padding:14px 0;}
+  .faq:first-of-type{padding-top:0;}
+  .faq:last-child{border-bottom:none;padding-bottom:0;}
+  .faq .q{font-weight:600;font-size:15px;margin-bottom:6px;}
+  .faq .q::before{content:"Q. ";color:var(--accent);font-family:var(--serif);font-weight:600;}
+  .faq .a{font-size:14.5px;color:var(--muted);line-height:1.65;}
+  .faq .a.todo{font-style:italic;color:#B7AE9F;}
+
+  /* location */
+  .loc{font-size:14.5px;color:var(--ink);line-height:1.7;}
+  .loc .lab{color:var(--muted);font-size:13px;}
+
+  footer{padding:28px 30px 44px;text-align:center;border-top:1px solid var(--line);}
+  footer a{color:var(--accent);text-decoration:none;font-weight:600;font-size:14px;}
+  .note{font-size:11.5px;color:#B7AE9F;margin-top:14px;line-height:1.6;}
+
+  @media (prefers-reduced-motion: no-preference){
+    .reveal{opacity:0;transform:translateY(14px);animation:rise .7s ease forwards;}
+    .r1{animation-delay:.05s}.r2{animation-delay:.13s}.r3{animation-delay:.21s}
+    .r4{animation-delay:.29s}.r5{animation-delay:.37s}
+  }
+  @keyframes rise{to{opacity:1;transform:none;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="reveal r1">
+    {% if has_photo %}
+    <img class="ava" src="{{ photo_url }}" alt="{{ display_name }}">
+    {% else %}
+    <!-- 실제 발행 시 본인 사진 URL로 교체 -->
+    <div class="ava-ph">{{ initial }}</div>
+    {% endif %}
+    <h1>{{ display_name }}</h1>
+    <div class="ko-name">{{ korean_name }}</div>
+    <div class="role">{{ role }}</div>
+    <div class="salon">{{ salon }}</div>
+    <p class="tagline">{{ tagline_html|safe }}</p>
+  </header>
+
+  <div class="cta-row reveal r1">
+    <a class="cta cta-primary" href="{{ booking_href }}">예약하기</a>
+    <a class="cta cta-ghost" href="{{ instagram_url }}">Instagram</a>
+  </div>
+  <div class="pad" style="text-align:center;padding-top:8px;padding-bottom:4px;">
+    <span style="font-size:13px;color:var(--muted);">문의는 인스타그램 DM으로 편하게 주세요</span>
+  </div>
+
+  <section class="reveal r2">
+    <div class="eyebrow">Specialties</div>
+    <h2>전문 시술</h2>
+    {% for s in specialties %}
+    <div class="spec">
+      <div class="name">{{ s.name }}{% if s.signature %} <span class="badge">signature</span>{% endif %}</div>
+      <div class="desc">{{ s.desc }}</div>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="reveal r3">
+    <div class="eyebrow">About</div>
+    <h2>소개</h2>
+    <ul class="about-list">
+      {% for item in about %}
+      <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="reveal r3">
+    <div class="eyebrow">Portfolio</div>
+    <h2>작업</h2>
+    <div class="gal">
+      {{ gallery_html|safe }}
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:12px;">※ 발행 시 인스타 대표 작업 사진으로 교체 (시술명 캡션 포함)</p>
+  </section>
+
+  <section class="reveal r4">
+    <div class="eyebrow">FAQ</div>
+    <h2>자주 묻는 질문</h2>
+    {% for f in faq %}
+    <div class="faq">
+      <div class="q">{{ f.q }}</div>
+      <div class="a">{{ f.a }}</div>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="reveal r5">
+    <div class="eyebrow">Location</div>
+    <h2>오시는 길</h2>
+    <p class="loc">
+      <span class="lab">매장</span><br>{{ salon }}<br>
+      <span class="lab">주소</span><br>{{ address }}<br>
+      <span class="lab">예약</span><br><a href="{{ booking_href_loc }}" style="color:var(--accent);text-decoration:none;font-weight:600;">네이버 예약</a> · 카카오톡 채널 · 인스타 DM<br><span class="lab" style="display:block;margin-top:8px;">찾아오시는 길</span>{{ directions }}
+    </p>
+  </section>
+
+  <footer class="reveal r5">
+    <a href="{{ instagram_url }}">@{{ instagram }}</a>
+    <p class="note">
+      © {{ display_name }} · {{ salon }}<br>
+      ※ [ ] 표시는 발행 전 실제 값으로 교체하세요 (사진·주소·예약 링크·FAQ 답변).<br>
+      ※ 옛 매장 정보는 퇴사·입사 확정 후 적용하세요.
+    </p>
+  </footer>
+
+</div>
+
+<!-- AI·검색이 읽는 구조화 데이터 -->
+<script type="application/ld+json">
+{{ person_ld_json|safe }}
+</script>
+<script type="application/ld+json">
+{{ faq_ld_json|safe }}
+</script>
+</body>
+</html>

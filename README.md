@@ -47,3 +47,48 @@ OpenAI/Perplexity 는 크레딧·키가 생겼을 때 `.env` 에 키만 넣으�
 ```bash
 python -m pytest tests/ -q
 ```
+
+---
+
+# 미용사 프로필 생성기 (build.py)
+
+YAML 입력으로 호스팅 프로필 정적 HTML을 찍어내는 빌드 도구. 기준 디자인
+(`templates/profile.html.j2`)은 손으로 만든 원본 HTML을 그대로 옮긴 것이고,
+값만 변수화한다. 디자인 변경 없음.
+
+## 설치 · 빌드 · 배포 (3줄)
+
+```bash
+pip install -r requirements.txt
+python build.py designers/hayewoni.yaml      # 빌드 → dist/hayewoni/index.html
+# dist/ 를 Netlify drop 또는 GitHub Pages에 수동 업로드
+```
+
+- 전부 빌드: `python build.py --all` (designers/*.yaml)
+- 입력: `designers/{slug}.yaml` (스키마는 `designers/hayewoni.yaml` 참고)
+- 출력: `dist/{slug}/index.html` (순수 정적, 런타임 서버 불필요, `.gitignore`)
+
+## 동작
+
+1. YAML 로드·검증 → `core.render(data)` → `dist/{slug}/index.html`
+2. schema.org JSON-LD 2종(Person·FAQPage)을 입력값에서 자동 생성해 삽입
+3. `<title>`·`<meta description>`도 입력값에서 자동 생성
+4. 빌드 후 JSON-LD 유효성(파싱) 검증
+
+## 검증·경고
+
+- 필수 필드(slug, display_name, korean_name, role, salon, instagram, specialties,
+  faq, knows_about) 누락 시 빌드 중단
+- 값에 `[ ]` 가 남아있으면 "미입력 추정" 경고 (발행 사고 방지)
+- photo_url / booking_url 비면 경고만 하고 진행(플레이스홀더 동작)
+
+## 구조 (입력-코어 분리)
+
+- `build.py` — CLI 엔트리 (YAML → core)
+- `core.py` — `render(data: dict) -> str` (입력 방식 무관 재사용 코어)
+- `schema.py` — data → Person/FAQPage JSON-LD
+- `validate.py` — 검증 + placeholder 경고
+- `templates/profile.html.j2` — 원본 디자인(값만 변수화)
+
+`core.render(data)`가 dict만 받으므로, 나중에 웹 폼이 같은 dict를 넘기면
+그대로 재사용된다 (웹 폼은 이번 범위 아님).

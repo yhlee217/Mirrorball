@@ -1,5 +1,6 @@
 .env
 runs/
+dist/
 __pycache__/
 *.pyc
 .pytest_cache/

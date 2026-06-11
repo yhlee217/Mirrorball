@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""미용사 프로필 정적 사이트 생성기 — CLI 빌드 엔트리.
+
+사용법:
+    python build.py designers/hayewoni.yaml   # 한 명
+    python build.py --all                      # designers/*.yaml 전부
+
+YAML 로드 → 검증 → core.render → dist/{slug}/index.html.
+배포는 dist/ 를 Netlify drop / GitHub Pages 에 수동 업로드.
+"""
+
+from __future__ import annotations
+
+import glob
+import json
+import re
+import sys
+from pathlib import Path
+
+import yaml
+
+import core
+import validate
+
+_JSONLD_RE = re.compile(
+    r'<script type="application/ld\+json">(.*?)</script>', re.DOTALL
+)
+
+
+def load_yaml(path: str) -> dict:
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+
+def check_jsonld(html: str) -> int:
+    """렌더된 HTML 의 JSON-LD 블록이 유효한 JSON 인지 파싱 검증. 개수 반환."""
+    blocks = _JSONLD_RE.findall(html)
+    if not blocks:
+        raise ValueError("JSON-LD 스크립트가 없습니다")
+    for i, block in enumerate(blocks):
+        try:
+            json.loads(block)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"JSON-LD[{i}] 파싱 실패: {e}") from e
+    return len(blocks)
+
+
+def build_one(path: str, dist: str = "dist") -> dict:
+    """한 명 빌드. {slug, out_path, warnings} 반환. 실패 시 예외."""
+    data = load_yaml(path)
+    if not data or not data.get("slug"):
+        raise ValueError(f"{path}: slug 가 없습니다")
+
+    warnings = validate.validate(data)  # 필수 누락이면 ValueError
+    html = core.render(data)
+    check_jsonld(html)
+
+    out = Path(dist) / data["slug"] / "index.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    return {"slug": data["slug"], "out_path": out, "warnings": warnings}
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    if not args:
+        raise SystemExit("사용법: python build.py designers/{slug}.yaml | --all")
+
+    if args[0] == "--all":
+        paths = sorted(glob.glob("designers/*.yaml"))
+        if not paths:
+            raise SystemExit("designers/*.yaml 이 없습니다")
+    else:
+        paths = [args[0]]
+
+    built: list[dict] = []
+    failed: list[tuple[str, str]] = []
+    for p in paths:
+        try:
+            r = build_one(p)
+            built.append(r)
+            print(f"✓ {r['slug']:<14} → {r['out_path']}")
+            for w in r["warnings"]:
+                print(f"    ⚠ {w}")
+        except Exception as exc:
+            failed.append((p, str(exc)))
+            print(f"✗ {p}\n    {exc}")
+
+    print("\n" + "=" * 52)
+    print(f"빌드 성공: {len(built)}  /  실패: {len(failed)}")
+    for r in built:
+        n = len(r["warnings"])
+        print(f"  - {r['slug']}: {r['out_path']}" + (f"  (경고 {n})" if n else ""))
+    if failed:
+        print("실패 목록:")
+        for p, e in failed:
+            print(f"  - {p}: {e.splitlines()[0]}")
+    print("=" * 52)
+    if failed:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
