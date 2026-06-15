@@ -1,0 +1,29 @@
+{% extends "_base.html.j2" %}
+{% block title %}예약 확정 · {{ customer }} 님 · {{ designer }}{% endblock %}
+{% block style %}
+  .ok{text-align:center;padding:6px 0 14px;}
+  .ok .mk{width:50px;height:50px;border-radius:50%;background:var(--soft);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 8px;}
+  .ok .t{font-weight:700;font-size:16px;}
+  .box{border:1px solid var(--line);border-radius:14px;}
+  .prep{background:var(--soft);border-radius:10px;padding:10px 13px;font-size:12px;color:var(--accent-d);margin-top:12px;line-height:1.5;}
+  .twobtn{display:flex;gap:8px;margin-top:13px;}
+  .twobtn .btn{flex:1;}
+  .btn.ghost{background:var(--soft);color:var(--accent-d);}
+{% endblock %}
+{% block card %}
+  <div class="ok"><div class="mk">✓</div><div class="t">예약이 확정됐어요</div></div>
+  <div class="kv box">
+    {% if when %}<div class="r"><div class="k">날짜</div><div class="v">{{ when }}</div></div>{% endif %}
+    {% if service %}<div class="r"><div class="k">시술</div><div class="v">{{ service }}{% if duration %} · {{ duration }}{% endif %}</div></div>{% endif %}
+    <div class="r"><div class="k">디자이너</div><div class="v">{{ designer }}</div></div>
+    <div class="r"><div class="k">위치</div><div class="v">{{ salon }}{% if directions %}<br><span style="font-weight:400;color:var(--muted);font-size:12px;">{{ directions }}</span>{% endif %}</div></div>
+  </div>
+  {% if prep %}<div class="prep">{{ prep }}</div>{% endif %}
+  {% if calendar_url or map_url %}
+  <div class="twobtn">
+    {% if calendar_url %}<a class="btn" href="{{ calendar_url }}">캘린더 추가</a>{% endif %}
+    {% if map_url %}<a class="btn ghost" href="{{ map_url }}">길찾기</a>{% endif %}
+  </div>
+  {% endif %}
+{% endblock %}

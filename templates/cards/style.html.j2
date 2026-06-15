@@ -1,0 +1,31 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ customer }} 님의 스타일 · {{ designer }}{% endblock %}
+{% block style %}
+  .kv .v small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:2px;}
+  .sw{display:flex;gap:6px;margin-top:5px;}
+  .sw span{width:22px;height:22px;border-radius:50%;border:1px solid rgba(0,0,0,.06);}
+{% endblock %}
+{% block card %}
+  <div class="card">
+    <div class="cap-top">
+      <div class="e">Personal Style</div>
+      <div class="nm">{{ customer }} 님의 스타일</div>
+      <div class="by">by {{ designer }} · {{ salon }}</div>
+    </div>
+    <div class="kv">
+      {% if face_shape %}
+      <div class="r"><div class="k">얼굴형</div><div class="v">{{ face_shape }}{% if face_note %}<small>{{ face_note }}</small>{% endif %}</div></div>
+      {% endif %}
+      {% if recommended %}
+      <div class="r"><div class="k">추천 스타일</div><div class="v">{{ recommended | join(' · ') }}{% if recommended_note %}<small>{{ recommended_note }}</small>{% endif %}</div></div>
+      {% endif %}
+      {% if personal_color %}
+      <div class="r"><div class="k">퍼스널컬러</div><div class="v">{{ personal_color }}{% if swatches %}<span class="sw">{% for c in swatches %}<span style="background:{{ c }}"></span>{% endfor %}</span>{% endif %}</div></div>
+      {% endif %}
+      {% if comment %}
+      <div class="r"><div class="k">한마디</div><div class="v" style="font-weight:400">{{ comment }}</div></div>
+      {% endif %}
+    </div>
+    {% if booking_url %}<div class="save"><a class="btn" href="{{ booking_url }}">예약하기</a></div>{% endif %}
+  </div>
+{% endblock %}

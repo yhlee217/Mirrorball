@@ -22,6 +22,8 @@ TEMPLATE_DIR = Path(__file__).parent / "templates" / "cards"
 # type -> 템플릿 파일
 TYPES = {
     "aftercare": "aftercare.html.j2",
+    "style": "style.html.j2",
+    "booking": "booking.html.j2",
 }
 
 

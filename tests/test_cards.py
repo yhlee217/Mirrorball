@@ -70,5 +70,54 @@ def test_build_one_real_example(tmp_path):
     assert out.name == "jiu_aftercare.html" and out.exists()
 
 
+# --- 스타일 카드 ------------------------------------------------------------
+STYLE = {
+    "type": "style", "designer": "하예원", "salon": "꼼나나비앙 한남점", "customer": "지우",
+    "face_shape": "계란형", "face_note": "레이어드컷이 잘 어울려요",
+    "recommended": ["레이어드컷", "레이어드펌"], "recommended_note": "자연스러운 흐름",
+    "personal_color": "가을 웜", "swatches": ["#B5754A", "#8C6A3E"],
+    "comment": "단발도 잘 어울려요", "booking_url": "https://book/x",
+}
+
+
+def test_style_card_renders():
+    html = cards.render(STYLE)
+    assert "지우 님의 스타일" in html and "by 하예원" in html
+    assert "계란형" in html and "레이어드컷이 잘 어울려요" in html
+    assert "레이어드컷 · 레이어드펌" in html          # join
+    assert html.count('class="sw"') == 1
+    assert "background:#B5754A" in html and html.count('<span style="background:') == 2
+    assert 'href="https://book/x"' in html
+
+
+def test_style_card_optional_absent():
+    html = cards.render({"type": "style", "designer": "x", "salon": "s", "customer": "y"})
+    assert "얼굴형" not in html and "퍼스널컬러" not in html and "예약하기" not in html
+
+
+# --- 예약 확정 카드 ---------------------------------------------------------
+BOOKING = {
+    "type": "booking", "designer": "하예원", "salon": "꼼나나비앙 한남점", "customer": "지우",
+    "when": "6월 18일 오후 2시", "service": "레이어드펌", "duration": "약 2시간 반",
+    "directions": "이태원역 택시", "prep": "가볍게 감고 오세요",
+    "calendar_url": "https://cal/x", "map_url": "https://map/x",
+}
+
+
+def test_booking_card_renders():
+    html = cards.render(BOOKING)
+    assert "예약이 확정됐어요" in html
+    assert "6월 18일 오후 2시" in html
+    assert "레이어드펌 · 약 2시간 반" in html
+    assert "이태원역 택시" in html and "가볍게 감고 오세요" in html
+    assert 'href="https://cal/x"' in html and 'href="https://map/x"' in html
+
+
+def test_booking_card_optional_absent():
+    html = cards.render({"type": "booking", "designer": "x", "salon": "s", "customer": "y"})
+    assert '<div class="twobtn">' not in html  # 버튼 url 없으면 버튼줄 요소 없음
+    assert '<div class="prep">' not in html    # prep 없으면 안내 박스 없음
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

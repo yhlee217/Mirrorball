@@ -1,0 +1,13 @@
+type: style
+name: jiu_style
+designer: "하예원"
+salon: "꼼나나비앙 한남점"
+customer: "지우"
+face_shape: "계란형"
+face_note: "레이어드컷이 가장 잘 어울려요"
+recommended: ["레이어드컷", "레이어드펌"]
+recommended_note: "자연스러운 흐름, 5~6개월 유지"
+personal_color: "가을 웜 뮤트"
+swatches: ["#B5754A", "#8C6A3E", "#C9A66B", "#6E5B47"]
+comment: "목선이 길어 짧은 단발도 잘 어울리세요 :)"
+booking_url: "https://booking.naver.com/booking/hayewoni"

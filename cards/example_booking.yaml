@@ -1,0 +1,12 @@
+type: booking
+name: jiu_booking
+designer: "하예원"
+salon: "꼼나나비앙 한남점"
+customer: "지우"
+when: "6월 18일 (수) 오후 2:00"
+service: "레이어드펌"
+duration: "약 2시간 30분"
+directions: "이태원역에서 택시가 편해요"
+prep: "펌 전엔 머리를 가볍게 감고 와 주세요. 변경은 하루 전까지 부탁드려요."
+calendar_url: "https://calendar.google.com/calendar/r/eventedit"
+map_url: "https://map.naver.com/p/search/꼼나나비앙 한남점"
