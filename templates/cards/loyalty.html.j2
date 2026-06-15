@@ -1,0 +1,25 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ customer }} 님 단골 카드 · {{ designer }}{% endblock %}
+{% block style %}
+  .stamp{background:linear-gradient(140deg,#6E5B47,#4E4031);border-radius:16px;padding:18px 18px 20px;color:#fff;}
+  .stamp .h{font-family:var(--serif);font-size:20px;font-weight:600;}
+  .stamp .sub{font-size:11.5px;opacity:.82;margin-bottom:14px;}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;}
+  .st{aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .st.on{background:#F7EFE2;color:var(--accent);}
+  .st.off{border:1.5px dashed rgba(255,255,255,.45);color:rgba(255,255,255,.5);font-size:12px;}
+  .stamp .foot{font-size:12px;margin-top:14px;opacity:.95;text-align:center;}
+  .stamp .foot b{color:#F2E4CC;}
+{% endblock %}
+{% block card %}
+  <div class="stamp">
+    <div class="h">{{ designer }} 단골 카드</div>
+    <div class="sub">{{ customer }} 님 · {{ goal }}회 모으면 {{ reward }}</div>
+    <div class="grid">
+      {% for i in range(1, total + 1) %}
+      {% if i <= stamps %}<div class="st on">✂</div>{% else %}<div class="st off">{{ i }}</div>{% endif %}
+      {% endfor %}
+    </div>
+    <div class="foot">현재 <b>{{ stamps }}개</b>{% if stamps < goal %} · {{ goal - stamps }}번 더 오시면 {{ reward }} 🎁{% endif %}</div>
+  </div>
+{% endblock %}

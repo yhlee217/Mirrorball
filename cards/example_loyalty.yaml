@@ -1,0 +1,9 @@
+type: loyalty
+name: jiu_loyalty
+designer: "하예원"
+salon: "꼼나나비앙 한남점"
+customer: "지우"
+total: 10
+stamps: 4
+goal: 6
+reward: "트리트먼트 무료"

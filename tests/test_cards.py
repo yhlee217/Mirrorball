@@ -119,5 +119,23 @@ def test_booking_card_optional_absent():
     assert '<div class="prep">' not in html    # prep 없으면 안내 박스 없음
 
 
+# --- 친구 소개 / 단골 적립 카드 --------------------------------------------
+def test_referral_card_renders():
+    html = cards.render({"type": "referral", "designer": "하예원", "salon": "s", "customer": "지우",
+                         "offer": "둘 다 20% 할인", "code": "HAYE·지우", "share_url": "https://s/x"})
+    assert "지우 님이 친구를 소개하면" in html and "둘 다 20% 할인" in html
+    assert "HAYE·지우" in html
+    assert 'href="https://s/x"' in html
+
+
+def test_loyalty_card_stamps():
+    html = cards.render({"type": "loyalty", "designer": "하예원", "salon": "s", "customer": "지우",
+                         "total": 10, "stamps": 4, "goal": 6, "reward": "트리트먼트 무료"})
+    assert html.count('class="st on"') == 4       # 채워진 도장 4
+    assert html.count('class="st off"') == 6      # 빈 칸 6
+    assert "현재 <b>4개</b>" in html
+    assert "2번 더 오시면 트리트먼트 무료" in html   # goal-stamps = 2
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

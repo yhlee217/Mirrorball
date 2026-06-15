@@ -24,6 +24,8 @@ TYPES = {
     "aftercare": "aftercare.html.j2",
     "style": "style.html.j2",
     "booking": "booking.html.j2",
+    "referral": "referral.html.j2",
+    "loyalty": "loyalty.html.j2",
 }
 
 
