@@ -75,10 +75,34 @@ python build.py designers/hayewoni.yaml      # 빌드 → dist/hayewoni/index.ht
 3. `<title>`·`<meta description>`도 입력값에서 자동 생성
 4. 빌드 후 JSON-LD 유효성(파싱) 검증
 
+## 선택 모듈 (있으면 나타나고, 없으면 기존 디자인 그대로)
+
+데이터가 있을 때만 렌더되는 선택 필드. 없으면 출력이 원본과 byte-identical 로 유지됩니다.
+
+```yaml
+# 헤어 메뉴판 — Specialties 다음에 "시술 안내" 섹션 추가
+menu:
+  - name: "여성 커트"
+    desc: "얼굴형 맞춤 디자인 커트"   # 선택
+    price: "3만원"
+    time: "약 50분"                  # 선택
+    signature: true                  # 선택, 배지 표시
+
+# Before/After 갤러리 — Portfolio 자리를 드래그 비교 슬라이더로 교체
+# (없으면 기존 portfolio_labels 라벨 그리드로 폴백)
+portfolio:
+  - before: "https://.../before.jpg"   # 사진은 사람이 넣음 (크롤링 없음)
+    after: "https://.../after.jpg"
+    caption: "단발 + 발레아주"          # 선택
+```
+
+`designers/minji.yaml` 이 두 모듈을 모두 채운 예시입니다(`python build.py designers/minji.yaml`).
+
 ## 검증·경고
 
 - 필수 필드(slug, display_name, korean_name, role, salon, instagram, specialties,
   faq, knows_about) 누락 시 빌드 중단
+- (선택) menu 항목은 name/price, portfolio 항목은 before/after 가 있어야 함
 - 값에 `[ ]` 가 남아있으면 "미입력 추정" 경고 (발행 사고 방지)
 - photo_url / booking_url 비면 경고만 하고 진행(플레이스홀더 동작)
 

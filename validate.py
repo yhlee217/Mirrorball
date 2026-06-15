@@ -50,6 +50,15 @@ def validate(data: dict) -> list[str]:
         if not isinstance(f, dict) or not f.get("q") or not f.get("a"):
             errors.append(f"faq[{i}] 의 q/a 누락")
 
+    # (선택) portfolio 가 있으면 before/after 사진이 둘 다 필요
+    for i, item in enumerate(data.get("portfolio") or []):
+        if not isinstance(item, dict) or not item.get("before") or not item.get("after"):
+            errors.append(f"portfolio[{i}] 는 before/after 사진이 모두 필요합니다")
+    # (선택) menu 가 있으면 name/price 필요
+    for i, m in enumerate(data.get("menu") or []):
+        if not isinstance(m, dict) or not m.get("name") or not m.get("price"):
+            errors.append(f"menu[{i}] 는 name/price 가 필요합니다")
+
     if errors:
         raise ValueError("입력 검증 실패:\n  - " + "\n  - ".join(errors))
 

@@ -161,6 +161,64 @@ def test_build_one_writes_and_validates(tmp_path):
     assert build.check_jsonld(out.read_text(encoding="utf-8")) == 2
 
 
+# --- 메뉴판 (2순위) ---------------------------------------------------------
+def test_menu_section_renders_when_present():
+    html = core.render(make_data(menu=[
+        {"name": "커트", "desc": "디자인 커트", "price": "3만원", "time": "약 50분"},
+        {"name": "펌", "price": "12만원~", "signature": True},
+    ]))
+    assert '<div class="eyebrow">Menu</div>' in html and "시술 안내" in html
+    assert html.count('class="menu-item"') == 2
+    assert '<div class="p">3만원</div>' in html
+    assert "약 50분" in html
+    assert '펌 <span class="badge">signature</span>' in html  # 메뉴 signature 배지
+    assert ".menu-item{display:flex" in html  # 메뉴 CSS 주입
+
+
+def test_no_menu_section_when_absent():
+    html = core.render(make_data())  # menu 없음
+    assert "시술 안내" not in html
+    assert 'class="menu-item"' not in html
+    assert ".menu-item{display:flex" not in html  # CSS 도 안 들어감
+
+
+def test_validate_menu_requires_name_price():
+    with pytest.raises(ValueError):
+        validate.validate(make_data(menu=[{"name": "커트"}]))  # price 누락
+
+
+# --- Before/After 갤러리 (1순위) --------------------------------------------
+PORTFOLIO = [
+    {"before": "https://x/b1.jpg", "after": "https://x/a1.jpg", "caption": "단발"},
+    {"before": "https://x/b2.jpg", "after": "https://x/a2.jpg"},
+]
+
+
+def test_portfolio_gallery_renders_when_present():
+    html = core.render(make_data(portfolio=PORTFOLIO))
+    assert html.count('class="ba-item"') == 2
+    assert 'class="ba-range"' in html
+    assert 'src="https://x/a1.jpg"' in html and 'src="https://x/b1.jpg"' in html
+    assert "<figcaption>단발</figcaption>" in html  # 캡션 있는 것
+    assert "querySelectorAll('.ba-range')" in html  # 슬라이더 JS 주입
+    assert ".ba-before{clip-path" in html  # 갤러리 CSS 주입
+    assert 'class="gal"' not in html  # 라벨 폴백은 안 나옴
+
+
+def test_portfolio_fallback_label_grid_when_absent():
+    html = core.render(make_data())  # portfolio 없음
+    assert 'class="ba-gal"' not in html
+    assert ".ba-before{clip-path" not in html
+    assert "querySelectorAll('.ba-range')" not in html  # JS 도 안 들어감
+    assert 'class="gal"' in html  # 기존 라벨 그리드 유지
+    assert "발행 시 인스타 대표 작업 사진으로 교체" in html  # 기존 안내문 유지
+
+
+def test_validate_portfolio_requires_before_after():
+    with pytest.raises(ValueError):
+        validate.validate(make_data(portfolio=[{"before": "https://x/b.jpg"}]))  # after 누락
+
+
 def test_build_one_real_hayewoni(tmp_path):
     # 실제 예시 파일도 빌드되고 경고 3개(photo/booking/주소)
     res = build.build_one("designers/hayewoni.yaml", dist=str(tmp_path / "dist"))

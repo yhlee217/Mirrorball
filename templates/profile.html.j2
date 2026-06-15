@@ -92,6 +92,30 @@
     .r4{animation-delay:.29s}.r5{animation-delay:.37s}
   }
   @keyframes rise{to{opacity:1;transform:none;}}
+{% if menu %}
+  /* menu (시술 안내) — 입력에 menu 가 있을 때만 */
+  .menu-item{display:flex;align-items:flex-start;gap:10px;padding:13px 0;border-bottom:1px solid var(--line);}
+  .menu-item:last-child{border-bottom:none;}
+  .menu-name{font-weight:700;font-size:15px;}
+  .menu-desc{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .menu-price{margin-left:auto;text-align:right;white-space:nowrap;padding-left:10px;}
+  .menu-price .p{font-weight:700;font-size:14.5px;}
+  .menu-price .t{font-size:12px;color:var(--muted);}
+{% endif %}
+{% if portfolio %}
+  /* before/after 갤러리 — 입력에 portfolio 가 있을 때만 */
+  .ba-gal{display:flex;flex-direction:column;gap:16px;}
+  .ba-item{margin:0;}
+  .ba-pair{position:relative;aspect-ratio:4/5;border-radius:10px;overflow:hidden;background:var(--soft);touch-action:none;}
+  .ba-pair img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;user-select:none;-webkit-user-drag:none;}
+  .ba-before{clip-path:inset(0 calc(100% - var(--pos,50%)) 0 0);}
+  .ba-cap{position:absolute;top:10px;font-size:10.5px;font-weight:700;letter-spacing:1px;color:#fff;background:rgba(42,38,34,.4);padding:2px 8px;border-radius:5px;pointer-events:none;}
+  .ba-cap.l{left:10px;} .ba-cap.r{right:10px;}
+  .ba-line{position:absolute;top:0;bottom:0;left:var(--pos,50%);width:3px;background:#fff;transform:translateX(-50%);box-shadow:0 0 6px rgba(0,0,0,.3);pointer-events:none;}
+  .ba-line::after{content:"⇆";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;background:#fff;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.28);}
+  .ba-range{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize;}
+  .ba-item figcaption{font-size:13px;color:var(--muted);margin-top:8px;}
+{% endif %}
 </style>
 </head>
 <body>
@@ -130,6 +154,22 @@
     {% endfor %}
   </section>
 
+{% if menu %}
+  <section class="reveal r3">
+    <div class="eyebrow">Menu</div>
+    <h2>시술 안내</h2>
+    {% for m in menu %}
+    <div class="menu-item">
+      <div>
+        <div class="menu-name">{{ m.name }}{% if m.signature %} <span class="badge">signature</span>{% endif %}</div>
+        {% if m.desc %}<div class="menu-desc">{{ m.desc }}</div>{% endif %}
+      </div>
+      <div class="menu-price"><div class="p">{{ m.price }}</div>{% if m.time %}<div class="t">{{ m.time }}</div>{% endif %}</div>
+    </div>
+    {% endfor %}
+  </section>
+
+{% endif %}
   <section class="reveal r3">
     <div class="eyebrow">About</div>
     <h2>소개</h2>
@@ -143,10 +183,28 @@
   <section class="reveal r3">
     <div class="eyebrow">Portfolio</div>
     <h2>작업</h2>
+{% if portfolio %}
+    <div class="ba-gal">
+      {% for item in portfolio %}
+      <figure class="ba-item">
+        <div class="ba-pair" style="--pos:50%">
+          <img class="ba-after" src="{{ item.after }}" alt="after">
+          <img class="ba-before" src="{{ item.before }}" alt="before">
+          <span class="ba-cap l">BEFORE</span>
+          <span class="ba-cap r">AFTER</span>
+          <span class="ba-line"></span>
+          <input class="ba-range" type="range" min="0" max="100" value="50" aria-label="시술 전후 비교">
+        </div>
+        {% if item.caption %}<figcaption>{{ item.caption }}</figcaption>{% endif %}
+      </figure>
+      {% endfor %}
+    </div>
+{% else %}
     <div class="gal">
       {{ gallery_html|safe }}
     </div>
     <p style="font-size:12.5px;color:var(--muted);margin-top:12px;">※ 발행 시 인스타 대표 작업 사진으로 교체 (시술명 캡션 포함)</p>
+{% endif %}
   </section>
 
   <section class="reveal r4">
@@ -188,5 +246,13 @@
 <script type="application/ld+json">
 {{ faq_ld_json|safe }}
 </script>
+{% if portfolio %}
+<script>
+  document.querySelectorAll('.ba-range').forEach(function(r){
+    var pair = r.closest('.ba-pair');
+    r.addEventListener('input', function(){ pair.style.setProperty('--pos', r.value + '%'); });
+  });
+</script>
+{% endif %}
 </body>
 </html>
