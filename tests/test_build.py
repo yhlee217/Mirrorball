@@ -251,6 +251,54 @@ def test_validate_reviews_stars_range():
         validate.validate(make_data(reviews=[{"text": "x", "by": "y"}]))  # stars 누락
 
 
+# --- 스타일 찾기 진단 -------------------------------------------------------
+QUIZ = {
+    "intro": "한 가지만 답하세요",
+    "questions": [
+        {"q": "얼굴형은?", "options": [
+            {"label": "계란형", "style": "layered"},
+            {"label": "둥근형", "style": "perm"},
+        ]},
+    ],
+    "results": {
+        "layered": {"title": "레이어드컷", "desc": "자연스러운 흐름", "cta_label": "상담받기"},
+        "perm": {"title": "디지털펌", "desc": "볼륨", "cta_label": "상담받기"},
+    },
+}
+
+
+def test_style_quiz_renders_when_present():
+    import json
+    import re
+
+    html = core.render(make_data(style_quiz=QUIZ, booking_url="https://book/x"))
+    assert "어울리는 스타일 찾기" in html and 'id="style-quiz"' in html
+    assert ".quiz-opt{border" in html          # CSS 주입
+    assert "getElementById('style-quiz')" in html  # JS 주입
+    blob = re.search(r'id="quiz-data">(.*?)</script>', html, re.S).group(1)
+    q = json.loads(blob)
+    assert len(q["questions"]) == 1 and q["booking"] == "https://book/x"  # 예약링크 주입
+
+
+def test_no_style_quiz_when_absent():
+    html = core.render(make_data())
+    assert "어울리는 스타일 찾기" not in html
+    assert ".quiz-opt{border" not in html
+    assert "getElementById('style-quiz')" not in html
+
+
+def test_validate_quiz_missing_result_for_style():
+    bad = dict(QUIZ)
+    bad = {**QUIZ, "results": {"layered": {"title": "레이어드컷"}}}  # perm 결과 없음
+    with pytest.raises(ValueError):
+        validate.validate(make_data(style_quiz=bad))
+
+
+def test_validate_quiz_requires_questions_and_results():
+    with pytest.raises(ValueError):
+        validate.validate(make_data(style_quiz={"questions": []}))
+
+
 def test_build_one_real_hayewoni(tmp_path):
     # 실제 예시 파일도 빌드되고 경고 3개(photo/booking/주소)
     res = build.build_one("designers/hayewoni.yaml", dist=str(tmp_path / "dist"))

@@ -94,6 +94,14 @@ def build_context(data: dict) -> dict:
         ctx["review_avg"] = round(sum(stars) / len(stars), 1)
         ctx["review_count"] = len(reviews)
 
+    booking_href = booking or "[예약 링크]"
+
+    # 스타일 찾기 퀴즈: 데이터를 JSON 으로 임베드 (결과 CTA 에 예약 링크 포함)
+    if data.get("style_quiz"):
+        quiz_data = dict(data["style_quiz"])
+        quiz_data["booking"] = booking_href
+        ctx["style_quiz_json"] = _dumps(quiz_data)
+
     ctx.update(
         address=loc.get("address", ""),
         directions=loc.get("directions", ""),
@@ -103,7 +111,7 @@ def build_context(data: dict) -> dict:
         has_photo=bool((data.get("photo_url") or "").strip()),
         initial=(data.get("display_name") or "·")[:1].upper(),
         tagline_html="<br>".join(tagline.splitlines()),
-        booking_href=booking or "[예약 링크]",
+        booking_href=booking_href,
         booking_href_loc=booking or "[네이버 예약 링크]",
         title=make_title(data),
         description=make_description(data),

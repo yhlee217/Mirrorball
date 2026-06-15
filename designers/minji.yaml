@@ -36,6 +36,29 @@ menu:                                   # 2순위 — 헤어 메뉴판
 about:
   - "前 청담 컬러 전문 살롱 — 5년"
   - "모발 손상 최소화 시술 지향"
+style_quiz:                             # 어울리는 스타일 찾기 (태그 집계 방식)
+  intro: "세 가지만 답하면 어울리는 스타일을 추천해드려요"
+  questions:
+    - q: "얼굴형이 어떻게 되세요?"
+      options:
+        - { label: "계란형 · 갸름한 편", style: "layered" }
+        - { label: "각진 편", style: "layered" }
+        - { label: "둥근 편", style: "perm" }
+        - { label: "긴 편", style: "bob" }
+    - q: "원하는 느낌은?"
+      options:
+        - { label: "자연스럽고 가볍게", style: "layered" }
+        - { label: "볼륨 있고 풍성하게", style: "perm" }
+        - { label: "단정하고 깔끔하게", style: "bob" }
+    - q: "관리에 쓸 수 있는 시간은?"
+      options:
+        - { label: "최소로, 손 안 가게", style: "perm" }
+        - { label: "보통", style: "layered" }
+        - { label: "충분히 신경 쓸 수 있어요", style: "bob" }
+  results:
+    layered: { title: "레이어드컷", desc: "얼굴형을 살리는 자연스러운 흐름. 가볍고 데일리 손질이 편해요.", cta_label: "레이어드컷 상담받기" }
+    perm: { title: "디지털펌", desc: "볼륨과 컬을 오래 유지. 아침 손질 시간을 확 줄여줍니다.", cta_label: "디지털펌 상담받기" }
+    bob: { title: "단발 + 클리닉", desc: "단정하고 세련된 라인에 결 관리까지 함께 잡아드려요.", cta_label: "단발 상담받기" }
 portfolio:                              # 1순위 — Before/After 변신 갤러리 (실제 인물 스톡 사진, 데모용)
   - before: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=750&fit=crop&crop=faces&q=70"
     after: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=750&fit=crop&crop=faces&q=70"

@@ -101,6 +101,19 @@ reviews:
     text: "발레아주 색이 너무 예뻐요..."
     by: "이○○"
     service: "발레아주"                 # 선택
+
+# 어울리는 스타일 찾기 — Specialties 다음에 인터랙티브 진단(순수 정적 JS)
+# 각 보기의 style 태그를 집계해 가장 많은 결과를 추천 → 예약 CTA
+style_quiz:
+  intro: "세 가지만 답하면 어울리는 스타일을 추천해드려요"   # 선택
+  questions:
+    - q: "얼굴형이 어떻게 되세요?"
+      options:
+        - { label: "계란형", style: "layered" }
+        - { label: "둥근 편", style: "perm" }
+  results:
+    layered: { title: "레이어드컷", desc: "자연스러운 흐름", cta_label: "상담받기" }
+    perm:    { title: "디지털펌", desc: "볼륨과 컬", cta_label: "상담받기" }
 ```
 
 `designers/minji.yaml` 이 두 모듈을 모두 채운 예시입니다(`python build.py designers/minji.yaml`).

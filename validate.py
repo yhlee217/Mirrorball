@@ -65,6 +65,29 @@ def validate(data: dict) -> list[str]:
         elif not isinstance(rv.get("stars"), int) or not (1 <= rv["stars"] <= 5):
             errors.append(f"reviews[{i}].stars 는 1~5 정수여야 합니다")
 
+    # (선택) style_quiz 형식 검증
+    quiz = data.get("style_quiz")
+    if quiz:
+        if not isinstance(quiz, dict) or not quiz.get("questions") or not quiz.get("results"):
+            errors.append("style_quiz 는 questions 와 results 가 필요합니다")
+        else:
+            used_styles = set()
+            for i, q in enumerate(quiz["questions"]):
+                if not isinstance(q, dict) or not q.get("q") or not q.get("options"):
+                    errors.append(f"style_quiz.questions[{i}] 는 q/options 가 필요합니다")
+                    continue
+                for j, o in enumerate(q["options"]):
+                    if not isinstance(o, dict) or not o.get("label") or not o.get("style"):
+                        errors.append(f"style_quiz.questions[{i}].options[{j}] 는 label/style 필요")
+                    else:
+                        used_styles.add(o["style"])
+            for s in used_styles:
+                if s not in quiz["results"]:
+                    errors.append(f"style_quiz: 옵션 style '{s}' 에 대한 results 항목이 없습니다")
+            for k, r in (quiz["results"] or {}).items():
+                if not isinstance(r, dict) or not r.get("title"):
+                    errors.append(f"style_quiz.results['{k}'] 는 title 이 필요합니다")
+
     if errors:
         raise ValueError("입력 검증 실패:\n  - " + "\n  - ".join(errors))
 

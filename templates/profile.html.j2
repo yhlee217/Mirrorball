@@ -127,6 +127,24 @@
   .review .rev-q{font-size:14px;line-height:1.6;margin:5px 0;}
   .review .rev-by{font-size:12px;color:var(--muted);}
 {% endif %}
+{% if style_quiz %}
+  /* style quiz (어울리는 스타일 찾기) — 입력에 style_quiz 가 있을 때만 */
+  .quiz-dots{display:flex;gap:6px;justify-content:center;margin-bottom:16px;}
+  .quiz-dots i{width:7px;height:7px;border-radius:50%;background:var(--line);transition:.2s;}
+  .quiz-dots i.on{background:var(--accent);width:20px;border-radius:6px;}
+  .quiz-intro{font-size:13px;color:var(--muted);text-align:center;margin:0 0 14px;}
+  .quiz-q{font-size:17px;font-weight:700;text-align:center;margin-bottom:16px;}
+  .quiz-opts{display:flex;flex-direction:column;gap:9px;}
+  .quiz-opt{border:1px solid var(--line);border-radius:12px;padding:12px 15px;font-size:14px;color:var(--ink);background:#fff;font-family:inherit;text-align:left;cursor:pointer;transition:.15s;}
+  .quiz-opt:hover{border-color:var(--accent);background:var(--soft);}
+  .quiz-opt:active{transform:scale(.99);}
+  .quiz-result{text-align:center;padding:6px 0;}
+  .quiz-result-e{font-family:var(--serif);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:600;}
+  .quiz-result-t{font-family:var(--serif);font-size:30px;font-weight:600;margin:4px 0 8px;}
+  .quiz-result-d{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:16px;}
+  .quiz-cta{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 22px;border-radius:12px;}
+  .quiz-again{display:block;margin:12px auto 0;background:none;border:none;color:var(--muted);font-size:12.5px;text-decoration:underline;cursor:pointer;font-family:inherit;}
+{% endif %}
 </style>
 </head>
 <body>
@@ -165,6 +183,15 @@
     {% endfor %}
   </section>
 
+{% if style_quiz %}
+  <section class="reveal r3">
+    <div class="eyebrow">Find Your Style</div>
+    <h2>어울리는 스타일 찾기</h2>
+    <div class="quiz" id="style-quiz"></div>
+    <script type="application/json" id="quiz-data">{{ style_quiz_json|safe }}</script>
+  </section>
+
+{% endif %}
 {% if menu %}
   <section class="reveal r3">
     <div class="eyebrow">Menu</div>
@@ -284,6 +311,65 @@
     var pair = r.closest('.ba-pair');
     r.addEventListener('input', function(){ pair.style.setProperty('--pos', r.value + '%'); });
   });
+</script>
+{% endif %}
+{% if style_quiz %}
+<script>
+  (function(){
+    var root = document.getElementById('style-quiz');
+    var dataEl = document.getElementById('quiz-data');
+    if(!root || !dataEl) return;
+    var data;
+    try { data = JSON.parse(dataEl.textContent); } catch(e){ return; }
+    var qs = data.questions || [];
+    var results = data.results || {};
+    var votes = {}, step = 0;
+    function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
+    function renderQuestion(){
+      var q = qs[step] || {};
+      var dots = qs.map(function(_,i){ return '<i class="'+(i<=step?'on':'')+'"></i>'; }).join('');
+      var opts = (q.options||[]).map(function(o,i){
+        return '<button class="quiz-opt" type="button" data-i="'+i+'">'+esc(o.label)+'</button>';
+      }).join('');
+      root.innerHTML =
+        '<div class="quiz-dots">'+dots+'</div>'+
+        ((step===0 && data.intro) ? '<p class="quiz-intro">'+esc(data.intro)+'</p>' : '')+
+        '<div class="quiz-q">'+esc(q.q)+'</div>'+
+        '<div class="quiz-opts">'+opts+'</div>';
+      root.querySelectorAll('.quiz-opt').forEach(function(b){
+        b.addEventListener('click', function(){
+          var o = (q.options||[])[+b.getAttribute('data-i')] || {};
+          votes[o.style] = (votes[o.style]||0) + 1;
+          step++;
+          (step < qs.length) ? renderQuestion() : renderResult();
+        });
+      });
+    }
+    function topStyle(){
+      var best=null, bestN=-1;
+      Object.keys(results).forEach(function(k){
+        var n = votes[k]||0;
+        if(n > bestN){ bestN=n; best=k; }
+      });
+      return best;
+    }
+    function renderResult(){
+      var r = results[topStyle()] || {};
+      var cta = data.booking ? '<a class="quiz-cta" href="'+esc(data.booking)+'">'+esc(r.cta_label||'이 스타일로 상담받기')+'</a>' : '';
+      root.innerHTML =
+        '<div class="quiz-result">'+
+          '<div class="quiz-result-e">추천 스타일</div>'+
+          '<div class="quiz-result-t">'+esc(r.title)+'</div>'+
+          '<div class="quiz-result-d">'+esc(r.desc)+'</div>'+
+          cta+
+          '<button class="quiz-again" type="button">다시 해보기</button>'+
+        '</div>';
+      root.querySelector('.quiz-again').addEventListener('click', function(){
+        votes={}; step=0; renderQuestion();
+      });
+    }
+    renderQuestion();
+  })();
 </script>
 {% endif %}
 </body>
