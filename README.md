@@ -1,146 +1,101 @@
-# Mirrorball — 미용사 AI 노출 진단
+# Mirrorball — 미용사 1인 컨시어지 도구 모음
 
-헤어 디자이너 1명이 AI 검색(ChatGPT·Gemini·Perplexity)에서 어떻게 노출되는지
-진단하는 1인 컨시어지용 내부 CLI 스크립트. SaaS 아님, 파일 기반.
+헤어 디자이너를 위한 1인 컨시어지 운영자용 **내부 도구**. SaaS가 아니라
+파일 기반 CLI 스크립트 모음이며, 서버·DB·웹UI·스케줄러 없이 동작한다.
 
-## 설치 / 실행 (3줄)
+전부 **하나의 디자이너 데이터**에서 파생되고 **프로필 페이지를 허브**로 묶인다.
+(구조 한눈에: `mockups/service_map.html` / 모바일: `mockups/service_map_mobile.html`)
+
+| 시스템 | 무엇 | 핵심 산출물 |
+|---|---|---|
+| **① 프로필 빌더** | YAML → 호스팅 프로필 정적 사이트 | `dist/{slug}/index.html` |
+| **② AI 노출 케어** | AI 검색 노출 진단·개선·증명 | `runs/`, `content/` 리포트·콘텐츠 |
+| **③ 카드 생성기** | 손님용 공유 카드(애프터케어 등) | `dist/cards/{name}.html` |
+
+## 설치
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env   # 키 채우기 (키 있는 엔진만 자동 활성화)
-python diagnose.py targets/example.yaml
+cp .env.example .env   # ② 진단/콘텐츠에 쓸 API 키 (① ③ 은 키 불필요)
 ```
 
-## 초기 무료 구성 (권장)
+Python 3.11+, Windows/WSL 동작. 출력물(`dist/`, `runs/`, `content/`)은 `.gitignore`.
 
-비용 0으로 시작하려면 **Gemini 무료 티어**만 쓰면 됩니다.
+---
 
-1. Google AI Studio 에서 API 키 발급 → `.env` 의 `GOOGLE_API_KEY` 에 입력
-2. 나머지(`OPENAI_API_KEY`, `PERPLEXITY_API_KEY`)는 비워둠 → 자동 비활성화
-3. `REPORT_PROVIDER=gemini` (기본값) — 리포트 생성도 Gemini 로
+## ① 프로필 빌더 — 호스팅 프로필 정적 사이트
 
-→ 실행하면 `활성 엔진: gemini / 리포트: gemini` 로 동작합니다.
-OpenAI/Perplexity 는 크레딧·키가 생겼을 때 `.env` 에 키만 넣으면 자동으로 합류합니다(엔진 1~3개 유연).
-로컬 모델(Ollama 등)은 다루지 않습니다 — 무료 크레딧/무료 티어 API만 사용.
-
-## 동작
-
-1. `targets/{slug}.yaml` 의 질문을 질문×(활성 엔진)×sampling 만큼 병렬 질의
-   (동시 3, 타임아웃 60s, 1회 재시도, 429는 백오프)
-2. 각 답변에서 디자이너/매장 언급·맥락·인용·경쟁 후보를 추출
-3. 원본을 `runs/{slug}/{YYYYMMDD_HHMM}/raw.json` 에 저장 (중간 실패해도 성공분 저장)
-4. `REPORT_PROVIDER` 로 고객용 `report.md` 생성 (프롬프트는 `prompts/report.md.j2`)
-
-질문은 사람이 yaml 에 직접 넣습니다. 자동 생성하지 않습니다.
-
-## 파일
-
-- `diagnose.py` — 엔트리(엔진 자동감지, 비용가드, 병렬 질의, 저장, 요약)
-- `engines.py` — provider 어댑터 + 자동 활성화 + 디스패처
-- `extract.py` — 언급/맥락/인용/경쟁 추출 (substring)
-- `report.py` — raw.json → 리포트 마크다운
-- `compare.py` — 두 측정(raw.json) 비교 → 발행 전후 변화 리포트
-- `content.py` — designers/{slug}.yaml → 네이버 블로그·플레이스용 인용 콘텐츠 초안
-- `prompts/report.md.j2`, `prompts/content.md.j2` — 프롬프트 템플릿
-
-### 추가 도구 사용법
+기준 디자인(`templates/profile.html.j2`)은 손으로 만든 원본 HTML을 그대로 옮긴 것이고,
+값만 변수화한다. 데이터가 있을 때만 나타나는 **선택 모듈**로 기능을 얹어, 모듈이 없으면
+출력이 원본과 byte-identical 로 유지된다.
 
 ```bash
-python compare.py kimminji            # 최근 두 측정 비교 → compare.md
-python content.py designers/minji.yaml # 인용 콘텐츠 초안 → content/{slug}.md
+python build.py designers/hayewoni.yaml   # 한 명 → dist/hayewoni/index.html
+python build.py --all                      # designers/*.yaml 전부 + sitemap/robots
 ```
+
+- 입력: `designers/{slug}.yaml` (전체 예시: `designers/minji.yaml`)
+- 자동: schema.org JSON-LD(Person·FAQPage), `<title>`/`description`, OG/Twitter 메타
+- 선택 모듈: `portfolio`(전후 갤러리)·`menu`(메뉴판)·`reviews`(후기)·`style_quiz`(스타일 찾기)
+- 배포: `dist/` 를 Netlify drop / GitHub Pages 에 수동 업로드 (자동배포 없음)
+
+핵심 코드: `build.py`(CLI) · `core.py`(`render(data)->str`) · `schema.py` · `validate.py`
+
+---
+
+## ② AI 노출 케어 — 진단·개선·증명
+
+디자이너가 AI 검색(ChatGPT·Gemini·Perplexity)에서 어떻게 노출되는지 측정하고 개선한다.
+키가 있는 provider만 자동 활성화(`.env`), 리포트는 `REPORT_PROVIDER`(기본 gemini).
+
+```bash
+python diagnose.py targets/example.yaml    # 질의 → runs/{slug}/{시각}/raw.json + report.md
+python compare.py  kimminji                 # 최근 두 측정 비교 → compare.md (발행 전후 변화)
+python content.py  designers/minji.yaml     # 인용 콘텐츠 초안 → content/{slug}.md
+python compete.py  targets/example.yaml     # 경쟁 노출 스캔(영업용) → compete.md
+```
+
+핵심 코드: `diagnose.py`·`engines.py`(provider 어댑터)·`extract.py`(추출)·`report.py`·`compare.py`·`content.py`·`compete.py`
+
+초기 무료 구성: Google AI Studio 키만 `.env`의 `GOOGLE_API_KEY`에 넣으면 Gemini 무료 티어로 시작.
+
+---
+
+## ③ 카드 생성기 — 손님용 공유 카드
+
+시술 후 손님에게 보내는 정적 HTML 카드. 같은 base 템플릿(`templates/cards/_base.html.j2`)에
+type별 카드를 Jinja 상속으로 얹는다.
+
+```bash
+python cards.py cards/example_aftercare.yaml   # → dist/cards/{name}.html
+python cards.py --all
+```
+
+- type 5종: `aftercare`(애프터케어) · `style`(퍼스널 스타일) · `booking`(예약 확정) · `referral`(친구 소개) · `loyalty`(단골 적립)
+- 새 종류는 `templates/cards/{type}.html.j2` 추가 + `cards.py` `TYPES` 등록만
+
+---
 
 ## 테스트
 
 ```bash
-python -m pytest tests/ -q
+python -m pytest tests/ -q     # 103개
 ```
 
----
+## 스코프 (의도적으로 안 만든 것)
 
-# 미용사 프로필 생성기 (build.py)
+- 서버·DB·웹UI·로그인·결제·스케줄러 — 전부 없음. 파일 기반 CLI만.
+- 자동 배포·인스타 크롤링·이미지 자동수집 없음 (사진·질문은 사람이 넣는다).
+- 챗봇·월간 알림·재방문 알림·적립/소개 추적 등 **서버가 필요한 기능은 범위 밖**.
 
-YAML 입력으로 호스팅 프로필 정적 HTML을 찍어내는 빌드 도구. 기준 디자인
-(`templates/profile.html.j2`)은 손으로 만든 원본 HTML을 그대로 옮긴 것이고,
-값만 변수화한다. 디자인 변경 없음.
+## 구조
 
-## 설치 · 빌드 · 배포 (3줄)
-
-```bash
-pip install -r requirements.txt
-python build.py designers/hayewoni.yaml      # 빌드 → dist/hayewoni/index.html
-# dist/ 를 Netlify drop 또는 GitHub Pages에 수동 업로드
 ```
-
-- 전부 빌드: `python build.py --all` (designers/*.yaml)
-- 입력: `designers/{slug}.yaml` (스키마는 `designers/hayewoni.yaml` 참고)
-- 출력: `dist/{slug}/index.html` (순수 정적, 런타임 서버 불필요, `.gitignore`)
-
-## 동작
-
-1. YAML 로드·검증 → `core.render(data)` → `dist/{slug}/index.html`
-2. schema.org JSON-LD 2종(Person·FAQPage)을 입력값에서 자동 생성해 삽입
-3. `<title>`·`<meta description>`도 입력값에서 자동 생성
-4. 빌드 후 JSON-LD 유효성(파싱) 검증
-
-## 선택 모듈 (있으면 나타나고, 없으면 기존 디자인 그대로)
-
-데이터가 있을 때만 렌더되는 선택 필드. 없으면 출력이 원본과 byte-identical 로 유지됩니다.
-
-```yaml
-# 헤어 메뉴판 — Specialties 다음에 "시술 안내" 섹션 추가
-menu:
-  - name: "여성 커트"
-    desc: "얼굴형 맞춤 디자인 커트"   # 선택
-    price: "3만원"
-    time: "약 50분"                  # 선택
-    signature: true                  # 선택, 배지 표시
-
-# Before/After 갤러리 — Portfolio 자리를 드래그 비교 슬라이더로 교체
-# (없으면 기존 portfolio_labels 라벨 그리드로 폴백)
-portfolio:
-  - before: "https://.../before.jpg"   # 사진은 사람이 넣음 (크롤링 없음)
-    after: "https://.../after.jpg"
-    caption: "단발 + 발레아주"          # 선택
-
-# 고객 후기 — Portfolio 다음에 "고객 후기" 섹션 (평균·개수는 자동 계산)
-reviews:
-  - stars: 5                           # 1~5 정수
-    text: "발레아주 색이 너무 예뻐요..."
-    by: "이○○"
-    service: "발레아주"                 # 선택
-
-# 어울리는 스타일 찾기 — Specialties 다음에 인터랙티브 진단(순수 정적 JS)
-# 각 보기의 style 태그를 집계해 가장 많은 결과를 추천 → 예약 CTA
-style_quiz:
-  intro: "세 가지만 답하면 어울리는 스타일을 추천해드려요"   # 선택
-  questions:
-    - q: "얼굴형이 어떻게 되세요?"
-      options:
-        - { label: "계란형", style: "layered" }
-        - { label: "둥근 편", style: "perm" }
-  results:
-    layered: { title: "레이어드컷", desc: "자연스러운 흐름", cta_label: "상담받기" }
-    perm:    { title: "디지털펌", desc: "볼륨과 컬", cta_label: "상담받기" }
+diagnose·engines·extract·report·compare·content·compete.py   ② 진단/케어
+build·core·schema·validate.py + templates/profile.html.j2     ① 프로필 빌더
+cards.py + templates/cards/*.html.j2                          ③ 카드 생성기
+designers/*.yaml  targets/*.yaml  cards/*.yaml                입력
+prompts/*.j2                                                  LLM 프롬프트
+mockups/*.html                                               서비스 맵·기능 미리보기
+tests/                                                       단위 테스트 103개
 ```
-
-`designers/minji.yaml` 이 두 모듈을 모두 채운 예시입니다(`python build.py designers/minji.yaml`).
-
-## 검증·경고
-
-- 필수 필드(slug, display_name, korean_name, role, salon, instagram, specialties,
-  faq, knows_about) 누락 시 빌드 중단
-- (선택) menu 항목은 name/price, portfolio 항목은 before/after 가 있어야 함
-- 값에 `[ ]` 가 남아있으면 "미입력 추정" 경고 (발행 사고 방지)
-- photo_url / booking_url 비면 경고만 하고 진행(플레이스홀더 동작)
-
-## 구조 (입력-코어 분리)
-
-- `build.py` — CLI 엔트리 (YAML → core)
-- `core.py` — `render(data: dict) -> str` (입력 방식 무관 재사용 코어)
-- `schema.py` — data → Person/FAQPage JSON-LD
-- `validate.py` — 검증 + placeholder 경고
-- `templates/profile.html.j2` — 원본 디자인(값만 변수화)
-
-`core.render(data)`가 dict만 받으므로, 나중에 웹 폼이 같은 dict를 넘기면
-그대로 재사용된다 (웹 폼은 이번 범위 아님).
