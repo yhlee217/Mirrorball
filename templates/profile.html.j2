@@ -116,6 +116,17 @@
   .ba-range{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize;}
   .ba-item figcaption{font-size:13px;color:var(--muted);margin-top:8px;}
 {% endif %}
+{% if reviews %}
+  /* reviews (고객 후기) — 입력에 reviews 가 있을 때만 */
+  .rev-head{display:flex;align-items:center;gap:13px;margin-bottom:16px;}
+  .rev-score{font-family:var(--serif);font-size:38px;font-weight:600;line-height:1;}
+  .rev-stars{color:#C99A3E;letter-spacing:1px;font-size:14px;}
+  .rev-count{font-size:12px;color:var(--muted);}
+  .review{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;}
+  .review:last-child{margin-bottom:0;}
+  .review .rev-q{font-size:14px;line-height:1.6;margin:5px 0;}
+  .review .rev-by{font-size:12px;color:var(--muted);}
+{% endif %}
 </style>
 </head>
 <body>
@@ -207,6 +218,27 @@
 {% endif %}
   </section>
 
+{% if reviews %}
+  <section class="reveal r4">
+    <div class="eyebrow">Reviews</div>
+    <h2>고객 후기</h2>
+    <div class="rev-head">
+      <div class="rev-score">{{ review_avg }}</div>
+      <div>
+        <div class="rev-stars">★★★★★</div>
+        <div class="rev-count">후기 {{ review_count }}건</div>
+      </div>
+    </div>
+    {% for rv in reviews %}
+    <div class="review">
+      <div class="rev-stars">{{ "★" * rv.stars }}{{ "☆" * (5 - rv.stars) }}</div>
+      <div class="rev-q">"{{ rv.text }}"</div>
+      <div class="rev-by">{{ rv.by }}{% if rv.service %} · {{ rv.service }}{% endif %}</div>
+    </div>
+    {% endfor %}
+  </section>
+
+{% endif %}
   <section class="reveal r4">
     <div class="eyebrow">FAQ</div>
     <h2>자주 묻는 질문</h2>

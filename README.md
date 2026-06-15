@@ -94,6 +94,13 @@ portfolio:
   - before: "https://.../before.jpg"   # 사진은 사람이 넣음 (크롤링 없음)
     after: "https://.../after.jpg"
     caption: "단발 + 발레아주"          # 선택
+
+# 고객 후기 — Portfolio 다음에 "고객 후기" 섹션 (평균·개수는 자동 계산)
+reviews:
+  - stars: 5                           # 1~5 정수
+    text: "발레아주 색이 너무 예뻐요..."
+    by: "이○○"
+    service: "발레아주"                 # 선택
 ```
 
 `designers/minji.yaml` 이 두 모듈을 모두 채운 예시입니다(`python build.py designers/minji.yaml`).

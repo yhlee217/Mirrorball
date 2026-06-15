@@ -47,6 +47,18 @@ portfolio:                              # 1순위 — Before/After 변신 갤러
     after: "https://picsum.photos/seed/color-after/600/750"
     caption: "뿌리펌 + 레이어드"
 portfolio_labels: ["발레아주", "디지털펌", "컬러", "클리닉"]   # portfolio 없을 때의 폴백용(있으면 미사용)
+reviews:                                # 후기 위젯 (별점·평균은 자동 계산)
+  - stars: 5
+    text: "발레아주 색이 너무 예뻐요. 뿌리 자라도 티 안 나서 만족합니다."
+    by: "이○○"
+    service: "발레아주"
+  - stars: 5
+    text: "디지털펌 결이 진짜 매끄러워요. 손질이 너무 편해졌어요."
+    by: "박○○"
+    service: "디지털펌"
+  - stars: 4
+    text: "상담 친절하게 해주시고 손상 없이 잘 해주세요."
+    by: "최○○"
 faq:
   - q: "발레아주는 얼마나 유지되나요?"
     a: "뿌리가 자라도 자연스러워 3~4개월은 부담 없이 유지됩니다. 결 관리만 해주시면 더 오래갑니다."

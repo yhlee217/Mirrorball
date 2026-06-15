@@ -219,6 +219,38 @@ def test_validate_portfolio_requires_before_after():
         validate.validate(make_data(portfolio=[{"before": "https://x/b.jpg"}]))  # after 누락
 
 
+# --- 후기 위젯 -------------------------------------------------------------
+REVIEWS = [
+    {"stars": 5, "text": "최고예요", "by": "김○○", "service": "커트"},
+    {"stars": 4, "text": "만족합니다", "by": "이○○"},
+]
+
+
+def test_reviews_render_with_avg():
+    html = core.render(make_data(reviews=REVIEWS))
+    assert '<div class="eyebrow">Reviews</div>' in html and "고객 후기" in html
+    assert html.count('class="review"') == 2
+    assert '<div class="rev-score">4.5</div>' in html  # (5+4)/2
+    assert "후기 2건" in html
+    assert "★★★★★" in html and "★★★★☆" in html  # 5점/4점
+    assert "김○○ · 커트" in html
+    assert ".rev-score{font-family" in html  # 후기 CSS 주입
+
+
+def test_no_reviews_when_absent():
+    html = core.render(make_data())
+    assert "고객 후기" not in html
+    assert 'class="review"' not in html
+    assert ".rev-score{font-family" not in html
+
+
+def test_validate_reviews_stars_range():
+    with pytest.raises(ValueError):
+        validate.validate(make_data(reviews=[{"text": "x", "by": "y", "stars": 6}]))
+    with pytest.raises(ValueError):
+        validate.validate(make_data(reviews=[{"text": "x", "by": "y"}]))  # stars 누락
+
+
 def test_build_one_real_hayewoni(tmp_path):
     # 실제 예시 파일도 빌드되고 경고 3개(photo/booking/주소)
     res = build.build_one("designers/hayewoni.yaml", dist=str(tmp_path / "dist"))

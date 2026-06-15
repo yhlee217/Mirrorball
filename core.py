@@ -87,6 +87,13 @@ def build_context(data: dict) -> dict:
     ]
     gallery_html = "\n      ".join(rows)
 
+    # 후기: 평균·개수는 입력에서 파생 (중복 입력 줄이기)
+    reviews = data.get("reviews") or []
+    if reviews:
+        stars = [int(r.get("stars") or 0) for r in reviews]
+        ctx["review_avg"] = round(sum(stars) / len(stars), 1)
+        ctx["review_count"] = len(reviews)
+
     ctx.update(
         address=loc.get("address", ""),
         directions=loc.get("directions", ""),

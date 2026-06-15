@@ -58,6 +58,12 @@ def validate(data: dict) -> list[str]:
     for i, m in enumerate(data.get("menu") or []):
         if not isinstance(m, dict) or not m.get("name") or not m.get("price"):
             errors.append(f"menu[{i}] 는 name/price 가 필요합니다")
+    # (선택) reviews 가 있으면 text/by + stars(1~5 정수)
+    for i, rv in enumerate(data.get("reviews") or []):
+        if not isinstance(rv, dict) or not rv.get("text") or not rv.get("by"):
+            errors.append(f"reviews[{i}] 는 text/by 가 필요합니다")
+        elif not isinstance(rv.get("stars"), int) or not (1 <= rv["stars"] <= 5):
+            errors.append(f"reviews[{i}].stars 는 1~5 정수여야 합니다")
 
     if errors:
         raise ValueError("입력 검증 실패:\n  - " + "\n  - ".join(errors))
