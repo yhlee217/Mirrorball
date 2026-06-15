@@ -1,0 +1,36 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ customer }} 님 애프터케어 · {{ designer }}{% endblock %}
+{% block style %}
+  .care .row{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-bottom:1px dashed var(--line);}
+  .care .row:last-child{border-bottom:none;}
+  .care .ic{width:30px;height:30px;border-radius:9px;background:var(--soft);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto;}
+  .care .tx{font-size:13px;line-height:1.5;}
+  .care .tx b{font-weight:700;}
+  .next{background:var(--soft);border-radius:11px;padding:12px 14px;margin-top:14px;
+    font-size:12.5px;color:var(--accent-d);text-align:center;line-height:1.5;}
+  .next b{color:var(--accent);}
+{% endblock %}
+{% block card %}
+  <div class="card care">
+    <div class="cap-top">
+      <div class="e">After Care</div>
+      <div class="nm">{{ customer }} 님 {{ service }} 관리</div>
+      <div class="by">{{ designer }} · {{ salon }}{% if service_date %} · {{ service_date }} 시술{% endif %}</div>
+    </div>
+    <div class="kv">
+      {% for tip in tips %}
+      <div class="row">
+        <div class="ic">{{ tip.icon | default('•', true) }}</div>
+        <div class="tx"><b>{{ tip.title }}</b>{% if tip.desc %}<br>{{ tip.desc }}{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="save">
+      {% if next_visit %}
+      <div class="next">다음 방문 추천: <b>{{ next_visit }}</b>{% if remind %}<br>시기가 되면 안부 메시지로 알려드릴게요.{% endif %}</div>
+      {% endif %}
+      {% if booking_url %}<a class="btn" href="{{ booking_url }}" style="margin-top:12px;">예약하기</a>{% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,20 @@
+type: aftercare
+name: jiu_aftercare
+designer: "하예원"
+salon: "꼼나나비앙 한남점"
+customer: "지우"
+service: "레이어드펌"
+service_date: "6월 11일"
+tips:
+  - icon: "💧"
+    title: "3일간은 샴푸 피하기"
+    desc: "펌이 자리잡는 시간이에요."
+  - icon: "🌬️"
+    title: "말릴 땐 손으로 비틀어 말리기"
+    desc: "컬 흐름이 더 예쁘게 살아요."
+  - icon: "✨"
+    title: "주 1~2회 펌 전용 트리트먼트"
+    desc: "유지력이 길어집니다."
+next_visit: "11월 초 (5개월 후)"
+remind: true
+booking_url: "https://booking.naver.com/booking/hayewoni"
