@@ -39,8 +39,16 @@ OpenAI/Perplexity 는 크레딧·키가 생겼을 때 `.env` 에 키만 넣으�
 - `engines.py` — provider 어댑터 + 자동 활성화 + 디스패처
 - `extract.py` — 언급/맥락/인용/경쟁 추출 (substring)
 - `report.py` — raw.json → 리포트 마크다운
-- `prompts/report.md.j2` — 리포트 프롬프트 템플릿
-- `tests/` — 추출/엔진/파이프라인/리포트 단위 테스트
+- `compare.py` — 두 측정(raw.json) 비교 → 발행 전후 변화 리포트
+- `content.py` — designers/{slug}.yaml → 네이버 블로그·플레이스용 인용 콘텐츠 초안
+- `prompts/report.md.j2`, `prompts/content.md.j2` — 프롬프트 템플릿
+
+### 추가 도구 사용법
+
+```bash
+python compare.py kimminji            # 최근 두 측정 비교 → compare.md
+python content.py designers/minji.yaml # 인용 콘텐츠 초안 → content/{slug}.md
+```
 
 ## 테스트
 
