@@ -6,7 +6,7 @@ salon: "살롱드헤어 강남점"
 tagline: |
   결을 살리는 컬러와 자연스러운 펌.
   나에게 어울리는 톤을 함께 찾아드립니다.
-photo_url: "https://picsum.photos/seed/minji-portrait/240/240"
+photo_url: "https://randomuser.me/api/portraits/women/65.jpg"   # 실제 인물 사진(데모용)
 instagram: "minji.hair"
 booking_url: "https://booking.naver.com/booking/minji"
 specialties:
@@ -36,16 +36,16 @@ menu:                                   # 2순위 — 헤어 메뉴판
 about:
   - "前 청담 컬러 전문 살롱 — 5년"
   - "모발 손상 최소화 시술 지향"
-portfolio:                              # 1순위 — Before/After 변신 갤러리
-  - before: "https://picsum.photos/seed/cut-before/600/750"
-    after: "https://picsum.photos/seed/cut-after/600/750"
-    caption: "단발 + 발레아주"
-  - before: "https://picsum.photos/seed/perm-before/600/750"
-    after: "https://picsum.photos/seed/perm-after/600/750"
-    caption: "디지털펌 + 톤다운"
-  - before: "https://picsum.photos/seed/color-before/600/750"
-    after: "https://picsum.photos/seed/color-after/600/750"
-    caption: "뿌리펌 + 레이어드"
+portfolio:                              # 1순위 — Before/After 변신 갤러리 (실제 인물 스톡 사진, 데모용)
+  - before: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=750&fit=crop&crop=faces&q=70"
+    after: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=750&fit=crop&crop=faces&q=70"
+    caption: "긴 머리 → 발레아주 컬러"
+  - before: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&h=750&fit=crop&crop=faces&q=70"
+    after: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=600&h=750&fit=crop&crop=faces&q=70"
+    caption: "톤다운 → 밝은 레이어드"
+  - before: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&h=750&fit=crop&crop=faces&q=70"
+    after: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=750&fit=crop&crop=faces&q=70"
+    caption: "디지털펌 + 결 정리"
 portfolio_labels: ["발레아주", "디지털펌", "컬러", "클리닉"]   # portfolio 없을 때의 폴백용(있으면 미사용)
 reviews:                                # 후기 위젯 (별점·평균은 자동 계산)
   - stars: 5
