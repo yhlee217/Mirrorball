@@ -57,7 +57,42 @@ def build_one(path: str, dist: str = "dist") -> dict:
     out = Path(dist) / data["slug"] / "index.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
-    return {"slug": data["slug"], "out_path": out, "warnings": warnings}
+    return {
+        "slug": data["slug"],
+        "out_path": out,
+        "warnings": warnings,
+        "site_url": (data.get("site_url") or "").strip(),
+    }
+
+
+def write_site_files(built: list[dict], dist: str = "dist") -> list[Path]:
+    """robots.txt 항상 + site_url 있는 프로필로 sitemap.xml 생성."""
+    from urllib.parse import urlparse
+
+    dist_p = Path(dist)
+    dist_p.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+
+    urls = [b["site_url"] for b in built if b.get("site_url")]
+    if urls:
+        body = "\n".join(f"  <url><loc>{u}</loc></url>" for u in urls)
+        sitemap = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            f"{body}\n</urlset>\n"
+        )
+        p = dist_p / "sitemap.xml"
+        p.write_text(sitemap, encoding="utf-8")
+        written.append(p)
+
+    robots = "User-agent: *\nAllow: /\n"
+    if urls:
+        o = urlparse(urls[0])
+        robots += f"Sitemap: {o.scheme}://{o.netloc}/sitemap.xml\n"
+    p = dist_p / "robots.txt"
+    p.write_text(robots, encoding="utf-8")
+    written.append(p)
+    return written
 
 
 def main() -> None:
@@ -84,6 +119,10 @@ def main() -> None:
         except Exception as exc:
             failed.append((p, str(exc)))
             print(f"✗ {p}\n    {exc}")
+
+    site_files = write_site_files(built) if built else []
+    for p in site_files:
+        print(f"✓ {p}")
 
     print("\n" + "=" * 52)
     print(f"빌드 성공: {len(built)}  /  실패: {len(failed)}")

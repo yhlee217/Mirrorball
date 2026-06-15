@@ -299,6 +299,40 @@ def test_validate_quiz_requires_questions_and_results():
         validate.validate(make_data(style_quiz={"questions": []}))
 
 
+# --- SEO (OG 메타 / sitemap / robots) --------------------------------------
+def test_og_meta_tags():
+    html = core.render(make_data(photo_url="https://x/p.jpg", site_url="https://x.site"))
+    assert '<meta property="og:title"' in html
+    assert '<meta property="og:description"' in html
+    assert '<meta name="twitter:card" content="summary">' in html
+    assert '<meta property="og:image" content="https://x/p.jpg">' in html
+    assert '<meta property="og:url" content="https://x.site">' in html
+
+
+def test_og_image_absent_without_photo():
+    html = core.render(make_data())  # photo 없음
+    assert "og:image" not in html
+    assert "og:url" not in html  # site_url 없음
+
+
+def test_write_site_files(tmp_path):
+    built = [
+        {"slug": "a", "site_url": "https://a.site"},
+        {"slug": "b", "site_url": ""},  # site_url 없는 디자이너
+    ]
+    written = build.write_site_files(built, dist=str(tmp_path))
+    robots = (tmp_path / "robots.txt").read_text(encoding="utf-8")
+    sitemap = (tmp_path / "sitemap.xml").read_text(encoding="utf-8")
+    assert "https://a.site" in sitemap and "https://b" not in sitemap
+    assert "Sitemap: https://a.site/sitemap.xml" in robots
+
+
+def test_robots_without_any_site_url(tmp_path):
+    build.write_site_files([{"slug": "a", "site_url": ""}], dist=str(tmp_path))
+    assert (tmp_path / "robots.txt").exists()
+    assert not (tmp_path / "sitemap.xml").exists()  # url 없으면 sitemap 없음
+
+
 def test_build_one_real_hayewoni(tmp_path):
     # 실제 예시 파일도 빌드되고 경고 3개(photo/booking/주소)
     res = build.build_one("designers/hayewoni.yaml", dist=str(tmp_path / "dist"))

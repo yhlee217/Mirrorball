@@ -1,4 +1,5 @@
 slug: minji
+site_url: "https://minji.example.site"   # 발행 URL (sitemap·og:url 용, 선택)
 display_name: "Minji"
 korean_name: "김 민 지"
 role: "헤어디자이너"
