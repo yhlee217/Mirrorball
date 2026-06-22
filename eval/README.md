@@ -7,6 +7,21 @@
 |---|---|
 | `rubric.md` | 품질 5축(SEO·전환·노하우충실도·진정성·사실정합성) 1·3·5점 기준 + 가드레일 + 평가자 출력 JSON 스키마 |
 | `golden_set.yaml` | 입력만으로 생성→채점할 케이스 + 노하우 보유자가 쓴 '5점 정답' 카피 + RAG 원칙·가드레일 항목 |
+| `LOOP_PROMPT.md` | 실제 파일·함수를 가리키는 **실행형 루프 지시문**(에이전트에 붙여넣기) |
+
+## 실행 코드 (저장소 루트)
+
+| 파일 | 역할 |
+|---|---|
+| `copygen.py` | 카피 생성 엔진 — `generate_copy(case)` (루프가 깎는 핵심) |
+| `prompts/copy.md.j2` | 생성 프롬프트 = 노하우 룰 인코딩 (주 개선 표적) |
+| `prompts/judge.md.j2` | 평가자 프롬프트 (루브릭 기반 JSON 채점) |
+| `eval_loop.py` | 하니스 — `load_golden`/`judge`/`aggregate`/`run_baseline` + `python eval_loop.py` baseline |
+
+```bash
+python eval_loop.py        # golden_set 전체 baseline 채점 (실행엔 .env 키 필요)
+python copygen.py eval/golden_set.yaml balayage_gangnam_damage   # 한 케이스 카피 생성
+```
 
 ## 루프가 이걸 쓰는 흐름
 
