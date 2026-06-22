@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>살롱 컨시어지 — 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F1EC; --paper:#FCFAF6; --ink:#2A2622; --muted:#8C8479;
+    --line:#E6DFD4; --accent:#6E5B47; --accent-d:#4E4031; --soft:#EFE9DF;
+    --sage:#5C7A57; --sage-bg:#EAF0E6; --gold:#9A7B33; --terra:#B0574A; --terra-bg:#F3E6E2;
+    --serif:'Cormorant Garamond',serif;
+    --sans:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;
+    --mono:ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:#E9E4DA;color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:24px 12px 36px;gap:14px;}
+  .hint{font-size:12.5px;color:#8C8479;text-align:center;max-width:380px;}
+  .hint b{color:var(--accent);}
+
+  /* mode toggle */
+  .seg{display:flex;background:#fff;border:1px solid var(--line);border-radius:30px;padding:4px;gap:4px;box-shadow:0 4px 14px rgba(42,38,34,.08);}
+  .seg button{border:none;background:none;font-family:var(--sans);font-size:13px;font-weight:700;color:var(--muted);padding:8px 18px;border-radius:24px;cursor:pointer;transition:.2s;}
+  .seg button.on{background:var(--accent);color:#fff;}
+
+  /* device */
+  .device{width:360px;max-width:96vw;height:740px;max-height:86vh;background:#1c1916;border-radius:42px;padding:11px;
+    box-shadow:0 30px 70px rgba(42,38,34,.32);position:relative;}
+  .screenwrap{position:relative;width:100%;height:100%;background:var(--paper);border-radius:32px;overflow:hidden;}
+  .stage{position:absolute;inset:0;bottom:60px;overflow:hidden;}
+  .screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;opacity:0;transform:translateX(30px);
+    transition:transform .36s cubic-bezier(.33,1,.68,1),opacity .26s ease;pointer-events:none;-webkit-overflow-scrolling:touch;}
+  .screen.active{opacity:1;transform:translateX(0);pointer-events:auto;z-index:2;}
+  .screen.exit-left{transform:translateX(-30px);opacity:0;}
+  .screen.from-left{transform:translateX(-30px);}
+  .screen::-webkit-scrollbar{width:0;}
+
+  /* tab bar */
+  .tabbar{position:absolute;left:11px;right:11px;bottom:11px;height:58px;background:rgba(252,250,246,.92);
+    backdrop-filter:blur(8px);border-top:1px solid var(--line);border-radius:0 0 32px 32px;display:flex;z-index:5;}
+  .tabbar button{flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    font-family:var(--sans);font-size:10.5px;color:var(--muted);cursor:pointer;transition:.2s;position:relative;}
+  .tabbar button .ic{font-size:18px;line-height:1;}
+  .tabbar button.on{color:var(--accent);font-weight:700;}
+  .tabbar button.on::before{content:"";position:absolute;top:0;width:26px;height:3px;border-radius:3px;background:var(--accent);}
+  .hide{display:none !important;}
+
+  /* generic */
+  .pad{padding:18px 16px;}
+  .head{padding:18px 16px 6px;}
+  .head .e{font-family:var(--serif);font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:600;}
+  .head h2{font-size:22px;margin:2px 0 2px;font-weight:700;}
+  .head .s{font-size:12.5px;color:var(--muted);}
+  .nav{display:flex;align-items:center;gap:10px;padding:14px 14px 4px;}
+  .back{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;font-size:16px;color:var(--accent);cursor:pointer;}
+  .nav .ttl{font-weight:700;font-size:16px;}
+
+  .chips{display:flex;gap:8px;padding:6px 16px 2px;}
+  .chip3{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 8px;text-align:center;}
+  .chip3 .n{font-family:var(--serif);font-size:21px;font-weight:600;color:var(--accent);line-height:1;}
+  .chip3 .l{font-size:10.5px;color:var(--muted);margin-top:3px;}
+
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;margin:12px 16px;overflow:hidden;}
+  .card .ch{padding:11px 14px 8px;font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:7px;}
+  .card .ch .go{margin-left:auto;font-size:12px;color:var(--accent);}
+  .li{display:flex;align-items:center;gap:11px;padding:11px 14px;border-top:1px solid var(--line);cursor:pointer;transition:background .15s;}
+  .li:active{background:var(--soft);}
+  .li .av{width:38px;height:38px;border-radius:50%;background:var(--soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:16px;flex:0 0 auto;}
+  .li .nm{font-weight:700;font-size:14px;}
+  .li .sub{font-size:11.5px;color:var(--muted);}
+  .li .rt{margin-left:auto;text-align:right;font-size:11.5px;color:var(--muted);}
+  .tag{font-size:10px;font-weight:700;border-radius:20px;padding:2px 8px;}
+  .t-bday{background:var(--terra-bg);color:var(--terra);} .t-revisit{background:var(--sage-bg);color:var(--sage);} .t-season{background:#F2EAD8;color:var(--gold);}
+
+  .btn{display:block;text-align:center;font-size:13px;font-weight:700;padding:11px;border-radius:11px;background:var(--accent);color:#fff;border:none;width:100%;cursor:pointer;transition:transform .12s;font-family:var(--sans);}
+  .btn:active{transform:scale(.98);}
+  .btn.ghost{background:var(--soft);color:var(--accent-d);}
+  .row2{display:flex;gap:8px;}
+
+  .kv{padding:4px 14px 12px;}
+  .kv .r{padding:9px 0;border-bottom:1px solid var(--line);}
+  .kv .r:last-child{border-bottom:none;}
+  .kv .k{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .kv .v{font-size:13.5px;margin-top:2px;}
+  .kv .v b{color:var(--accent-d);}
+  .pill{display:inline-block;font-size:11px;background:var(--soft);color:var(--accent-d);border-radius:20px;padding:2px 9px;margin:3px 3px 0 0;}
+  .mono{font-family:var(--mono);font-size:11.5px;background:#F2ECE1;border-radius:8px;padding:8px 11px;line-height:1.7;color:#3a332c;white-space:pre-line;}
+  .reco{background:var(--sage-bg);color:#3f5a3b;border-radius:10px;padding:10px 12px;font-size:12.5px;margin-top:4px;}
+  .reco b{color:#2f4a2b;}
+  .draft{background:#F2ECE1;border-radius:9px;padding:9px 11px;font-size:12.5px;color:#3a332c;line-height:1.5;margin-top:6px;}
+  .draft .lab{font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:3px;}
+  textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:var(--sans);font-size:12.5px;resize:vertical;margin-top:6px;}
+
+  .reveal{opacity:0;transform:translateY(10px);animation:rise .5s ease forwards;}
+  @keyframes rise{to{opacity:1;transform:none;}}
+
+  /* exposure bars */
+  .bar{margin:9px 0;}
+  .bar .t2{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
+  .track{height:8px;border-radius:6px;background:var(--soft);overflow:hidden;}
+  .track .fill{height:100%;border-radius:6px;background:var(--accent);width:0;transition:width .9s cubic-bezier(.33,1,.68,1);}
+
+  /* 손님 프로필 */
+  .hero{text-align:center;padding:30px 18px 22px;border-bottom:1px solid var(--line);}
+  .ava{width:88px;height:88px;border-radius:50%;margin:0 auto 14px;background:var(--soft);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:34px;color:var(--accent);border:1px solid var(--line);}
+  .hero h1{font-family:var(--serif);font-size:32px;font-weight:600;margin:0;}
+  .hero .ko{font-size:13px;color:var(--muted);letter-spacing:3px;margin:2px 0 10px;}
+  .hero .role{font-size:13px;font-weight:600;color:var(--accent);}
+  .hero .salon{font-size:12px;color:var(--muted);}
+  .hero .tl{font-size:13px;margin-top:14px;line-height:1.6;}
+  .psec{padding:22px 18px;border-top:1px solid var(--line);}
+  .eyebrow{font-family:var(--serif);font-size:12px;letter-spacing:2.5px;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:10px;}
+  .ba{position:relative;aspect-ratio:4/5;border-radius:10px;overflow:hidden;background:var(--soft);touch-action:none;}
+  .ba .after{position:absolute;inset:0;background:linear-gradient(155deg,#EFE3CC,#D9BE97);}
+  .ba .before{position:absolute;top:0;bottom:0;left:0;right:0;background:linear-gradient(155deg,#CFC8BD,#A39A8C);clip-path:inset(0 calc(100% - var(--pos,50%)) 0 0);}
+  .ba .cap{position:absolute;top:9px;font-size:10px;font-weight:700;letter-spacing:1px;color:#fff;background:rgba(42,38,34,.4);padding:2px 8px;border-radius:5px;}
+  .ba .cl{left:9px;} .ba .cr{right:9px;}
+  .ba .line{position:absolute;top:0;bottom:0;left:var(--pos,50%);width:3px;background:#fff;transform:translateX(-50%);box-shadow:0 0 6px rgba(0,0,0,.3);pointer-events:none;}
+  .ba .line::after{content:"⇆";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;background:#fff;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.25);}
+  .ba input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:ew-resize;}
+  .menu .mi{display:flex;padding:10px 0;border-bottom:1px solid var(--line);}
+  .menu .mi:last-child{border-bottom:none;}
+  .menu .nm{font-weight:700;font-size:14px;} .menu .ds{font-size:11.5px;color:var(--muted);}
+  .menu .pr{margin-left:auto;text-align:right;} .menu .pr .p{font-weight:700;font-size:13.5px;} .menu .pr .tm{font-size:11px;color:var(--muted);}
+  .rev{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;}
+  .stars{color:#C99A3E;font-size:13px;letter-spacing:1px;} .rev .q{font-size:13px;margin:4px 0;} .rev .by{font-size:11.5px;color:var(--muted);}
+
+  /* quiz */
+  .dots{display:flex;gap:6px;justify-content:center;margin-bottom:16px;}
+  .dots i{width:7px;height:7px;border-radius:50%;background:var(--line);transition:.2s;}
+  .dots i.on{background:var(--accent);width:20px;border-radius:6px;}
+  .q{font-size:17px;font-weight:700;text-align:center;margin-bottom:16px;}
+  .opt{border:1px solid var(--line);border-radius:12px;padding:13px 15px;font-size:14px;background:#fff;margin-bottom:9px;cursor:pointer;transition:.15s;}
+  .opt:active{transform:scale(.99);background:var(--soft);}
+  .qres{text-align:center;padding:10px 0;}
+  .qres .e{font-family:var(--serif);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:600;}
+  .qres .t{font-family:var(--serif);font-size:30px;font-weight:600;margin:4px 0 8px;}
+  .qres .d{font-size:13.5px;color:var(--muted);margin-bottom:16px;}
+
+  /* satisfaction */
+  .faces{display:flex;justify-content:center;gap:18px;font-size:40px;margin:18px 0;}
+  .faces span{cursor:pointer;transition:transform .15s;}
+  .faces span:active{transform:scale(1.2);}
+
+  /* toast */
+  .toast{position:absolute;left:50%;bottom:78px;transform:translateX(-50%) translateY(14px);background:var(--accent-d);color:#fff;
+    font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:22px;opacity:0;pointer-events:none;transition:.3s;z-index:20;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.25);}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+  <div class="seg" id="modeseg">
+    <button data-mode="owner" class="on">원장 앱</button>
+    <button data-mode="guest">손님 화면</button>
+  </div>
+
+  <div class="device"><div class="screenwrap">
+    <div class="stage" id="stage">
+
+      <!-- ===== 원장 ===== -->
+      <section class="screen active" id="o-home" data-mode="owner">
+        <div class="head"><div class="e">하예원 · 6월 16일(월)</div><h2>안녕하세요 👋</h2><div class="s">오늘 예약 4 · 챙길 고객 3</div></div>
+        <div class="chips">
+          <div class="chip3"><div class="n">4</div><div class="l">오늘 예약</div></div>
+          <div class="chip3" data-go="o-alerts"><div class="n">3</div><div class="l">챙길 고객</div></div>
+          <div class="chip3" data-go="o-exposure"><div class="n">7</div><div class="l">AI 노출</div></div>
+        </div>
+        <div class="card">
+          <div class="ch">오늘 예약</div>
+          <div class="li" data-go="o-client"><div class="av">지</div><div><div class="nm">지우 님</div><div class="sub">레이어드펌 · 첫방문 5개월차</div></div><div class="rt">14:00</div></div>
+          <div class="li"><div class="av">박</div><div><div class="nm">박○○ 님</div><div class="sub">발레아주 리터치</div></div><div class="rt">16:30</div></div>
+        </div>
+        <div class="card">
+          <div class="ch">바로가기</div>
+          <div class="li" data-go="o-alerts"><div class="av">🔔</div><div><div class="nm">오늘 챙길 고객</div><div class="sub">생일·재방문·시즌 3명</div></div><div class="rt">›</div></div>
+          <div class="li" data-go="o-exposure"><div class="av">📈</div><div><div class="nm">AI 노출 케어</div><div class="sub">이번 달 2→7회</div></div><div class="rt">›</div></div>
+        </div>
+      </section>
+
+      <section class="screen" id="o-alerts" data-mode="owner">
+        <div class="head"><div class="e">Today · 6/16</div><h2>오늘 챙길 고객</h2><div class="s">자동 발송 X · 원장님이 직접 한마디</div></div>
+        <div class="pad" style="padding-top:6px;">
+          <div class="card reveal" style="margin:0 0 12px;">
+            <div class="ch"><span class="tag t-bday">생일</span> 박○○ 님</div>
+            <div style="padding:0 14px 12px;">
+              <div class="kv" style="padding:0;"><div class="r"><div class="v">오늘 생일 · 마지막 방문 2개월 전(발레아주)</div></div></div>
+              <div class="draft"><div class="lab">추천 문구 (직접 보내기)</div>박○○님 생일 축하드려요 :) 기분 전환 필요하시면 편하게 연락 주세요!</div>
+              <div class="row2" style="margin-top:8px;"><button class="btn" data-send="박○○ 님">카톡으로 직접</button><button class="btn ghost" data-edit>문구 수정</button></div>
+            </div>
+          </div>
+          <div class="card reveal" style="margin:0 0 12px;animation-delay:.08s;">
+            <div class="ch"><span class="tag t-revisit">재방문</span> 지우 님</div>
+            <div style="padding:0 14px 12px;">
+              <div class="kv" style="padding:0;"><div class="r"><div class="v">레이어드펌 5개월차 → 리터치 시기</div></div></div>
+              <div class="draft"><div class="lab">추천 문구</div>지우님 펌 하신 지 다섯 달쯤 됐네요. 풀리기 전에 한 번 더 잡으면 겨울 내내 편해요!</div>
+              <div class="row2" style="margin-top:8px;"><button class="btn" data-send="지우 님">카톡으로 직접</button><button class="btn ghost" data-go="o-client">고객 보기</button></div>
+            </div>
+          </div>
+          <div class="card reveal" style="margin:0;animation-delay:.16s;">
+            <div class="ch"><span class="tag t-season">시즌</span> 이○○ 님</div>
+            <div style="padding:0 14px 12px;">
+              <div class="kv" style="padding:0;"><div class="r"><div class="v">여름 전 톤 정리 추천 · 밝은 톤 선호</div></div></div>
+              <div class="draft"><div class="lab">추천 문구</div>이○○님, 여름 오기 전에 톤 살짝 정리하면 화사해져요. 시간 되실 때 봐요!</div>
+              <div class="row2" style="margin-top:8px;"><button class="btn" data-send="이○○ 님">카톡으로 직접</button><button class="btn ghost" data-edit>문구 수정</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="o-clients" data-mode="owner">
+        <div class="head"><div class="e">CRM</div><h2>고객</h2><div class="s">탭하면 카르테가 열려요</div></div>
+        <div class="card">
+          <div class="li" data-go="o-client"><div class="av">지</div><div><div class="nm">지우 님</div><div class="sub">레이어드펌 · 단골 4회</div></div><div class="rt">★ 단골</div></div>
+          <div class="li"><div class="av">박</div><div><div class="nm">박○○ 님</div><div class="sub">발레아주 · 2회</div></div><div class="rt">오늘 생일</div></div>
+          <div class="li"><div class="av">이</div><div><div class="nm">이○○ 님</div><div class="sub">컬러 · 3회</div></div><div class="rt">밝은 톤</div></div>
+          <div class="li"><div class="av">최</div><div><div class="nm">최○○ 님</div><div class="sub">커트 · 신규</div></div><div class="rt">1회</div></div>
+        </div>
+      </section>
+
+      <!-- 고객 상세 = 예약브리핑 + 레시피 + 추천 + 만족도이력 -->
+      <section class="screen" id="o-client" data-mode="owner">
+        <div class="nav"><button class="back" data-back>‹</button><span class="ttl">지우 님</span></div>
+        <div class="chips"><div class="chip3"><div class="n">4</div><div class="l">방문</div></div><div class="chip3"><div class="n">5개월</div><div class="l">펌 경과</div></div><div class="chip3"><div class="n">★4.9</div><div class="l">만족</div></div></div>
+        <div class="card"><div class="ch">📅 다음 예약 브리핑</div><div class="kv">
+          <div class="r"><div class="k">예약</div><div class="v"><b>6/18(수) 14:00 · 레이어드펌</b></div></div>
+          <div class="r"><div class="k">지난 대화</div><div class="v">딸 수능 준비 中 · 곱슬 고민 · 아침 손질 시간 부담</div></div>
+          <div class="r"><div class="k">선호/주의</div><div class="v"><span class="pill">밝은 톤</span><span class="pill">두피 민감</span><span class="pill">향 강한 제품 X</span></div></div>
+        </div><div style="padding:0 14px 12px;"><div class="reco"><b>한마디 추천:</b> "수능 끝나셨어요?" 로 시작 → 자연스럽게 안부 + 시술</div></div></div>
+        <div class="card"><div class="ch">🧪 시술 레시피 (재현)</div><div class="kv">
+          <div class="r"><div class="k">컬러 (1/15)</div><div class="mono">베이스 8레벨 / 옥사이드 6%
+토너 펄+애쉬 1:1 / 10분</div></div>
+          <div class="r"><div class="k">펌 (4/2)</div><div class="mono">열펌 130℃ / 12분 / 로드 25mm</div></div>
+        </div></div>
+        <div class="card"><div class="ch">💡 다음 시술 추천</div><div style="padding:0 14px 12px;">
+          <div class="reco"><b>지금 시기:</b> 펌 5개월차 → 리터치 (+글로스 1.5만 업셀)</div>
+          <button class="btn ghost" data-send="지우 님" style="margin-top:8px;">추천 문구 보내기</button>
+        </div></div>
+        <div class="card" style="margin-bottom:18px;"><div class="ch">🗂 최근 이력</div>
+          <div class="li" style="cursor:default;"><div>레이어드펌</div><div class="rt">4/2</div></div>
+          <div class="li" style="cursor:default;"><div>발레아주 (8레벨)</div><div class="rt">1/15</div></div>
+        </div>
+      </section>
+
+      <section class="screen" id="o-exposure" data-mode="owner">
+        <div class="head"><div class="e">AI Exposure Care</div><h2>AI 노출</h2><div class="s">하예원 · 이번 달 측정</div></div>
+        <div class="pad" style="padding-top:8px;">
+          <div class="card" style="margin:0 0 12px;"><div style="padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-size:12px;color:var(--muted);">전체 언급 (발행 전→후)</span><span style="font-size:12px;font-weight:700;color:var(--sage);">▲ +5</span></div>
+            <div style="font-family:var(--serif);font-size:30px;font-weight:600;margin:2px 0 8px;">2회 → 7회</div>
+            <div class="bar"><div class="t2"><span>ChatGPT</span><span>0→3</span></div><div class="track"><div class="fill" data-w="50"></div></div></div>
+            <div class="bar"><div class="t2"><span>Gemini</span><span>1→2</span></div><div class="track"><div class="fill" data-w="33"></div></div></div>
+            <div class="bar"><div class="t2"><span>Perplexity</span><span>1→2</span></div><div class="track"><div class="fill" data-w="33"></div></div></div>
+          </div></div>
+          <div class="card" style="margin:0 0 12px;"><div class="ch">경쟁 노출</div><div style="padding:0 14px 12px;font-size:13px;color:var(--muted);">'발레아주'에서 <b style="color:var(--ink)">미미헤어</b>가 3→1회로 밀려남</div></div>
+          <button class="btn" data-toast="인용 콘텐츠 초안을 생성했어요 (content/hayewoni.md)">인용 콘텐츠 초안 생성</button>
+        </div>
+      </section>
+
+      <!-- ===== 손님 ===== -->
+      <section class="screen" id="g-profile" data-mode="guest">
+        <div class="hero">
+          <div class="ava">H</div>
+          <h1>Hayewoni</h1><div class="ko">하 예 원</div>
+          <div class="role">헤어디자이너</div><div class="salon">꼼나나비앙 한남점</div>
+          <div class="tl">정교한 커트 라인과 분위기를 완성하는 펌 디자인.<br>레이어드컷·뿌리펌으로 나만의 스타일을 설계합니다.</div>
+        </div>
+        <div class="psec"><div class="eyebrow">Find Your Style</div>
+          <button class="btn" data-go="g-quiz">어울리는 스타일 찾기 →</button>
+        </div>
+        <div class="psec"><div class="eyebrow">Portfolio</div>
+          <div class="ba">
+            <div class="after"></div><div class="before"></div>
+            <span class="cap cl">BEFORE</span><span class="cap cr">AFTER</span>
+            <span class="line"></span>
+            <input type="range" min="0" max="100" value="50" id="baRange" aria-label="전후 비교">
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;">← 밀어서 전후 비교 · 레이어드컷 + 발레아주</div>
+        </div>
+        <div class="psec"><div class="eyebrow">Menu</div><div class="menu">
+          <div class="mi"><div><div class="nm">레이어드컷</div><div class="ds">얼굴형 맞춤</div></div><div class="pr"><div class="p">4만원</div><div class="tm">약 1시간</div></div></div>
+          <div class="mi"><div><div class="nm">발레아주</div><div class="ds">자연 그라데이션</div></div><div class="pr"><div class="p">18만원~</div><div class="tm">약 3시간</div></div></div>
+          <div class="mi"><div><div class="nm">디지털펌</div><div class="ds">오래 가는 열펌</div></div><div class="pr"><div class="p">16만원~</div><div class="tm">약 2시간반</div></div></div>
+        </div></div>
+        <div class="psec"><div class="eyebrow">Reviews · ★4.9</div>
+          <div class="rev"><div class="stars">★★★★★</div><div class="q">"발레아주 색이 너무 예뻐요. 뿌리 자라도 티 안 나요."</div><div class="by">이○○ · 발레아주</div></div>
+          <div class="rev"><div class="stars">★★★★★</div><div class="q">"펌 결이 진짜 매끄러워요. 손질이 편해졌어요."</div><div class="by">박○○ · 디지털펌</div></div>
+        </div>
+        <div class="psec" style="text-align:center;"><button class="btn" data-toast="네이버 예약으로 이동합니다">예약하기</button></div>
+      </section>
+
+      <section class="screen" id="g-quiz" data-mode="guest">
+        <div class="nav"><button class="back" data-back>‹</button><span class="ttl">어울리는 스타일 찾기</span></div>
+        <div class="pad" id="quizBox"></div>
+      </section>
+
+      <section class="screen" id="g-sat" data-mode="guest">
+        <div class="head" style="text-align:center;"><div class="e">After Service</div><h2>오늘 어떠셨어요?</h2><div class="s">지우 님 · 레이어드펌</div></div>
+        <div class="pad">
+          <div class="faces"><span data-rate="good">😍</span><span data-rate="good">🙂</span><span data-rate="bad">😕</span></div>
+          <div id="sat-good" class="hide"><div class="reco" style="text-align:center;">감사해요! 한 줄 남겨주시면 큰 힘이 돼요 :)</div><button class="btn" style="margin-top:10px;" data-toast="네이버 리뷰 작성으로 이동">네이버 리뷰 남기기</button></div>
+          <div id="sat-bad" class="hide"><div class="draft"><div class="lab">원장님께 비공개로 전달</div>어떤 점이 아쉬우셨어요? 바로 챙겨드릴게요.</div><textarea rows="3" placeholder="아쉬웠던 점..."></textarea><button class="btn" style="margin-top:8px;" data-toast="원장님께 비공개로 전달됐어요 (공개 후기 전 회수)">비공개로 보내기</button></div>
+        </div>
+      </section>
+
+    </div>
+
+    <nav class="tabbar" id="tabbar"></nav>
+    <div class="toast" id="toast"></div>
+  </div></div>
+
+  <div class="hint">⬆ <b>원장 앱 / 손님 화면</b> 전환 · 카드를 탭하면 화면이 슬라이드로 넘어갑니다. 전후 슬라이더·스타일 퀴즈·만족도 모두 동작합니다.</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const tabbar = document.getElementById('tabbar');
+  const toastEl = document.getElementById('toast');
+  let mode = 'owner';
+  const stacks = { owner:['o-home'], guest:['g-profile'] };
+  const tabs = {
+    owner:[['o-home','🏠','홈'],['o-alerts','🔔','알림'],['o-clients','👥','고객'],['o-exposure','📈','노출']],
+    guest:[['g-profile','💇','프로필'],['g-quiz','✨','스타일'],['g-sat','💬','만족도']]
+  };
+
+  function show(id, dir){
+    const cur = stage.querySelector('.screen.active');
+    const next = document.getElementById(id);
+    if(!next || cur===next) return;
+    next.classList.remove('exit-left');
+    if(dir==='back') next.classList.add('from-left');
+    void next.offsetWidth;
+    next.classList.add('active');
+    next.classList.remove('from-left');
+    next.scrollTop = 0;
+    if(cur){
+      cur.classList.remove('active');
+      if(dir!=='back') cur.classList.add('exit-left');
+      const c=cur; setTimeout(()=>c.classList.remove('exit-left'),400);
+    }
+    runEffects(id);
+    syncTabs(id);
+  }
+
+  function renderTabs(){
+    tabbar.innerHTML = tabs[mode].map(t=>`<button data-tab="${t[0]}"><span class="ic">${t[1]}</span>${t[2]}</button>`).join('');
+    syncTabs(stacks[mode][stacks[mode].length-1]);
+  }
+  function syncTabs(id){
+    tabbar.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.tab===id));
+  }
+
+  function setMode(m){
+    if(m===mode) return;
+    mode=m;
+    document.querySelectorAll('#modeseg button').forEach(b=>b.classList.toggle('on', b.dataset.mode===m));
+    renderTabs();
+    show(stacks[m][stacks[m].length-1]); // 마지막 보던 화면 복귀
+  }
+
+  function toast(msg){
+    toastEl.textContent=msg; toastEl.classList.add('show');
+    clearTimeout(toastEl._t); toastEl._t=setTimeout(()=>toastEl.classList.remove('show'),1900);
+  }
+
+  // 효과: 노출 막대 채우기 / 퀴즈 초기화
+  function runEffects(id){
+    if(id==='o-exposure'){
+      const fills=document.querySelectorAll('#o-exposure .fill');
+      fills.forEach(f=>f.style.width='0');
+      setTimeout(()=>fills.forEach(f=>f.style.width=f.dataset.w+'%'),60);
+    }
+    if(id==='g-quiz') renderQuiz();
+    if(id==='g-sat'){ document.getElementById('sat-good').classList.add('hide'); document.getElementById('sat-bad').classList.add('hide'); }
+    // reveal 재생
+    document.getElementById(id).querySelectorAll('.reveal').forEach(el=>{el.style.animation='none';void el.offsetWidth;el.style.animation='';});
+  }
+
+  // 이벤트 위임
+  document.body.addEventListener('click', e=>{
+    const seg=e.target.closest('#modeseg button'); if(seg){ setMode(seg.dataset.mode); return; }
+    const tab=e.target.closest('[data-tab]'); if(tab){ const id=tab.dataset.tab; stacks[mode]=[id]; show(id); return; }
+    const go=e.target.closest('[data-go]'); if(go){ const id=go.dataset.go; stacks[mode].push(id); show(id,'fwd'); return; }
+    const bk=e.target.closest('[data-back]'); if(bk){ const s=stacks[mode]; if(s.length>1){ s.pop(); show(s[s.length-1],'back'); } return; }
+    const send=e.target.closest('[data-send]'); if(send){ toast(send.dataset.send+'께 카톡으로 — 직접 보내세요'); return; }
+    const tst=e.target.closest('[data-toast]'); if(tst){ toast(tst.dataset.toast); return; }
+    const ed=e.target.closest('[data-edit]'); if(ed){ const card=ed.closest('.card'); let ta=card.querySelector('textarea'); if(ta){ta.remove();} else { ta=document.createElement('textarea'); ta.rows=2; ta.value=card.querySelector('.draft').textContent.replace(/^.*?\n/,'').trim(); card.querySelector('div[style]').appendChild(ta); ta.focus(); } return; }
+    const face=e.target.closest('[data-rate]'); if(face){ const g=face.dataset.rate==='good'; document.getElementById('sat-good').classList.toggle('hide',!g); document.getElementById('sat-bad').classList.toggle('hide',g); return; }
+  });
+
+  // 전후 슬라이더
+  const baR=document.getElementById('baRange');
+  if(baR){ baR.addEventListener('input',()=>{ baR.closest('.ba').style.setProperty('--pos',baR.value+'%'); }); }
+
+  // 스타일 퀴즈
+  const QUIZ={
+    intro:'세 가지만 답하면 어울리는 스타일을 추천해드려요',
+    qs:[
+      {q:'얼굴형이 어떻게 되세요?',o:[['계란형','layered'],['각진 편','layered'],['둥근 편','perm'],['긴 편','bob']]},
+      {q:'원하는 느낌은?',o:[['자연스럽게','layered'],['볼륨 있게','perm'],['단정하게','bob']]},
+      {q:'관리 시간은?',o:[['최소로','perm'],['보통','layered'],['충분히','bob']]}
+    ],
+    res:{layered:['레이어드컷','얼굴형을 살리는 자연스러운 흐름'],perm:['디지털펌','볼륨과 컬을 오래'],bob:['단발','단정하고 세련된 라인']}
+  };
+  let qi=0, votes={};
+  function renderQuiz(){
+    qi=0; votes={}; step();
+  }
+  function step(){
+    const box=document.getElementById('quizBox');
+    const dots=QUIZ.qs.map((_,i)=>`<i class="${i<=qi?'on':''}"></i>`).join('');
+    const cur=QUIZ.qs[qi];
+    box.innerHTML=`<div class="dots">${dots}</div>${qi===0?`<p style="text-align:center;font-size:13px;color:var(--muted);margin:0 0 14px;">${QUIZ.intro}</p>`:''}<div class="q">${cur.q}</div>`+
+      cur.o.map((o,i)=>`<div class="opt" data-oi="${i}">${o[0]}</div>`).join('');
+    box.querySelectorAll('.opt').forEach(op=>op.addEventListener('click',()=>{
+      const s=cur.o[+op.dataset.oi][1]; votes[s]=(votes[s]||0)+1; qi++;
+      if(qi<QUIZ.qs.length){ box.style.opacity=0; setTimeout(()=>{step();box.style.transition='.25s';box.style.opacity=1;},120); }
+      else result();
+    }));
+  }
+  function result(){
+    const best=Object.keys(QUIZ.res).sort((a,b)=>(votes[b]||0)-(votes[a]||0))[0];
+    const r=QUIZ.res[best];
+    const box=document.getElementById('quizBox');
+    box.style.opacity=0;
+    setTimeout(()=>{
+      box.innerHTML=`<div class="qres reveal"><div class="e">추천 스타일</div><div class="t">${r[0]}</div><div class="d">${r[1]}</div><button class="btn" data-toast="${r[0]} 상담 예약으로 이동">${r[0]} 상담받기</button><button class="btn ghost" style="margin-top:8px;" id="qAgain">다시 해보기</button></div>`;
+      box.style.opacity=1;
+      document.getElementById('qAgain').addEventListener('click',renderQuiz);
+    },140);
+  }
+
+  renderTabs();
+  runEffects('o-home');
+})();
+</script>
+</body>
+</html>
