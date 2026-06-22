@@ -21,16 +21,28 @@ import engines
 DEFAULT_PROMPT = "prompts/copy.md.j2"
 
 
-def resolve_principles(case: dict, kb_path: str | None = None, k: int = 3) -> list[str]:
-    """원칙 결정: 케이스에 명시돼 있으면 그대로(골든셋·재현성), 없고 kb_path 면 RAG 검색(실전)."""
+def resolve_rag(case: dict, kb_path: str | None = None, k: int = 3) -> tuple[list[str], list[str]]:
+    """(원칙, 예시) 결정.
+
+    - 케이스에 rag_principles 가 명시되면 그대로 쓰고 예시는 비움(골든셋 = 통제된 평가).
+    - 없고 kb_path 면 RAG 검색: 검색된 엔트리의 principle + example(few-shot)을 함께 반환.
+    """
     explicit = case.get("rag_principles") or []
     if explicit:
-        return explicit
+        return explicit, []
     if kb_path:
         import rag
 
-        return rag.principles_for(case.get("input", {}), kb_path=kb_path, k=k)
-    return []
+        ents = rag.retrieve(case.get("input", {}), kb_path=kb_path, k=k)
+        principles = [e["principle"] for e in ents]
+        examples = [e["example"] for e in ents if e.get("example")]
+        return principles, examples
+    return [], []
+
+
+def resolve_principles(case: dict, kb_path: str | None = None, k: int = 3) -> list[str]:
+    """원칙만 반환(하위호환)."""
+    return resolve_rag(case, kb_path, k)[0]
 
 
 def render_prompt(case: dict, prompt_path: str = DEFAULT_PROMPT,
@@ -49,7 +61,9 @@ def render_prompt(case: dict, prompt_path: str = DEFAULT_PROMPT,
         lstrip_blocks=True,
     )
     ctx = dict(case.get("input", {}))
-    ctx["rag_principles"] = resolve_principles(case, kb_path=kb_path, k=k)
+    principles, examples = resolve_rag(case, kb_path=kb_path, k=k)
+    ctx["rag_principles"] = principles
+    ctx["rag_examples"] = examples
     ctx["must_include"] = case.get("must_include", []) or []
     ctx["must_not_claim"] = case.get("must_not_claim", []) or []
     return env.get_template(tpl.name).render(**ctx)

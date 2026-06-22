@@ -80,6 +80,27 @@ def test_render_prompt_injects_retrieved_principles():
     assert "고객의 과거 실패를 탓하지 않고" in prompt
 
 
+def test_resolve_rag_returns_principles_and_examples():
+    # 실전 RAG: 원칙 + 예시(few-shot) 둘 다
+    principles, examples = copygen.resolve_rag({"input": PERM}, kb_path="kb/knowledge.yaml", k=3)
+    assert principles and examples
+    assert any("대부분은 솜씨보다" in e for e in examples)   # failure_cause example
+
+
+def test_resolve_rag_explicit_has_no_examples():
+    # 골든(명시 원칙): 예시 비움 → 통제된 평가 유지
+    case = {"input": PERM, "rag_principles": ["내 원칙"]}
+    principles, examples = copygen.resolve_rag(case, kb_path="kb/knowledge.yaml")
+    assert principles == ["내 원칙"] and examples == []
+
+
+def test_render_prompt_few_shot_only_in_rag_path():
+    rag_case = {"input": PERM, "must_include": [], "must_not_claim": []}
+    golden = {"input": PERM, "rag_principles": ["내 원칙"], "must_include": [], "must_not_claim": []}
+    assert "좋은 표현 예시" in copygen.render_prompt(rag_case, kb_path="kb/knowledge.yaml")
+    assert "좋은 표현 예시" not in copygen.render_prompt(golden, kb_path="kb/knowledge.yaml")
+
+
 if __name__ == "__main__":
     import pytest
 

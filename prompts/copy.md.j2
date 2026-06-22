@@ -20,6 +20,13 @@
 {% for p in rag_principles %}
 - {{ p }}
 {% endfor %}
+{% if rag_examples %}
+
+[좋은 표현 예시 (톤·구체성 참고만 — 그대로 베끼지 말 것)]
+{% for ex in rag_examples %}
+- {{ ex }}
+{% endfor %}
+{% endif %}
 
 [디자이너 정보]
 - 지역: {{ region }} / 매장: {{ salon }} / 디자이너: {{ designer }}
