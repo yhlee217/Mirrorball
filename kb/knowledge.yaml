@@ -59,7 +59,7 @@ entries:
     mechanism: "실패 경험 고객의 방어심을 풀고 전문성을 보인다"
     applies_to:
       services: ["디지털펌", "펌", "컬러"]
-      signals: ["풀림", "재시술", "실망", "실패"]
+      signals: ["풀림", "풀려", "재시술", "실망", "실패"]
     example: "대부분은 솜씨보다 그날 모발 상태나 시기 때문이에요."
     priority: 2
 
@@ -140,3 +140,49 @@ entries:
       signals: []
     example: "강남역에서 뿌리 자라도 티 안 나는 발레아주, 찾으셨나요?"
     priority: 3
+
+  - id: urgency_promise
+    title: 급한 고객엔 시간 약속 확정
+    category: 응대전환
+    principle: "급한 고객에겐 '시간 약속'을 먼저 확정해 불안을 없앤다"
+    mechanism: "시간 불안을 즉시 해소해 급한 고객의 결정을 끌어낸다"
+    applies_to:
+      services: ["*"]
+      signals: ["급한", "예식", "면접", "30분"]
+    example: "스타일링 30분이면 완성, 급한 일정은 우선 배정해 드려요."
+    priority: 2
+
+  - id: no_medical_overclaim
+    title: 의료 효과 과장 금지·정직
+    category: 컨설팅
+    principle: "의료·치료 효과를 약속하지 않고 '관리·완화' 선에서 정직하게 말한다"
+    mechanism: "과장 대신 정직으로 민감 고객의 신뢰를 얻는다"
+    applies_to:
+      services: ["*"]
+      signals: ["두피", "민감", "트러블", "탈모"]
+    example: "상태가 안 좋은 날엔 무리하게 진행하지 않고 회복을 먼저 권해요."
+    dont: "탈모 치료·발모 등 의료적 효과를 절대 주장하지 말 것."
+    priority: 2
+
+  - id: visit_worth
+    title: 멀리 오는 가치 보장
+    category: 응대전환
+    principle: "멀리 오는 고객에겐 '한 번에 제대로'와 사전 상담으로 헛걸음을 없앤다"
+    mechanism: "방문 비용(시간·거리) 대비 가치를 명확히 해 결심을 돕는다"
+    applies_to:
+      services: ["*"]
+      signals: ["멀리", "타지역", "일부러"]
+    example: "오시는 길이 아깝지 않게, 사진·톤을 먼저 맞춰보고 시작해요."
+    priority: 1
+
+  - id: expectation_reset
+    title: 기대 현실화(그대로 → 본인에게 맞게)
+    category: 컨설팅
+    principle: "연예인·유행 스타일을 '그대로'가 아니라 '본인에게 맞게'로 현실 기대를 조정한다"
+    mechanism: "기대-결과 격차를 미리 좁혀 불만을 예방하고 전문성을 보인다"
+    applies_to:
+      services: ["*"]
+      signals: ["연예인", "유행", "인플루언서", "사진"]
+    example: "그 스타일을 손님 얼굴형에 맞게 변형해 더 잘 어울리게 잡아드려요."
+    dont: "특정 인물·방송과의 관계를 사실 없이 암시하지 말 것."
+    priority: 1
