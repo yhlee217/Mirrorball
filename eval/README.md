@@ -17,7 +17,15 @@
 | `prompts/copy.md.j2` | 생성 프롬프트 = 노하우 룰 인코딩 (주 개선 표적) |
 | `prompts/judge.md.j2` | 평가자 프롬프트 (루브릭 기반 JSON 채점) |
 | `eval_loop.py` | 하니스 — `load_golden`/`judge`/`aggregate`/`run_baseline` + `python eval_loop.py` baseline |
+| `run_loop.py` + `prompts/engineer.md.j2` | 자율 드라이버 — baseline→최약축→프롬프트 수정→재채점→채택/롤백→정지 |
 | `rag.py` + `kb/knowledge.yaml` | 영업 노하우 RAG — 케이스 상황에 맞는 검증 원칙을 검색해 주입 |
+
+## 루프 실행 방법 — 두 경로
+
+- **개발(루프 깎기): Claude CLI = LLM, 키 불필요.** `eval/LOOP_PROMPT.md` 를 Claude Code 에
+  붙여넣으면 Claude 가 직접 생성·채점·프롬프트 수정·재채점을 돌린다. (지금까지 이 방식으로 5바퀴)
+- **무인 운영: API 키 필요.** `python run_loop.py` 는 `engines.py`(Gemini/OpenAI 등)로
+  생성·평가·개선을 프로그램이 자동 수행한다. 맥미니에서 사람 없이 돌릴 때의 경로.
 
 > **노하우 주입 2경로**: 골든 세트는 `rag_principles` 를 **명시**(C축 재현성 테스트용).
 > 실전 케이스(원칙 미기재)는 `generate_copy(case, kb_path="kb/knowledge.yaml")` 로
