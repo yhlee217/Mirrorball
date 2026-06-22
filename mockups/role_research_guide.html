@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>담당자별 실행 리서치 보고서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F1EC; --paper:#FCFAF6; --ink:#2A2622; --muted:#8C8479;
+    --line:#E6DFD4; --accent:#6E5B47; --accent-d:#4E4031; --soft:#EFE9DF;
+    --sage:#5C7A57; --sage-bg:#EAF0E6; --blue:#4A6582; --gold:#9A7B33; --terra:#B0574A;
+    --serif:'Cormorant Garamond',serif;
+    --sans:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.72;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:780px;margin:0 auto;padding:0 22px 80px;}
+  .top{text-align:center;padding:54px 0 18px;}
+  .top .kic{font-family:var(--serif);font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);font-weight:600;}
+  .top h1{font-family:var(--serif);font-size:33px;font-weight:600;margin:8px 0 8px;}
+  .top p{color:var(--muted);font-size:14px;margin:0 auto;max-width:520px;}
+
+  .tldr{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:6px 0 24px;}
+  .tldr .h{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px;}
+  .tldr ul{margin:0;padding-left:18px;}
+  .tldr li{font-size:13.5px;margin:5px 0;}
+  .tldr b{color:var(--accent-d);}
+
+  .role{border:1px solid var(--line);border-radius:16px;overflow:hidden;margin:18px 0;background:var(--paper);box-shadow:0 8px 22px rgba(42,38,34,.05);}
+  .rhead{padding:14px 18px;color:#fff;display:flex;align-items:baseline;gap:10px;}
+  .rhead .no{font-family:var(--serif);font-size:24px;font-weight:600;opacity:.9;}
+  .rhead .t{font-size:17px;font-weight:700;}
+  .rhead .s{margin-left:auto;font-size:11.5px;opacity:.9;}
+  .r1 .rhead{background:linear-gradient(135deg,#7A6650,#574734);}
+  .r2 .rhead{background:linear-gradient(135deg,#5C7A57,#42603E);}
+  .r3 .rhead{background:linear-gradient(135deg,#4A6582,#33485E);}
+  .r4 .rhead{background:linear-gradient(135deg,#9A7B33,#6E5722);}
+  .r5 .rhead{background:linear-gradient(135deg,#B0574A,#8E4136);}
+  .rbody{padding:16px 18px 18px;}
+  .task{font-size:13.5px;color:var(--accent-d);background:var(--soft);border-radius:9px;padding:9px 13px;margin-bottom:13px;}
+  .task b{color:var(--accent);}
+
+  .find{margin:0 0 12px;}
+  .find .lab{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;}
+  .find ul{margin:0;padding-left:17px;}
+  .find li{font-size:13.5px;margin:5px 0;line-height:1.6;}
+  .find b{color:var(--accent-d);}
+  .stat{display:inline-block;background:var(--sage-bg);color:var(--sage);font-weight:700;border-radius:5px;padding:0 6px;font-size:12.5px;}
+
+  .check{border-top:1px dashed var(--line);margin-top:12px;padding-top:11px;}
+  .check .lab{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:6px;}
+  .check div{font-size:13px;margin:4px 0;color:var(--ink);}
+  .check div::before{content:"☐ ";color:var(--accent);}
+
+  .note{background:#F3E6E2;border:1px solid #E6CFC8;border-radius:8px;padding:8px 12px;font-size:12.5px;color:#8E4136;margin-top:8px;}
+  .src{font-size:11.5px;color:var(--muted);margin-top:24px;border-top:1px solid var(--line);padding-top:14px;line-height:1.8;}
+  .src a{color:var(--accent);text-decoration:none;}
+  .src .h{font-weight:700;color:var(--accent-d);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="kic">Research Report</div>
+    <h1>담당자별 실행 리서치 보고서</h1>
+    <p>각 담당자가 자기 파트를 채울 때 바로 쓰도록, 두 축(AI·로컬 노출 / 영업·카피 노하우)을 외부 리서치로 보완.</p>
+  </div>
+
+  <div class="tldr">
+    <div class="h">한눈에</div>
+    <ul>
+      <li>AI는 <b>"첫 40~60자의 명확한 답 + 데이터 + Q&amp;A 구조"</b>를 인용한다 (LLM 인용의 <span class="stat">44.2%</span>가 글 앞 30%에서).</li>
+      <li>단골 1명 = 연 <b>$150~250 × 4~6회</b>, 첫방문 평균 재방문은 <span class="stat">45%</span>뿐 — <b>선예약 한 줄</b>이 재방문을 40%→<span class="stat">80%</span>로.</li>
+      <li>이 리서치는 우리 설계(질문형 카피·재방문 각인·번들·정직 카피·JSON-LD)를 <b>검증</b>했다. 빈 곳은 "실데이터".</li>
+    </ul>
+  </div>
+
+  <!-- 1 -->
+  <div class="role r1">
+    <div class="rhead"><span class="no">1</span><span class="t">노하우 담당 (원장·실무자)</span><span class="s">KB·정답 카피 채우기</span></div>
+    <div class="rbody">
+      <div class="task"><b>할 일:</b> kb/knowledge.yaml 의 example·verified, golden_set 의 reference_output 을 <b>검증된 실제 노하우</b>로 교체</div>
+      <div class="find"><div class="lab">객단가 (업셀)</div><ul>
+        <li><b>번들 = 앵커링.</b> "Color+Cut" 대신 <b>"시그니처 컬러 트랜스포메이션"</b> 같은 가치 네이밍 패키지로 높은 가격대에 먼저 고정.</li>
+        <li><b>"팔지 말고 진단하라."</b> "오늘 목표가 뭐예요?" → 본드빌더·글로스/토너·두피디톡스(15분 내, 고ROI).</li>
+        <li>메뉴는 판매도구: 시그니처·고수익 번들 강조, 애드온 메인 배치. 객단가 <span class="stat">+$5~10 × 200명 = +$24k/년</span>.</li>
+      </ul></div>
+      <div class="find"><div class="lab">리텐션 (단골 전환)</div><ul>
+        <li>첫방문 평균 재방문 <span class="stat">45%</span> (Boulevard, 2,500만 예약). 첫방문자 ~70%는 안 옴. best-in-class 70%.</li>
+        <li><b>선예약</b>: 첫 방문에 다음을 예약한 손님 <span class="stat">80%+</span> 재방문 vs "전화할게요" 40% 미만. 체어사이드 리북 +20~30%.</li>
+        <li>재방문 <span class="stat">5%↑ → 이익 25~95%↑</span>. 단골 42%가 매출 80%. 2일 뒤 안부 문자가 신뢰.</li>
+      </ul></div>
+      <div class="check"><div class="lab">지금 반영</div>
+        <div>KB example 을 실제 통한 멘트로 / verified 에 본인 실측치(재방문율 등)</div>
+        <div>골든 reference_output 을 본인이 쓴 5점 카피로 → 루프 기준선 상승</div>
+        <div>번들 1~2개를 가치 네이밍으로 정의해 menu/KB 반영</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="role r2">
+    <div class="rhead"><span class="no">2</span><span class="t">콘텐츠·카피 담당</span><span class="s">AI가 인용하는 글쓰기</span></div>
+    <div class="rbody">
+      <div class="task"><b>할 일:</b> prompts/copy.md.j2(프로필 카피)·content.md.j2(블로그·플레이스)가 검색·AI가 인용하기 좋은 출력을 내게</div>
+      <div class="find"><div class="lab">AEO/GEO 인용 규칙</div><ul>
+        <li>"SEO는 클릭, GEO는 인용." 검색 <span class="stat">60%+</span>가 클릭 없이 끝남, 44%가 AI를 1차 정보원으로.</li>
+        <li><b>앞 40~60자에 핵심 답</b> — LLM 인용 <span class="stat">44.2%</span>가 글 앞 30%에서.</li>
+        <li><b>150~200자마다 수치 1개</b>(출처) — AI는 하드 데이터 우선 인용. 전문가·자격 신호는 신뢰 <span class="stat">+41%</span>.</li>
+        <li><b>구조화 포맷 3배</b> 더 인용. 질문형 헤딩·Q&amp;A 쌍, 시맨틱 청킹(한 문단=한 개념).</li>
+      </ul></div>
+      <div class="note">우리 카피 A축(질문형+첫 문장 답)은 1순위 규칙과 일치. 추가 레버: <b>구체 수치</b>·<b>자격 신호</b>가 아직 약함.</div>
+      <div class="check"><div class="lab">지금 반영</div>
+        <div>content.md.j2: "150~200자마다 사실 기반 수치 1개" 규칙 추가</div>
+        <div>블로그: 질문형 제목 + 첫 40~60자에 답 명시</div>
+        <div>자격·경력이 사실에 있으면 1회 자연 노출(과장 금지 유지)</div>
+        <div>(선택) 루브릭 A축에 "수치·자격 신호 포함" 채점 항목 추가</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="role r3">
+    <div class="rhead"><span class="no">3</span><span class="t">노출·발행 담당 (로컬 SEO)</span><span class="s">Google &amp; 네이버</span></div>
+    <div class="rbody">
+      <div class="task"><b>할 일:</b> 만든 프로필을 올리고 Google·네이버에서 실제로 노출되게 운영</div>
+      <div class="find"><div class="lab">Google 로컬</div><ul>
+        <li>3요소: <b>적합도·거리·권위</b>. 리뷰 <span class="stat">50개+</span> 안정 노출, 유지 월 5개+.</li>
+        <li>사진 <b>매주 업로드</b>(주5장&gt;연50장), <span class="stat">50장+</span> 순위 유리. NAP 정확 일치. 결과 4~8주~3~6개월.</li>
+      </ul></div>
+      <div class="find"><div class="lab">네이버 (한국 시장)</div><ul>
+        <li>스마트플레이스 로직 = <b>적합도·인기도·신뢰도</b>. 초기 세팅이 기초공사.</li>
+        <li><b>사진 리뷰 100개↑ → 방문자 +115.6 / 길찾기 +79 / 저장 +55</b>. 시술 사진 최대 300장.</li>
+        <li>검색 키워드 <b>10~15개 직접 등록</b>(강남 헤어샵·강남역 파마…). 비포·애프터 리뷰 유도. <b>사업자 인증</b> 우대.</li>
+      </ul></div>
+      <div class="check"><div class="lab">지금 반영</div>
+        <div>GBP/플레이스 초기 세팅(카테고리·NAP 일치), 사업자 인증</div>
+        <div>리뷰 루틴: 체크아웃 요청 + 2일 후 문자 + 직링크(월 5개+)</div>
+        <div>사진 주간 업로드(전후·내부·작업), 네이버 키워드 10~15개</div>
+        <div>content.py 산출물을 블로그/플레이스 글감으로 주간 발행</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="role r4">
+    <div class="rhead"><span class="no">4</span><span class="t">기술 담당</span><span class="s">구조화 데이터(JSON-LD)</span></div>
+    <div class="rbody">
+      <div class="task"><b>할 일:</b> schema.py 의 구조화 데이터로 검색·AI가 매장/디자이너를 엔티티로 인식하게</div>
+      <div class="find"><div class="lab">리서치 핵심</div><ul>
+        <li>HairSalon은 LocalBusiness 하위 타입. 구조화 데이터는 직접 순위 요인은 아니나 <b>AI Overview 인용·Knowledge Graph 엔티티 인식</b>의 핵심 레버.</li>
+      </ul></div>
+      <div class="note">⚠️ FAQ 리치 결과는 Google에서 사실상 폐지(보도 기준 2026). 단 <b>FAQ 콘텐츠는 AI·사용자에게 여전히 유효</b> — Google 리치 기대 대신 AI 인용·가독성용으로 유지.</div>
+      <div class="check"><div class="lab">지금 반영</div>
+        <div>Person+HairSalon+FAQPage JSON-LD 유지(AI 인용·엔티티)</div>
+        <div>address_locality/region 을 플레이스와 정확 일치(엔티티 신뢰)</div>
+        <div>(선택) LocalBusiness 에 영업시간·sameAs(인스타·플레이스 URL) 보강</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="role r5">
+    <div class="rhead"><span class="no">5</span><span class="t">사업·영업 담당</span><span class="s">숫자로 본 우선순위</span></div>
+    <div class="rbody">
+      <div class="find"><div class="lab">리서치가 뒷받침하는 우선순위</div><ul>
+        <li><b>리텐션이 돈</b>: 단골 42%가 매출 80%, 재방문 5%↑→이익 25~95%↑ → 구독·재방문카드·선예약 1순위.</li>
+        <li>신규 1명 LTV <b>$150~250×4~6회</b> → 무료 진단 영업(④)의 획득비용 한도 기준.</li>
+        <li>AI 트래픽 전년比 <span class="stat">+527%</span>, 1차 정보원화 44% → 비어 있을 때 선점(독점권).</li>
+      </ul></div>
+      <div class="check"><div class="lab">지금 반영</div>
+        <div>playbook 가격·영업·살롱 실행안에 위 LTV·리텐션 숫자를 근거 멘트로 삽입</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="src">
+    <div class="h">출처 (발췌)</div>
+    GEO/AEO: <a href="https://geoptie.com/blog/generative-engine-optimization">Geoptie</a> ·
+    <a href="https://www.frase.io/blog/what-is-answer-engine-optimization-the-complete-guide-to-getting-cited-by-ai">Frase AEO</a> ·
+    <a href="https://blog.hubspot.com/marketing/answer-engine-optimization">HubSpot</a><br>
+    로컬 SEO·스키마: <a href="https://hashmeta.com/blog/local-seo-for-hair-salons-complete-beauty-industry-marketing-guide/">Hashmeta</a> ·
+    <a href="https://www.thelocalgem.com/blog/how-to-rank-salon-on-google">The Local Gem</a> ·
+    <a href="https://opace.agency/blog/structured-data-schema-for-seo/">Opace</a><br>
+    네이버: <a href="https://marketingchef.net/naver-place-ranking-setting/">Marketing Chef</a> ·
+    <a href="https://hoonhooon.com/entry/스마트플레이스-상위-노출-노하우-Tip">Hoonlog</a><br>
+    객단가·리텐션: <a href="https://dingg.app/blogs/increase-salon-average-ticket-upsell-cross-sell-packages">Dingg</a> ·
+    <a href="https://www.mindbodyonline.com/business/education/blog/5-ways-increase-average-ticket-your-salon-or-spa">Mindbody</a> ·
+    <a href="https://hairsalonpro.com/salon-client-retention-after-first-visit/">HairSalonPro</a> ·
+    <a href="https://www.salontoday.com/salon-management/1093720/7-client-retention-statistics-strategies-for-your-salon">Salon Today</a><br>
+    <span style="color:#B7AE9F">※ 다수 수치는 업계 마케팅 자료 기반 — 의사결정 전 본인 데이터로 재확인 권장.</span>
+  </div>
+
+</div>
+</body>
+</html>
