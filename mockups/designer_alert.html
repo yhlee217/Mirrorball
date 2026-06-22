@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>오늘 챙길 고객 — 원장 알림</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F1EC; --paper:#FCFAF6; --ink:#2A2622; --muted:#8C8479;
+    --line:#E6DFD4; --accent:#6E5B47; --accent-d:#4E4031; --soft:#EFE9DF;
+    --sage:#5C7A57; --sage-bg:#EAF0E6; --gold:#9A7B33;
+    --serif:'Cormorant Garamond',serif;
+    --sans:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:680px;margin:0 auto;padding:0 22px 70px;}
+  .top{text-align:center;padding:50px 0 14px;}
+  .top .kic{font-family:var(--serif);font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);font-weight:600;}
+  .top h1{font-family:var(--serif);font-size:30px;font-weight:600;margin:8px 0 8px;}
+
+  .principle{background:linear-gradient(135deg,#6E5B47,#4E4031);color:#fff;border-radius:14px;padding:16px 18px;margin:6px 0 24px;}
+  .principle .h{font-family:var(--serif);font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.85;}
+  .principle .t{font-size:15px;font-weight:700;margin-top:3px;line-height:1.5;}
+  .principle .s{font-size:12.5px;opacity:.9;margin-top:5px;}
+
+  .layout{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;justify-content:center;}
+  .phone{flex:0 0 300px;background:#fff;border-radius:30px;box-shadow:0 16px 38px rgba(42,38,34,.15);padding:9px;border:1px solid var(--line);}
+  .screen{border-radius:23px;overflow:hidden;background:var(--paper);}
+  .sc-h{background:linear-gradient(135deg,#9A7B33,#6E5722);color:#fff;padding:15px 16px 13px;}
+  .sc-h .e{font-family:var(--serif);font-size:10.5px;letter-spacing:2px;text-transform:uppercase;opacity:.85;}
+  .sc-h .nm{font-family:var(--serif);font-size:21px;font-weight:600;margin-top:1px;}
+  .sc-h .sub{font-size:11px;opacity:.9;}
+  .sc-b{padding:6px 14px 16px;}
+  .c{padding:12px 2px;border-bottom:1px solid var(--line);}
+  .c:last-child{border-bottom:none;}
+  .c .top2{display:flex;align-items:center;gap:8px;}
+  .c .tag{font-size:10px;font-weight:700;border-radius:20px;padding:2px 8px;}
+  .t-bday{background:#F3E6E2;color:#B0574A;} .t-revisit{background:var(--sage-bg);color:var(--sage);} .t-season{background:#F2EAD8;color:var(--gold);}
+  .c .nm{font-weight:700;font-size:14px;}
+  .c .why{font-size:12px;color:var(--muted);margin:3px 0 6px;}
+  .draft{background:#F2ECE1;border-radius:9px;padding:8px 11px;font-size:12px;color:#3a332c;line-height:1.5;}
+  .draft .lab{font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:2px;}
+  .acts{display:flex;gap:6px;margin-top:7px;}
+  .mini{flex:1;text-align:center;font-size:11px;font-weight:700;padding:6px;border-radius:8px;background:var(--accent);color:#fff;}
+  .mini.ghost{background:var(--soft);color:var(--accent-d);}
+
+  .side{flex:0 0 280px;max-width:300px;padding-top:8px;}
+  .side h3{font-size:15px;margin:0 0 8px;}
+  .side p{font-size:13px;color:var(--muted);margin:0 0 12px;}
+  .pts{list-style:none;padding:0;margin:0;}
+  .pts li{font-size:13px;margin:8px 0;padding-left:18px;position:relative;}
+  .pts li::before{content:"✓";position:absolute;left:0;color:var(--sage);font-weight:700;}
+  .pts li b{color:var(--accent-d);}
+  .badge{display:inline-block;font-size:11px;font-weight:700;color:var(--sage);background:var(--sage-bg);border-radius:20px;padding:2px 10px;margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="kic">For the Designer</div>
+    <h1>오늘 챙길 고객</h1>
+  </div>
+
+  <div class="principle">
+    <div class="h">Design Principle</div>
+    <div class="t">고객 관계는 자동화하지 않는다.</div>
+    <div class="s">시스템은 원장님을 <b>무장</b>시킨다(누구를·왜·뭐라고). 손님에게 보내는 한마디는 <b>원장님이 직접</b>. — 자동 메시지는 "서비스 제공자" 느낌, 직접 보낸 한마디는 "내 디자이너" 느낌.</div>
+  </div>
+
+  <div class="layout">
+    <div class="phone"><div class="screen">
+      <div class="sc-h"><div class="e">Today · 6/16</div><div class="nm">챙길 고객 3명</div><div class="sub">자동 발송 X · 직접 보내기</div></div>
+      <div class="sc-b">
+
+        <div class="c">
+          <div class="top2"><span class="tag t-bday">생일</span><span class="nm">박○○ 님</span></div>
+          <div class="why">오늘 생일 · 마지막 방문 2개월 전(발레아주)</div>
+          <div class="draft"><div class="lab">추천 문구 (수정해서 직접)</div>박○○님 생일 축하드려요 :) 머리도 기분도 새롭게 하고 싶으시면 편하게 연락 주세요!</div>
+          <div class="acts"><span class="mini">카톡으로 직접</span><span class="mini ghost">문구 수정</span></div>
+        </div>
+
+        <div class="c">
+          <div class="top2"><span class="tag t-revisit">재방문</span><span class="nm">지우 님</span></div>
+          <div class="why">레이어드펌 5개월차 → 리터치 시기</div>
+          <div class="draft"><div class="lab">추천 문구</div>지우님 펌 하신 지 다섯 달쯤 됐네요. 풀리기 전에 한 번 더 잡으면 겨울 내내 편하실 거예요!</div>
+          <div class="acts"><span class="mini">카톡으로 직접</span><span class="mini ghost">문구 수정</span></div>
+        </div>
+
+        <div class="c">
+          <div class="top2"><span class="tag t-season">시즌</span><span class="nm">이○○ 님</span></div>
+          <div class="why">여름 전 톤 정리 추천 · 밝은 톤 선호</div>
+          <div class="draft"><div class="lab">추천 문구</div>이○○님, 여름 오기 전에 톤 살짝 정리하면 화사해져요. 시간 되실 때 봐요!</div>
+          <div class="acts"><span class="mini">카톡으로 직접</span><span class="mini ghost">문구 수정</span></div>
+        </div>
+
+      </div>
+    </div></div>
+
+    <div class="side">
+      <h3>무엇이 달라지나</h3>
+      <p>⑤를 "자동 발송"이 아니라 "원장 알림"으로 바꾼 버전.</p>
+      <ul class="pts">
+        <li><b>친분 보존</b>: 시스템은 누구를·왜·초안만, 보내는 건 원장님 손</li>
+        <li><b>실현성↑</b>: 손님 자동발송(서버) 불필요 → <b>지금 파일 기반으로 가능</b></li>
+        <li><b>같은 토대</b>: <code style="font-size:11px">customers/{id}.yaml</code>의 생일·시술이력·선호에서 자동 도출</li>
+        <li><b>A·B와 한 묶음</b>: 예약 브리핑·다음시술 추천과 같은 "원장 무장" 라인</li>
+      </ul>
+      <span class="badge">보류 → 지금 가능</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
