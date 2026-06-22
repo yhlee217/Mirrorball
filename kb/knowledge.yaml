@@ -1,0 +1,142 @@
+# 영업 노하우 지식베이스 (RAG).
+# 검증된 '영업 무기'를 검색 가능한 단위로 저장 → 케이스 상황에 맞춰 검색해
+# copygen 의 rag_principles 로 주입한다. (검색 로직: rag.py)
+#
+# [엔트리 스키마]
+#   id        : 고유 식별자
+#   title     : 짧은 이름
+#   category  : 응대전환 | 가격메뉴 | 컨설팅 | SEO
+#   principle : ★ 카피에 주입되는 '규칙' 한 줄 (rag_principles 로 들어감)
+#   mechanism : 왜 전환되는가 (운영자·AI 맥락용, 주입 아님)
+#   applies_to:
+#     services: 적용 시술 리스트, 또는 ["*"] = 보편
+#     signals : 케이스 텍스트(service+audience+keywords)에 이 토큰이 있으면 관련 ↑
+#   example   : 이 원칙을 체현한 실제 문구 (few-shot 후보)
+#   dont      : 피해야 할 함정 (선택)
+#   verified  : 검증 근거/성과 메모 (선택)
+#   priority  : 중요도(동점 정렬·보편 엔트리 기본점)
+
+entries:
+  - id: revisit_anchor
+    title: 재방문 시점 각인
+    category: 응대전환
+    principle: "유지 기간을 계절·시점과 묶어 다음 방문을 자연스럽게 각인한다"
+    mechanism: "고객이 다음 방문을 스스로 계획하게 만들어 재방문율을 올린다"
+    applies_to:
+      services: ["디지털펌", "레이어드펌", "뿌리펌", "발레아주"]
+      signals: ["유지", "5~6개월", "2개월", "계절", "겨울"]
+    example: "디지털펌은 5~6개월 가니까, 지금 하면 겨울 내내 편해요."
+    verified: "재방문 주기 단축·재방문율 향상(현장 검증)"
+    priority: 3
+
+  - id: first_visit_consult
+    title: 첫 방문은 상담으로 전환
+    category: 응대전환
+    principle: "첫 방문 진입장벽을 '상담부터'로 낮춰 부담 없이 방문을 유도한다"
+    mechanism: "결제 부담을 미루고 방문 자체를 먼저 끌어낸다"
+    applies_to:
+      services: ["*"]
+      signals: ["첫 방문", "처음", "부담"]
+    example: "처음이시면 상담만 받아보셔도 좋아요."
+    priority: 3
+
+  - id: honest_refusal
+    title: 정직한 거절로 신뢰
+    category: 응대전환
+    principle: "무리한 시술을 정직하게 거절해 장기 신뢰를 만든다"
+    mechanism: "단기 매출보다 신뢰를 택해 단골로 전환"
+    applies_to:
+      services: ["*"]
+      signals: ["손상", "탈색", "재시술", "불안"]
+    example: "손상이 심한 날은 무리한 시술 대신 상태부터 봐드려요 — 오래 예쁜 게 더 중요하니까요."
+    dont: "거절을 부정적으로만 말하지 말 것. 반드시 '가치(오래 예쁨)'로 프레이밍."
+    priority: 3
+
+  - id: failure_cause
+    title: 과거 실패 원인 짚기
+    category: 응대전환
+    principle: "고객의 과거 실패를 탓하지 않고 원인(모발 상태·시기)을 짚어 신뢰를 회복한다"
+    mechanism: "실패 경험 고객의 방어심을 풀고 전문성을 보인다"
+    applies_to:
+      services: ["디지털펌", "펌", "컬러"]
+      signals: ["풀림", "재시술", "실망", "실패"]
+    example: "대부분은 솜씨보다 그날 모발 상태나 시기 때문이에요."
+    priority: 2
+
+  - id: transparent_price
+    title: 투명 가격 선공개
+    category: 가격메뉴
+    principle: "가격을 숨기지 않고 먼저 투명하게 제시해 가격 민감 고객의 신뢰를 산다"
+    mechanism: "가격 불안을 먼저 해소해 문의 장벽을 낮춘다"
+    applies_to:
+      services: ["*"]
+      signals: ["가격", "부담", "가성비"]
+    example: "커트 3만원, 클리닉 5만원 — 미리 솔직하게 알려드려요."
+    priority: 2
+
+  - id: bundle_anchor
+    title: 묶음 앵커 업셀
+    category: 가격메뉴
+    principle: "시그니처·보완 시술을 묶어 객단가는 올리되 할인 명분을 제공한다"
+    mechanism: "할인 명분으로 저항을 낮추며 객단가를 올린다"
+    applies_to:
+      services: ["*"]
+      signals: ["클리닉", "묶음", "함께", "시그니처"]
+    example: "두 개를 함께 하시면 1만원 빼드려요."
+    priority: 2
+
+  - id: need_only
+    title: 불필요 시술 거절 = 가성비 신뢰
+    category: 가격메뉴
+    principle: "필요 없는 시술은 권하지 않는다고 명시해 가성비 신뢰를 만든다"
+    mechanism: "과잉 시술 우려를 없애 재방문 신뢰를 쌓는다"
+    applies_to:
+      services: ["*"]
+      signals: ["가격", "손상", "가성비"]
+    example: "심하지 않으면 클리닉도 굳이 권하지 않아요. 필요한 것만 해야 또 오시니까요."
+    priority: 2
+
+  - id: personal_consult
+    title: 퍼스널 진단을 가치로
+    category: 컨설팅
+    principle: "얼굴형·두상·퍼스널컬러 분석을 명확한 결과물로 제시해 차별화한다"
+    mechanism: "단순 시술이 아닌 '진단+제안'으로 객단가·신뢰를 높인다"
+    applies_to:
+      services: ["퍼스널이미지컨설팅", "발레아주", "레이어드컷", "커트"]
+      signals: ["퍼스널컬러", "얼굴형", "어울리는", "컨설팅"]
+    example: "얼굴형에 맞춰 어울리는 라인을 함께 찾아드려요."
+    priority: 2
+
+  - id: male_reproducible
+    title: 남성 시간·재현성 약속
+    category: 응대전환
+    principle: "남성·직장인 고객에겐 빠름·단정·재현성을 약속한다"
+    mechanism: "남성 고객의 핵심 니즈(시간·재현성)를 정확히 친다"
+    applies_to:
+      services: ["남성 커트", "다운펌", "커트"]
+      signals: ["남성", "직장인", "다운펌", "빠름"]
+    example: "다음에 오셔도 같은 라인으로 재현되게 잡아드려요."
+    priority: 2
+
+  - id: junior_sincerity
+    title: 경력 짧을 땐 시간·정성
+    category: 컨설팅
+    principle: "경력이 짧을수록 충분한 상담 시간과 정성을 무기로 삼고, 절대 과장하지 않는다"
+    mechanism: "경력 약점을 정성·정직으로 전환해 신뢰를 얻는다"
+    applies_to:
+      services: ["*"]
+      signals: ["신입", "입문", "합리적"]
+    example: "화려한 경력 대신, 오늘 손님 머리에 가장 잘 어울리는 스타일에 집중할게요."
+    dont: "경력·수상·고객층을 절대 지어내지 말 것(환각)."
+    priority: 2
+
+  - id: question_lead
+    title: 질문형 도입 (검색·AI 인용)
+    category: SEO
+    principle: "고객의 고민을 질문형 첫 문장으로 던져 검색·AI 인용 적합성을 높인다"
+    mechanism: "AI·검색이 '질문→답' 구조를 인용하기 쉽다"
+    applies_to:
+      services: ["*"]
+      signals: []
+    example: "강남역에서 뿌리 자라도 티 안 나는 발레아주, 찾으셨나요?"
+    priority: 3

@@ -13,10 +13,15 @@
 
 | 파일 | 역할 |
 |---|---|
-| `copygen.py` | 카피 생성 엔진 — `generate_copy(case)` (루프가 깎는 핵심) |
+| `copygen.py` | 카피 생성 엔진 — `generate_copy(case, kb_path=...)` (루프가 깎는 핵심) |
 | `prompts/copy.md.j2` | 생성 프롬프트 = 노하우 룰 인코딩 (주 개선 표적) |
 | `prompts/judge.md.j2` | 평가자 프롬프트 (루브릭 기반 JSON 채점) |
 | `eval_loop.py` | 하니스 — `load_golden`/`judge`/`aggregate`/`run_baseline` + `python eval_loop.py` baseline |
+| `rag.py` + `kb/knowledge.yaml` | 영업 노하우 RAG — 케이스 상황에 맞는 검증 원칙을 검색해 주입 |
+
+> **노하우 주입 2경로**: 골든 세트는 `rag_principles` 를 **명시**(C축 재현성 테스트용).
+> 실전 케이스(원칙 미기재)는 `generate_copy(case, kb_path="kb/knowledge.yaml")` 로
+> KB 에서 **자동 검색**해 주입한다. (`copygen.resolve_principles` 가 분기)
 
 ```bash
 python eval_loop.py        # golden_set 전체 baseline 채점 (실행엔 .env 키 필요)

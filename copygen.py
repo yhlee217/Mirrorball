@@ -21,8 +21,24 @@ import engines
 DEFAULT_PROMPT = "prompts/copy.md.j2"
 
 
-def render_prompt(case: dict, prompt_path: str = DEFAULT_PROMPT) -> str:
-    """case(input + rag_principles + must_include/must_not_claim)로 생성 프롬프트 렌더."""
+def resolve_principles(case: dict, kb_path: str | None = None, k: int = 3) -> list[str]:
+    """원칙 결정: 케이스에 명시돼 있으면 그대로(골든셋·재현성), 없고 kb_path 면 RAG 검색(실전)."""
+    explicit = case.get("rag_principles") or []
+    if explicit:
+        return explicit
+    if kb_path:
+        import rag
+
+        return rag.principles_for(case.get("input", {}), kb_path=kb_path, k=k)
+    return []
+
+
+def render_prompt(case: dict, prompt_path: str = DEFAULT_PROMPT,
+                  *, kb_path: str | None = None, k: int = 3) -> str:
+    """case(input + rag_principles + must_include/must_not_claim)로 생성 프롬프트 렌더.
+
+    rag_principles 가 없고 kb_path 가 주어지면 RAG 로 검색해 주입한다.
+    """
     from jinja2 import Environment, FileSystemLoader
 
     tpl = Path(prompt_path)
@@ -33,7 +49,7 @@ def render_prompt(case: dict, prompt_path: str = DEFAULT_PROMPT) -> str:
         lstrip_blocks=True,
     )
     ctx = dict(case.get("input", {}))
-    ctx["rag_principles"] = case.get("rag_principles", []) or []
+    ctx["rag_principles"] = resolve_principles(case, kb_path=kb_path, k=k)
     ctx["must_include"] = case.get("must_include", []) or []
     ctx["must_not_claim"] = case.get("must_not_claim", []) or []
     return env.get_template(tpl.name).render(**ctx)
@@ -45,12 +61,14 @@ def generate_copy(
     provider: str | None = None,
     model: str | None = None,
     prompt_path: str = DEFAULT_PROMPT,
+    kb_path: str | None = None,
+    k: int = 3,
 ) -> str:
-    """설정된 provider 로 카피 생성 (웹검색 OFF)."""
+    """설정된 provider 로 카피 생성 (웹검색 OFF). kb_path 주면 RAG 자동 검색."""
     provider = provider or os.getenv("COPY_PROVIDER") or os.getenv("REPORT_PROVIDER") or "gemini"
     models = engines.resolve_models()
     model = model or os.getenv("COPY_MODEL") or models.get(provider) or ""
-    prompt = render_prompt(case, prompt_path)
+    prompt = render_prompt(case, prompt_path, kb_path=kb_path, k=k)
     return asyncio.run(engines.complete(provider, prompt, {provider: model})).strip()
 
 
