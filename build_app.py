@@ -87,9 +87,21 @@ def _clean_booking(b: dict | None) -> dict | None:
     return out
 
 
+def _latest_service(cust: dict) -> str | None:
+    best_d, best_s = None, None
+    for h in cust.get("history", []) or []:
+        d = _parse_date(h.get("date"))
+        if d and (best_d is None or d > best_d):
+            best_d, best_s = d, h.get("service")
+    return best_s
+
+
 def build_customer(cust: dict) -> dict:
     """앱 화면용 고객 카드(연락처 등 PII 는 출력에서 제외)."""
+    import aftercare
+
     lv = last_visit(cust)
+    svc = _latest_service(cust)
     return {
         "id": cust.get("id"),
         "name": cust.get("name"),
@@ -103,6 +115,8 @@ def build_customer(cust: dict) -> dict:
              "notes": h.get("notes")}
             for h in (cust.get("history") or [])
         ],
+        # 마지막 시술 기준 애프터케어 팁(방문 후 디자이너가 직접 전송)
+        "aftercare": aftercare.tips_for(svc) if svc else [],
         # contact 는 의도적으로 제외 — 디자이너 로컬에만 존재, 배포물 미포함
     }
 

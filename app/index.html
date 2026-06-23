@@ -355,6 +355,12 @@
         (c.last_visit?'<div class="r"><div class="k">마지막 방문</div><div class="v">'+esc(c.last_visit)+'</div></div>':'')+
       '</div>'+
       '<div class="sec-h" style="margin-top:16px">시술 이력</div><div class="card">'+hist+'</div>'+
+      ((c.aftercare&&c.aftercare.length)?(
+        '<div class="card reveal" style="padding:13px 15px"><div class="ch" style="padding:0 0 6px">시술 후 관리 안내 (보내기 좋아요)</div>'+
+        '<ul style="margin:0;padding-left:18px;font-size:13px;color:var(--ink);line-height:1.7">'+
+        c.aftercare.map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+'</ul>'+
+        '<button class="btn ghost" data-toast="관리 안내를 카톡으로 보내기" style="margin-top:10px">관리 안내 보내기</button></div>'
+      ):'')+
       '<button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기" style="margin-top:4px">추천 문구 보내기</button>';
     go('s-client');
   }
