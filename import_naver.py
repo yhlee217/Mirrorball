@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""네이버 예약 내보내기(CSV) → 원장 앱 예약 데이터로 변환.
+"""네이버 예약 내보내기(CSV) → 디자이너 앱 예약 데이터로 변환.
 
 네이버 예약 파트너센터에서 '예약자 목록'을 CSV/엑셀로 내려받아 넣으면,
 컬럼 이름을 자동 인식해 정규화된 예약 목록(clients/{slug}/bookings.yaml)으로 만든다.
-손님이 예약을 *만드는* 곳은 네이버 그대로 — 원장이 *보는* 데이터만 여기서 동기화.
+손님이 예약을 *만드는* 곳은 네이버 그대로 — 디자이너가 *보는* 데이터만 여기서 동기화.
 
 사용법:
     python import_naver.py export.csv --slug minji
@@ -168,7 +168,7 @@ def _rec_key(r: dict) -> str:
 
 
 def append_records(slug: str, rows: list[dict]) -> tuple[Path, int, int]:
-    """누적 원장 clients/{slug}/records.yaml 에 dedup 병합. (경로, 전체, 신규) 반환."""
+    """누적 장부 clients/{slug}/records.yaml 에 dedup 병합. (경로, 전체, 신규) 반환."""
     out = Path("clients") / slug / "records.yaml"
     out.parent.mkdir(parents=True, exist_ok=True)
     existing = []
@@ -203,10 +203,10 @@ def main() -> int:
     n = len(yaml.safe_load(out.read_text(encoding="utf-8")) or [])
     print(f"✓ {out}  (오늘/필터 예약 {n}건{' · ' + args.date if args.date else ''})")
 
-    # 누적 원장에 적재 → 통계·관리용 (전체 기간 보존)
+    # 누적 장부에 적재 → 통계·관리용 (전체 기간 보존)
     ledger, total, added = append_records(args.slug, bookings)
     print(f"✓ {ledger}  (누적 {total}건, 신규 +{added})")
-    print("  연락처(phone)는 원장 로컬에만 — 배포물엔 build_app 이 제외합니다.")
+    print("  연락처(phone)는 디자이너 로컬에만 — 배포물엔 build_app 이 제외합니다.")
     return 0
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""원장용 컨시어지 앱 데이터 빌더 (Phase 2).
+"""디자이너용 컨시어지 앱 데이터 빌더 (Phase 2).
 
 고객 YAML(비공개) → 앱이 읽는 JSON 한 장.
 컨시어지가 로컬에서 실행, 결과 JSON 만 게이트된 배포물에 올린다.
@@ -9,7 +9,7 @@
     python build_app.py --all                  # clients/*/ 전부
     출력: dist_app/{slug}.json
 
-핵심 로직 = "오늘 챙길 고객" 산출.  *자동 발송하지 않는다* — 원장에게 알림만.
+핵심 로직 = "오늘 챙길 고객" 산출.  *자동 발송하지 않는다* — 디자이너에게 알림만.
   · 생일: birthday 가 오늘
   · 재방문: 마지막 시술 + care_cycle_days 가 지났거나 7일 내 도래
 산출은 결정적(LLM 불필요). 추천 문구 초안만 비워두면 copygen.py 로 채울 수 있다.
@@ -101,7 +101,7 @@ def build_customer(cust: dict) -> dict:
              "notes": h.get("notes")}
             for h in (cust.get("history") or [])
         ],
-        # contact 는 의도적으로 제외 — 원장 로컬에만 존재, 배포물 미포함
+        # contact 는 의도적으로 제외 — 디자이너 로컬에만 존재, 배포물 미포함
     }
 
 
@@ -179,7 +179,7 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
         "clients": [build_customer(c) for c in customers],
     }
 
-    # 누적 원장이 있으면 통계 포함 (관리·분석용). PII(전화)는 stats 가 집계만 함.
+    # 누적 장부가 있으면 통계 포함 (관리·분석용). PII(전화)는 stats 가 집계만 함.
     recs_path = Path(client_dir) / "records.yaml"
     if recs_path.exists():
         import stats

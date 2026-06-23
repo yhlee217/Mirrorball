@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="컨시어지">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icon.svg">
-<title>원장 컨시어지</title>
+<title>살롱 컨시어지</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
@@ -185,7 +185,7 @@
 
     <!-- 챙길 고객 -->
     <section class="screen" id="s-alerts" data-title="오늘 챙길 고객">
-      <div class="sec-h">자동 발송 X · 원장님이 직접 한마디</div>
+      <div class="sec-h">자동 발송 X · 내가 직접 한마디</div>
       <div id="alertList"></div>
     </section>
 
@@ -314,7 +314,7 @@
     var cls={bday:'t-bday',revisit:'t-revisit',season:'t-season'};
     box.innerHTML=care.map(function(c,i){
       var draft=c.draft? '<div class="draft"><div class="lab">추천 문구 (직접 보내기)</div>'+esc(c.draft)+'</div>'
-        : '<div class="draft"><div class="lab">추천 문구</div><span style="color:var(--muted)">원장님 말투로 곧 채워드려요</span></div>';
+        : '<div class="draft"><div class="lab">추천 문구</div><span style="color:var(--muted)">내 말투로 곧 채워드려요</span></div>';
       return '<div class="care reveal" style="animation-delay:'+(i*0.06)+'s">'+
         '<div class="hd"><span class="tag '+(cls[c.kind]||'t-season')+'">'+esc(c.label)+'</span><span class="nm">'+esc(c.name)+' 님</span></div>'+
         '<div class="why">'+esc(c.why)+'</div>'+draft+

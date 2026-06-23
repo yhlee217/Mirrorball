@@ -2,7 +2,7 @@ slug: hayewoni
 site_url: "https://yhlee217.github.io/Mirrorball/hayewoni/"
 display_name: "Hayewoni"
 korean_name: "하 예 원"
-role: "헤어디자이너"
+role: "부원장"
 salon: "살롱톤"
 tagline: |
   정교한 커트 라인과 분위기를 완성하는 펌 디자인.
@@ -50,7 +50,7 @@ address_region: "서울"
 
 # 영어 버전 (외국인 고객용) → dist/{slug}/en/ 로 추가 발행, KO/EN 전환 링크 자동 생성
 en:
-  role: "Hair Designer"
+  role: "Vice Director"
   salon: "Salon Tone"
   tagline: |
     Precise cut lines and perms that complete your overall mood.

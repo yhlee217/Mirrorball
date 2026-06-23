@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""누적 예약 원장(records.yaml) → 관리·통계 데이터.
+"""누적 예약 장부(records.yaml) → 관리·통계 데이터.
 
 네이버 예약은 실시간 목록을 주지만 '분석'은 안 해준다. import_naver 로 쌓은
-원장에서 재방문율·인기 시술·월별 추이·객단가 등을 결정적으로 계산한다.
+장부에서 재방문율·인기 시술·월별 추이·객단가 등을 결정적으로 계산한다.
 
 사용법:
     python stats.py clients/minji            # 통계 요약 출력
@@ -126,7 +126,7 @@ def load_records(client_dir: str) -> list[dict]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="예약 원장 → 통계")
+    ap = argparse.ArgumentParser(description="예약 장부 → 통계")
     ap.add_argument("client_dir", help="clients/{slug}")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()

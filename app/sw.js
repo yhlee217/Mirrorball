@@ -1,4 +1,4 @@
-// 원장 컨시어지 PWA — 최소 오프라인 셸 캐시
+// 살롱 컨시어지 PWA — 최소 오프라인 셸 캐시
 const CACHE = 'concierge-app-v1';
 const ASSETS = ['./index.html', './manifest.webmanifest', './icon.svg'];
 

@@ -1,7 +1,7 @@
 {
-  "name": "원장 컨시어지",
+  "name": "살롱 컨시어지",
   "short_name": "컨시어지",
-  "description": "1인 미용실 원장용 고객 관리·AI 노출 케어",
+  "description": "헤어 디자이너용 고객 관리·AI 노출 케어",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
