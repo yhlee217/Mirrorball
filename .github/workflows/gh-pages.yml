@@ -37,6 +37,8 @@ jobs:
           <ul><li><a href="./hayewoni/">하예원 · 살롱톤</a></li>
           <li><a href="./minji/">김민지</a></li></ul>
           HTML
+      - name: 커스텀 도메인 적용(있으면)
+        run: test -f CNAME && cp CNAME dist/CNAME && echo "CNAME → $(cat CNAME)" || echo "CNAME 없음(기본 github.io 사용)"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
