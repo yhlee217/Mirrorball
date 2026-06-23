@@ -6,7 +6,7 @@ salon: "살롱톤"
 tagline: |
   정교한 커트 라인과 분위기를 완성하는 펌 디자인.
   레이어드컷·뿌리펌과 퍼스널이미지컨설팅으로 나만의 스타일을 설계합니다.
-photo_url: "assets/hayewoni.jpg"   # designers/assets/hayewoni.jpg 에 사진 파일을 넣어주세요
+photo_url: "https://naverbooking-phinf.pstatic.net/20250403_69/1743667775120YLhwA_JPEG/%BF%B9%BF%F8%BA%CE%BF%F8%C0%E5.jpg"   # 네이버 예약 CDN 호스팅
 instagram: "hayewoni"
 booking_url: "https://m.booking.naver.com/booking/13/bizes/466128/items/5691694?theme=place&service-target=map-pc&tab=book&lang=ko&area=bmp&map-search=1"
 specialties:
