@@ -159,6 +159,11 @@
     font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:22px;opacity:0;pointer-events:none;transition:.3s;z-index:20;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.25);}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
+  /* 접근성: 모션 최소화 선호 시 애니메이션 줄임 */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important;}
+  }
+
   /* 홈 화면에 설치(standalone)되면 기기 프레임을 벗고 풀스크린 앱처럼 */
   @media (display-mode:standalone){
     body{padding:0;gap:0;background:var(--paper);justify-content:flex-start;}
@@ -183,6 +188,15 @@
 
       <!-- ===== 원장 ===== -->
       <section class="screen active" id="o-home" data-mode="owner">
+        <div class="card hide" id="installHint" style="margin:14px 16px 0;background:var(--sage-bg);border-color:#CFE0C6;">
+          <div style="padding:12px 14px;">
+            <div style="font-size:13px;font-weight:700;color:#3f5a3b;line-height:1.5;" id="ihText"></div>
+            <div class="row2" style="margin-top:9px;">
+              <button class="btn" id="ihCopy" style="background:var(--sage);">링크 복사</button>
+              <button class="btn ghost" id="ihClose" aria-label="안내 닫기">닫기</button>
+            </div>
+          </div>
+        </div>
         <div class="head"><div class="e">하예원 · 6월 16일(월)</div><h2>안녕하세요 👋</h2><div class="s">오늘 예약 4 · 챙길 고객 3</div></div>
         <div class="chips">
           <div class="chip3"><div class="n">4</div><div class="l">오늘 예약</div></div>
@@ -243,7 +257,7 @@
 
       <!-- 고객 상세 = 예약브리핑 + 레시피 + 추천 + 만족도이력 -->
       <section class="screen" id="o-client" data-mode="owner">
-        <div class="nav"><button class="back" data-back>‹</button><span class="ttl">지우 님</span></div>
+        <div class="nav"><button class="back" data-back aria-label="뒤로 가기">‹</button><span class="ttl">지우 님</span></div>
         <div class="chips"><div class="chip3"><div class="n">4</div><div class="l">방문</div></div><div class="chip3"><div class="n">5개월</div><div class="l">펌 경과</div></div><div class="chip3"><div class="n">★4.9</div><div class="l">만족</div></div></div>
         <div class="card"><div class="ch">📅 다음 예약 브리핑</div><div class="kv">
           <div class="r"><div class="k">예약</div><div class="v"><b>6/18(수) 14:00 · 레이어드펌</b></div></div>
@@ -313,14 +327,14 @@
       </section>
 
       <section class="screen" id="g-quiz" data-mode="guest">
-        <div class="nav"><button class="back" data-back>‹</button><span class="ttl">어울리는 스타일 찾기</span></div>
+        <div class="nav"><button class="back" data-back aria-label="뒤로 가기">‹</button><span class="ttl">어울리는 스타일 찾기</span></div>
         <div class="pad" id="quizBox"></div>
       </section>
 
       <section class="screen" id="g-sat" data-mode="guest">
         <div class="head" style="text-align:center;"><div class="e">After Service</div><h2>오늘 어떠셨어요?</h2><div class="s">지우 님 · 레이어드펌</div></div>
         <div class="pad">
-          <div class="faces"><span data-rate="good">😍</span><span data-rate="good">🙂</span><span data-rate="bad">😕</span></div>
+          <div class="faces"><span role="button" tabindex="0" aria-label="아주 만족" data-rate="good">😍</span><span role="button" tabindex="0" aria-label="만족" data-rate="good">🙂</span><span role="button" tabindex="0" aria-label="아쉬움" data-rate="bad">😕</span></div>
           <div id="sat-good" class="hide"><div class="reco" style="text-align:center;">감사해요! 한 줄 남겨주시면 큰 힘이 돼요 :)</div><button class="btn" style="margin-top:10px;" data-toast="네이버 리뷰 작성으로 이동">네이버 리뷰 남기기</button></div>
           <div id="sat-bad" class="hide"><div class="draft"><div class="lab">원장님께 비공개로 전달</div>어떤 점이 아쉬우셨어요? 바로 챙겨드릴게요.</div><textarea rows="3" placeholder="아쉬웠던 점..."></textarea><button class="btn" style="margin-top:8px;" data-toast="원장님께 비공개로 전달됐어요 (공개 후기 전 회수)">비공개로 보내기</button></div>
         </div>
@@ -452,6 +466,31 @@
       document.getElementById('qAgain').addEventListener('click',renderQuiz);
     },140);
   }
+
+  // 설치/접근 안내: 인스타 인앱 브라우저 → 사파리로 열어 설치 유도
+  (function installHint(){
+    var ua=navigator.userAgent||'';
+    var standalone=matchMedia('(display-mode:standalone)').matches||navigator.standalone;
+    var el=document.getElementById('installHint');
+    var t=document.getElementById('ihText');
+    if(!el||!t||standalone) return;                       // 이미 설치됨 → 안내 불필요
+    var inApp=/Instagram|FBAN|FBAV|FB_IAB|KAKAOTALK|Line|NAVER|DaumApps/i.test(ua);
+    var ios=/iPhone|iPad|iPod/i.test(ua);
+    if(inApp){
+      t.textContent="앱처럼 쓰려면 — 우측 위 ··· 메뉴 → 'Safari(사파리)로 열기' → 공유 버튼 → '홈 화면에 추가'";
+      el.classList.remove('hide');
+    } else if(ios){
+      t.textContent="공유 버튼 → '홈 화면에 추가'하면 앱처럼 한 번에 열 수 있어요";
+      el.classList.remove('hide');
+    } else { return; }
+    document.getElementById('ihClose').onclick=function(){ el.classList.add('hide'); };
+    document.getElementById('ihCopy').onclick=function(){
+      var done=function(){ t.textContent="링크를 복사했어요 — Safari 주소창에 붙여넣어 여세요"; };
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(location.href).then(done,done);
+      } else { done(); }
+    };
+  })();
 
   renderTabs();
   runEffects('o-home');
