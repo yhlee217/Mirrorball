@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="{{ lang }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -31,8 +31,14 @@
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
     font-size:16px;line-height:1.75;-webkit-font-smoothing:antialiased;}
   .wrap{max-width:600px;margin:0 auto;background:var(--paper);min-height:100vh;
-    box-shadow:0 0 60px rgba(42,38,34,.06);}
+    box-shadow:0 0 60px rgba(42,38,34,.06);position:relative;}
   .pad{padding:0 30px;}
+
+  /* language switch */
+  .lang-switch{position:absolute;top:16px;right:16px;z-index:5;font-size:12px;font-weight:700;
+    letter-spacing:.5px;color:var(--accent);text-decoration:none;border:1px solid var(--line);
+    border-radius:20px;padding:5px 12px;background:var(--paper);}
+  .lang-switch:active{transform:scale(.97);}
 
   /* hero */
   header{padding:54px 30px 36px;text-align:center;border-bottom:1px solid var(--line);}
@@ -160,6 +166,9 @@
 <body>
 <div class="wrap">
 
+  {% if has_en %}
+  <a class="lang-switch" href="{{ lang_switch_href }}" aria-label="language">{{ t.switch_label }}</a>
+  {% endif %}
   <header class="reveal r1">
     {% if has_photo %}
     <img class="ava" src="{{ photo_url }}" alt="{{ display_name }}">
@@ -175,16 +184,16 @@
   </header>
 
   <div class="cta-row reveal r1">
-    <a class="cta cta-primary" href="{{ booking_href }}">예약하기</a>
+    <a class="cta cta-primary" href="{{ booking_href }}">{{ t.book }}</a>
     <a class="cta cta-ghost" href="{{ instagram_url }}">Instagram</a>
   </div>
   <div class="pad" style="text-align:center;padding-top:8px;padding-bottom:4px;">
-    <span style="font-size:13px;color:var(--muted);">문의는 인스타그램 DM으로 편하게 주세요</span>
+    <span style="font-size:13px;color:var(--muted);">{{ t.dm_hint }}</span>
   </div>
 
   <section class="reveal r2">
     <div class="eyebrow">Specialties</div>
-    <h2>전문 시술</h2>
+    <h2>{{ t.h2_specialties }}</h2>
     {% for s in specialties %}
     <div class="spec">
       <div class="name">{{ s.name }}{% if s.signature %} <span class="badge">signature</span>{% endif %}</div>
@@ -196,7 +205,7 @@
 {% if style_quiz %}
   <section class="reveal r3">
     <div class="eyebrow">Find Your Style</div>
-    <h2>어울리는 스타일 찾기</h2>
+    <h2>{{ t.h2_quiz }}</h2>
     <div class="quiz" id="style-quiz"></div>
     <script type="application/json" id="quiz-data">{{ style_quiz_json|safe }}</script>
   </section>
@@ -205,7 +214,7 @@
 {% if menu %}
   <section class="reveal r3">
     <div class="eyebrow">Menu</div>
-    <h2>시술 안내</h2>
+    <h2>{{ t.h2_menu }}</h2>
     {% for m in menu %}
     <div class="menu-item">
       <div>
@@ -220,7 +229,7 @@
 {% endif %}
   <section class="reveal r3">
     <div class="eyebrow">About</div>
-    <h2>소개</h2>
+    <h2>{{ t.h2_about }}</h2>
     <ul class="about-list">
       {% for item in about %}
       <li>{{ item }}</li>
@@ -230,7 +239,7 @@
 
   <section class="reveal r3">
     <div class="eyebrow">Portfolio</div>
-    <h2>작업</h2>
+    <h2>{{ t.h2_portfolio }}</h2>
 {% if portfolio %}
     <div class="ba-gal">
       {% for item in portfolio %}
@@ -241,7 +250,7 @@
           <span class="ba-cap l">BEFORE</span>
           <span class="ba-cap r">AFTER</span>
           <span class="ba-line"></span>
-          <input class="ba-range" type="range" min="0" max="100" value="50" aria-label="시술 전후 비교">
+          <input class="ba-range" type="range" min="0" max="100" value="50" aria-label="{{ t.ba_aria }}">
         </div>
         {% if item.caption %}<figcaption>{{ item.caption }}</figcaption>{% endif %}
       </figure>
@@ -251,19 +260,19 @@
     <div class="gal">
       {{ gallery_html|safe }}
     </div>
-    <p style="font-size:12.5px;color:var(--muted);margin-top:12px;">※ 발행 시 인스타 대표 작업 사진으로 교체 (시술명 캡션 포함)</p>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:12px;">{{ t.gallery_note }}</p>
 {% endif %}
   </section>
 
 {% if reviews %}
   <section class="reveal r4">
     <div class="eyebrow">Reviews</div>
-    <h2>고객 후기</h2>
+    <h2>{{ t.h2_reviews }}</h2>
     <div class="rev-head">
       <div class="rev-score">{{ review_avg }}</div>
       <div>
         <div class="rev-stars">★★★★★</div>
-        <div class="rev-count">후기 {{ review_count }}건</div>
+        <div class="rev-count">{{ t.review_count_prefix }}{{ review_count }}{{ t.review_count_suffix }}</div>
       </div>
     </div>
     {% for rv in reviews %}
@@ -278,7 +287,7 @@
 {% endif %}
   <section class="reveal r4">
     <div class="eyebrow">FAQ</div>
-    <h2>자주 묻는 질문</h2>
+    <h2>{{ t.h2_faq }}</h2>
     {% for f in faq %}
     <div class="faq">
       <div class="q">{{ f.q }}</div>
@@ -289,20 +298,18 @@
 
   <section class="reveal r5">
     <div class="eyebrow">Location</div>
-    <h2>오시는 길</h2>
+    <h2>{{ t.h2_location }}</h2>
     <p class="loc">
-      <span class="lab">매장</span><br>{{ salon }}<br>
-      <span class="lab">주소</span><br>{{ address }}<br>
-      <span class="lab">예약</span><br><a href="{{ booking_href_loc }}" style="color:var(--accent);text-decoration:none;font-weight:600;">네이버 예약</a> · 카카오톡 채널 · 인스타 DM<br><span class="lab" style="display:block;margin-top:8px;">찾아오시는 길</span>{{ directions }}
+      <span class="lab">{{ t.lab_salon }}</span><br>{{ salon }}<br>
+      <span class="lab">{{ t.lab_address }}</span><br>{{ address }}<br>
+      <span class="lab">{{ t.lab_booking }}</span><br><a href="{{ booking_href_loc }}" style="color:var(--accent);text-decoration:none;font-weight:600;">{{ t.booking_link }}</a>{{ t.booking_channels }}<br><span class="lab" style="display:block;margin-top:8px;">{{ t.lab_directions }}</span>{{ directions }}
     </p>
   </section>
 
   <footer class="reveal r5">
     <a href="{{ instagram_url }}">@{{ instagram }}</a>
     <p class="note">
-      © {{ display_name }} · {{ salon }}<br>
-      ※ [ ] 표시는 발행 전 실제 값으로 교체하세요 (사진·주소·예약 링크·FAQ 답변).<br>
-      ※ 옛 매장 정보는 퇴사·입사 확정 후 적용하세요.
+      © {{ display_name }} · {{ salon }}
     </p>
   </footer>
 

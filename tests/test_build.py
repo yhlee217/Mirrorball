@@ -344,6 +344,31 @@ def test_build_one_real_hayewoni(tmp_path):
     assert "m.booking.naver.com" in body          # 예약 링크 반영
     # 채워진 상태 → 경고는 사진 파일 유무에 따른 0~1개
     assert len(res["warnings"]) <= 1
+    # 한국어 페이지엔 KO/EN 전환 링크가 있다(en 블록 존재)
+    assert 'class="lang-switch" href="en/"' in body
+
+
+def test_build_one_english_page(tmp_path):
+    # en 블록이 있으면 dist/{slug}/en/index.html 추가 생성 + 영어 UI/콘텐츠
+    res = build.build_one("designers/hayewoni.yaml", dist=str(tmp_path / "dist"))
+    en = tmp_path / "dist" / "hayewoni" / "en" / "index.html"
+    assert en.exists()
+    body = en.read_text(encoding="utf-8")
+    assert '<html lang="en">' in body
+    assert "Book Now" in body and "Layered Cut" in body
+    assert 'class="lang-switch" href="../"' in body   # 한국어로 돌아가는 링크
+    assert res["en_url"].endswith("/en/")               # site_url 있으면 en_url 채움
+
+
+def test_no_english_page_without_en_block(tmp_path):
+    data = make_data()  # en 블록 없음
+    out = tmp_path / "y.yaml"
+    out.write_text(__import__("yaml").safe_dump(data, allow_unicode=True), encoding="utf-8")
+    res = build.build_one(str(out), dist=str(tmp_path / "dist"))
+    assert not (tmp_path / "dist" / data["slug"] / "en").exists()
+    body = (tmp_path / "dist" / data["slug"] / "index.html").read_text(encoding="utf-8")
+    assert '<a class="lang-switch"' not in body         # 전환 링크 미출력
+    assert res["en_url"] == ""
 
 
 if __name__ == "__main__":

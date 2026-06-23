@@ -15,6 +15,75 @@ import schema
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 TEMPLATE_NAME = "profile.html.j2"
 
+# UI 고정 문자열(언어별). 콘텐츠(소개·FAQ 등)는 YAML 에서, UI 라벨은 여기서.
+UI = {
+    "ko": {
+        "book": "예약하기",
+        "dm_hint": "문의는 인스타그램 DM으로 편하게 주세요",
+        "h2_specialties": "전문 시술",
+        "h2_quiz": "어울리는 스타일 찾기",
+        "h2_menu": "시술 안내",
+        "h2_about": "소개",
+        "h2_portfolio": "작업",
+        "h2_reviews": "고객 후기",
+        "h2_faq": "자주 묻는 질문",
+        "h2_location": "오시는 길",
+        "lab_salon": "매장",
+        "lab_address": "주소",
+        "lab_booking": "예약",
+        "lab_directions": "찾아오시는 길",
+        "booking_link": "네이버 예약",
+        "booking_channels": " · 카카오톡 채널 · 인스타 DM",
+        "review_count_prefix": "후기 ",
+        "review_count_suffix": "건",
+        "gallery_note": "※ 발행 시 인스타 대표 작업 사진으로 교체 (시술명 캡션 포함)",
+        "ba_aria": "시술 전후 비교",
+        "switch_label": "EN",
+    },
+    "en": {
+        "book": "Book Now",
+        "dm_hint": "Feel free to reach out via Instagram DM",
+        "h2_specialties": "Specialties",
+        "h2_quiz": "Find Your Style",
+        "h2_menu": "Menu",
+        "h2_about": "About",
+        "h2_portfolio": "Work",
+        "h2_reviews": "Reviews",
+        "h2_faq": "FAQ",
+        "h2_location": "Location",
+        "lab_salon": "Salon",
+        "lab_address": "Address",
+        "lab_booking": "Booking",
+        "lab_directions": "Getting here",
+        "booking_link": "Naver booking",
+        "booking_channels": " · KakaoTalk channel · Instagram DM",
+        "review_count_prefix": "",
+        "review_count_suffix": " reviews",
+        "gallery_note": "※ Replace with signature work photos at publish (with captions)",
+        "ba_aria": "Before / after comparison",
+        "switch_label": "한국어",
+    },
+}
+
+# 'en' 블록이 덮어쓰는 콘텐츠 키
+_EN_OVERLAY_KEYS = (
+    "role", "salon", "tagline", "specialties", "about", "faq",
+    "knows_about", "portfolio_labels", "menu", "reviews", "style_quiz",
+    "location",
+)
+
+
+def _overlay_lang(data: dict, lang: str) -> dict:
+    """lang=='en' 이고 data['en'] 가 있으면 해당 키를 덮어쓴 사본 반환."""
+    en = data.get("en")
+    if lang != "en" or not en:
+        return data
+    merged = dict(data)
+    for k in _EN_OVERLAY_KEYS:
+        if k in en:
+            merged[k] = en[k]
+    return merged
+
 
 @lru_cache(maxsize=1)
 def _env():
@@ -42,16 +111,32 @@ def korean_name_plain(data: dict) -> str:
     return (data.get("korean_name") or "").replace(" ", "")
 
 
-def make_title(data: dict) -> str:
+def make_title(data: dict, lang: str = "ko") -> str:
+    if lang == "en":
+        return (
+            f"{data.get('display_name','')} | "
+            f"{data.get('role','')} · {data.get('salon','')}"
+        )
     return (
         f"{korean_name_plain(data)} · {data.get('display_name','')} | "
         f"{data.get('role','')} · {data.get('salon','')}"
     )
 
 
-def make_description(data: dict) -> str:
-    """knows_about 를 '·'로 잇고 마지막은 과/와로 연결 + 매장·역할·이름·인스타."""
+def make_description(data: dict, lang: str = "ko") -> str:
+    """knows_about 를 잇고 매장·역할·이름·인스타로 마무리. 언어별 연결어."""
     items = list(data.get("knows_about", []))
+    if lang == "en":
+        if not items:
+            spec_part = ""
+        elif len(items) == 1:
+            spec_part = items[0]
+        else:
+            spec_part = ", ".join(items[:-1]) + ", and " + items[-1]
+        return (
+            f"{spec_part}. {data.get('role','')} at {data.get('salon','')} "
+            f"({data.get('display_name','')} / @{data.get('instagram','')})."
+        )
     if not items:
         spec_part = ""
     elif len(items) == 1:
@@ -70,9 +155,12 @@ def _dumps(obj: dict) -> str:
     return json.dumps(obj, ensure_ascii=False, indent=2).replace("</", "<\\/")
 
 
-def build_context(data: dict) -> dict:
+def build_context(data: dict, lang: str = "ko") -> dict:
     """템플릿에 넘길 컨텍스트 (원본 필드 + 파생 값)."""
     from markupsafe import escape
+
+    has_en = bool(data.get("en"))
+    data = _overlay_lang(data, lang)
 
     ctx = dict(data)
     booking = (data.get("booking_url") or "").strip()
@@ -113,14 +201,18 @@ def build_context(data: dict) -> dict:
         tagline_html="<br>".join(tagline.splitlines()),
         booking_href=booking_href,
         booking_href_loc=booking or "[네이버 예약 링크]",
-        title=make_title(data),
-        description=make_description(data),
+        title=make_title(data, lang),
+        description=make_description(data, lang),
         person_ld_json=_dumps(schema.person_ld(data)),
         faq_ld_json=_dumps(schema.faq_ld(data)),
+        lang=lang,
+        t=UI.get(lang, UI["ko"]),
+        has_en=has_en,
+        lang_switch_href=("../" if lang == "en" else "en/"),
     )
     return ctx
 
 
-def render(data: dict) -> str:
+def render(data: dict, lang: str = "ko") -> str:
     """data dict 를 받아 완성된 정적 HTML 문자열을 반환."""
-    return _env().get_template(TEMPLATE_NAME).render(**build_context(data))
+    return _env().get_template(TEMPLATE_NAME).render(**build_context(data, lang))

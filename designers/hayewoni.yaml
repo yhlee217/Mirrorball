@@ -47,3 +47,46 @@ location:
 knows_about: ["레이어드컷", "뿌리펌", "레이어드펌", "퍼스널이미지컨설팅"]
 address_locality: "영등포구"
 address_region: "서울"
+
+# 영어 버전 (외국인 고객용) → dist/{slug}/en/ 로 추가 발행, KO/EN 전환 링크 자동 생성
+en:
+  role: "Hair Designer"
+  salon: "Salon Tone"
+  tagline: |
+    Precise cut lines and perms that complete your overall mood.
+    Layered cuts, root perms, and personal image consulting to design a style that's truly yours.
+  specialties:
+    - name: "Layered Cut"
+      desc: "Especially flattering for angular or oval face shapes. A great solution whether you struggle with thick, hard-to-manage hair or fine hair that lacks volume."
+    - name: "Root Perm"
+      desc: "Recommended when a flat crown or hair clinging to the head makes the face look larger. Adds root volume to make the face look more three-dimensional and smaller. (Retouch every ~2 months.)"
+    - name: "Layered Perm"
+      desc: "A heat (digital) perm with a smooth texture that lasts 5–6 months. Ideal for those who prefer a natural flow. (For tighter curls, a cold perm is suggested instead.)"
+    - name: "Personal Image Consulting"
+      desc: "A precise analysis of your head shape, neckline, eye color, face shape, body type, and overall mood. You'll leave with the right hairstyle and accurate knowledge of your personal color. Especially loved by women in their 20s–40s."
+      signature: true
+  about:
+    - "Idol music-video styling · personal stylist for top actors"
+    - "Former cut-specialist salon in Cheongdam — refined technique"
+    - "Working holiday in Denmark — comfortable serving international clients"
+    - "Turns clients' hidden needs into results — trusted enough to refer family"
+  faq:
+    - q: "Who does a layered cut suit best?"
+      a: "It suits angular and oval face shapes best. It works well both for thick, hard-to-manage hair and for fine, sparse hair that lacks volume."
+    - q: "How long does a root perm last?"
+      a: "A retouch is usually recommended every 2 months. When a flat crown makes the face look larger, added root volume makes the face look more three-dimensional and smaller."
+    - q: "What's the difference between a layered perm and a regular perm?"
+      a: "A layered perm (heat perm) has a smooth texture and lasts 5–6 months, ideal for a natural flow. A regular (cold) perm suits tighter curl designs from the roots."
+    - q: "Can damaged hair be permed?"
+      a: "Yes — with gentle perm solutions to minimize damage. If hair has lost all strength from bleaching, I'll recommend a thorough consultation before any treatment."
+    - q: "What is personal image consulting?"
+      a: "Beyond suggesting trends, it analyzes your head shape, neckline, eye color, face shape, body type, and mood — so you leave with both a flattering hairstyle and accurate knowledge of your personal color."
+    - q: "It's my first visit — how do I get there and how long does it take?"
+      a: "We're at Salon Tone in Forena Yeongdeungpo (#220), a short walk from Yeongdeungpo-gu Office Station. Cuts take about 1 hour, color about 1.5 hours, perms about 2.5 hours."
+    - q: "How do I book?"
+      a: "Naver booking is easiest. International clients are welcome via KakaoTalk channel or Instagram DM. We're at Salon Tone on Gukhoe-daero 50-gil, Yeongdeungpo-gu."
+  knows_about: ["Layered Cut", "Root Perm", "Layered Perm", "Personal Image Consulting"]
+  portfolio_labels: ["Layered Cut", "Root Perm", "Layered Perm", "Bob", "Styling", "Color"]
+  location:
+    address: "20 Gukhoe-daero 50-gil, Yeongdeungpo-gu, Seoul (Forena Yeongdeungpo, Bldg #220)"
+    directions: "A short walk from Yeongdeungpo-gu Office Station. (Salon Tone, Forena Yeongdeungpo #220)"

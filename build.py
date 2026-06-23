@@ -71,11 +71,24 @@ def build_one(path: str, dist: str = "dist") -> dict:
         else:
             warnings.append(f"photo_url 파일 없음: {src} (사진을 넣어주세요)")
 
+    # 영어 버전: 'en' 블록이 있으면 dist/{slug}/en/index.html 추가 생성.
+    site_url = (data.get("site_url") or "").strip()
+    en_url = ""
+    if data.get("en"):
+        html_en = core.render(data, lang="en")
+        check_jsonld(html_en)
+        out_en = out.parent / "en" / "index.html"
+        out_en.parent.mkdir(parents=True, exist_ok=True)
+        out_en.write_text(html_en, encoding="utf-8")
+        if site_url:
+            en_url = site_url.rstrip("/") + "/en/"
+
     return {
         "slug": data["slug"],
         "out_path": out,
         "warnings": warnings,
-        "site_url": (data.get("site_url") or "").strip(),
+        "site_url": site_url,
+        "en_url": en_url,
     }
 
 
@@ -88,6 +101,7 @@ def write_site_files(built: list[dict], dist: str = "dist") -> list[Path]:
     written: list[Path] = []
 
     urls = [b["site_url"] for b in built if b.get("site_url")]
+    urls += [b["en_url"] for b in built if b.get("en_url")]
     if urls:
         body = "\n".join(f"  <url><loc>{u}</loc></url>" for u in urls)
         sitemap = (
