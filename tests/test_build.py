@@ -334,11 +334,16 @@ def test_robots_without_any_site_url(tmp_path):
 
 
 def test_build_one_real_hayewoni(tmp_path):
-    # 실제 예시 파일도 빌드되고 경고 3개(photo/booking/주소)
+    # 실제 데이터(영등포·살롱톤·예약·주소 채움) 빌드 — 사진 파일 없으면 경고 1
     res = build.build_one("designers/hayewoni.yaml", dist=str(tmp_path / "dist"))
     assert res["slug"] == "hayewoni"
-    assert (tmp_path / "dist" / "hayewoni" / "index.html").exists()
-    assert len(res["warnings"]) == 3
+    html = (tmp_path / "dist" / "hayewoni" / "index.html")
+    assert html.exists()
+    body = html.read_text(encoding="utf-8")
+    assert "살롱톤" in body and "영등포" in body
+    assert "m.booking.naver.com" in body          # 예약 링크 반영
+    # 채워진 상태 → 경고는 사진 파일 유무에 따른 0~1개
+    assert len(res["warnings"]) <= 1
 
 
 if __name__ == "__main__":

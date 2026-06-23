@@ -57,6 +57,20 @@ def build_one(path: str, dist: str = "dist") -> dict:
     out = Path(dist) / data["slug"] / "index.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
+
+    # 상대경로 photo_url(예: assets/x.jpg)이면 designers/ 의 원본을 dist 로 복사.
+    warnings = list(warnings)
+    photo = (data.get("photo_url") or "").strip()
+    if photo and not photo.startswith(("http://", "https://", "data:")):
+        src = Path("designers") / photo
+        if src.exists():
+            dst = out.parent / photo
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            import shutil
+            shutil.copy(src, dst)
+        else:
+            warnings.append(f"photo_url 파일 없음: {src} (사진을 넣어주세요)")
+
     return {
         "slug": data["slug"],
         "out_path": out,
