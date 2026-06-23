@@ -8,6 +8,7 @@
 사용법:
     python ops.py build [--all|designers/{slug}.yaml]   프로필 정적 빌드 → dist/
     python ops.py build-app [--all|clients/{slug}]       원장앱 데이터 빌드 → dist_app/
+    python ops.py preview [slug]                          앱 데이터 빌드+로컬 서버(미리보기)
     python ops.py cards <example.yaml>                   카드 빌드
     python ops.py diagnose <target.yaml>                 AI 노출 진단(로컬, 키 필요)
     python ops.py copy <input.yaml>                      카피 생성(로컬)
@@ -40,6 +41,24 @@ def cmd_build(rest: list[str]) -> int:
 def cmd_build_app(rest: list[str]) -> int:
     target = rest[0] if rest else "--all"
     return _run([PY, "build_app.py", target])
+
+
+def cmd_preview(rest: list[str]) -> int:
+    """앱 데이터를 mockups/data/ 로 빌드하고 로컬 HTTP 서버 실행.
+    프로토타입은 file:// 에선 데모, http:// 에선 실데이터를 읽는다."""
+    import shutil
+
+    slug = rest[0] if rest else "minji"
+    rc = _run([PY, "build_app.py", f"clients/{slug}"])
+    if rc != 0:
+        return rc
+    src = Path("dist_app") / f"{slug}.json"
+    dst_dir = Path("mockups") / "data"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(src, dst_dir / f"{slug}.json")
+    print(f"✓ {dst_dir/f'{slug}.json'} 준비됨")
+    print(f"  → http://localhost:8000/app_prototype.html?d={slug}  (Ctrl+C 종료)")
+    return _run([PY, "-m", "http.server", "8000", "--directory", "mockups"])
 
 
 def cmd_cards(rest: list[str]) -> int:
@@ -83,6 +102,7 @@ def cmd_status(_rest: list[str]) -> int:
 COMMANDS = {
     "build": cmd_build,
     "build-app": cmd_build_app,
+    "preview": cmd_preview,
     "cards": cmd_cards,
     "diagnose": cmd_diagnose,
     "copy": cmd_copy,

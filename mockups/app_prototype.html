@@ -197,16 +197,18 @@
             </div>
           </div>
         </div>
-        <div class="head"><div class="e">하예원 · 6월 16일(월)</div><h2>안녕하세요 👋</h2><div class="s">오늘 예약 4 · 챙길 고객 3</div></div>
+        <div class="head"><div class="e" id="homeEyebrow">하예원 · 6월 16일(월)</div><h2>안녕하세요 👋</h2><div class="s" id="homeSub">오늘 예약 4 · 챙길 고객 3</div></div>
         <div class="chips">
-          <div class="chip3"><div class="n">4</div><div class="l">오늘 예약</div></div>
-          <div class="chip3" data-go="o-alerts"><div class="n">3</div><div class="l">챙길 고객</div></div>
+          <div class="chip3"><div class="n" id="chipBookings">4</div><div class="l">오늘 예약</div></div>
+          <div class="chip3" data-go="o-alerts"><div class="n" id="chipCare">3</div><div class="l">챙길 고객</div></div>
           <div class="chip3" data-go="o-exposure"><div class="n">7</div><div class="l">AI 노출</div></div>
         </div>
         <div class="card">
           <div class="ch">오늘 예약</div>
+          <div id="homeBookings">
           <div class="li" data-go="o-client"><div class="av">지</div><div><div class="nm">지우 님</div><div class="sub">레이어드펌 · 첫방문 5개월차</div></div><div class="rt">14:00</div></div>
           <div class="li"><div class="av">박</div><div><div class="nm">박○○ 님</div><div class="sub">발레아주 리터치</div></div><div class="rt">16:30</div></div>
+          </div>
         </div>
         <div class="card">
           <div class="ch">바로가기</div>
@@ -217,7 +219,7 @@
 
       <section class="screen" id="o-alerts" data-mode="owner">
         <div class="head"><div class="e">Today · 6/16</div><h2>오늘 챙길 고객</h2><div class="s">자동 발송 X · 원장님이 직접 한마디</div></div>
-        <div class="pad" style="padding-top:6px;">
+        <div class="pad" style="padding-top:6px;" id="alertList">
           <div class="card reveal" style="margin:0 0 12px;">
             <div class="ch"><span class="tag t-bday">생일</span> 박○○ 님</div>
             <div style="padding:0 14px 12px;">
@@ -247,7 +249,7 @@
 
       <section class="screen" id="o-clients" data-mode="owner">
         <div class="head"><div class="e">CRM</div><h2>고객</h2><div class="s">탭하면 카르테가 열려요</div></div>
-        <div class="card">
+        <div class="card" id="clientList">
           <div class="li" data-go="o-client"><div class="av">지</div><div><div class="nm">지우 님</div><div class="sub">레이어드펌 · 단골 4회</div></div><div class="rt">★ 단골</div></div>
           <div class="li"><div class="av">박</div><div><div class="nm">박○○ 님</div><div class="sub">발레아주 · 2회</div></div><div class="rt">오늘 생일</div></div>
           <div class="li"><div class="av">이</div><div><div class="nm">이○○ 님</div><div class="sub">컬러 · 3회</div></div><div class="rt">밝은 톤</div></div>
@@ -490,6 +492,72 @@
         navigator.clipboard.writeText(location.href).then(done,done);
       } else { done(); }
     };
+  })();
+
+  // ── 실데이터 주입 (build_app.py → data/{slug}.json) ──────────────
+  // ?d=minji 또는 기본 'minji'. 파일을 못 읽으면(file:// 단독실행) 데모 HTML 유지.
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function avChar(name){ return esc(String(name||'·').trim().charAt(0)); }
+
+  function renderData(d){
+    if(!d) return;
+    // 홈 헤더·칩
+    var nb=(d.bookings||[]).length, nc=(d.care||[]).length;
+    var sub=document.getElementById('homeSub');
+    if(sub) sub.textContent='오늘 예약 '+nb+' · 챙길 고객 '+nc;
+    var eb=document.getElementById('homeEyebrow');
+    if(eb) eb.textContent=esc(d.designer||'')+(d.salon?(' · '+esc(d.salon)):'');
+    var cb=document.getElementById('chipBookings'); if(cb) cb.textContent=nb;
+    var cc=document.getElementById('chipCare'); if(cc) cc.textContent=nc;
+
+    // 오늘 예약
+    var hb=document.getElementById('homeBookings');
+    if(hb && d.bookings){
+      hb.innerHTML=d.bookings.map(function(b){
+        return '<div class="li" data-go="o-client"><div class="av">'+avChar(b.name)+
+          '</div><div><div class="nm">'+esc(b.name)+' 님</div><div class="sub">'+
+          esc(b.service||'')+'</div></div><div class="rt">'+esc(b.time||'')+'</div></div>';
+      }).join('') || '<div class="li"><div class="sub">오늘 예약이 없어요</div></div>';
+    }
+
+    // 오늘 챙길 고객
+    var al=document.getElementById('alertList');
+    if(al && d.care){
+      var tagcls={bday:'t-bday',revisit:'t-revisit',season:'t-season'};
+      al.innerHTML=d.care.map(function(c,i){
+        var draft=c.draft?('<div class="draft"><div class="lab">추천 문구 (직접 보내기)</div>'+esc(c.draft)+'</div>'):
+          '<div class="draft"><div class="lab">추천 문구</div><span style="color:var(--muted)">문구 준비 중 — 원장님 말투로 곧 채워드려요</span></div>';
+        return '<div class="card reveal" style="margin:0 0 12px;animation-delay:'+(i*0.08)+'s;">'+
+          '<div class="ch"><span class="tag '+(tagcls[c.kind]||'t-season')+'">'+esc(c.label)+'</span> '+esc(c.name)+' 님</div>'+
+          '<div style="padding:0 14px 12px;"><div class="kv" style="padding:0;"><div class="r"><div class="v">'+esc(c.why)+'</div></div></div>'+
+          draft+
+          '<div class="row2" style="margin-top:8px;"><button class="btn" data-send="'+esc(c.name)+' 님">카톡으로 직접</button><button class="btn ghost" data-edit>문구 수정</button></div></div></div>';
+      }).join('') || '<div class="card"><div style="padding:16px;color:var(--muted)">오늘 챙길 고객이 없어요</div></div>';
+    }
+
+    // 고객 목록
+    var cl=document.getElementById('clientList');
+    if(cl && d.clients){
+      cl.innerHTML=d.clients.map(function(c){
+        var visits=c.loyalty_visits||0;
+        var rt=visits>=4?'★ 단골':(visits+'회');
+        var svc=(c.history&&c.history[0]&&c.history[0].service)||(c.booking&&c.booking.service)||'';
+        return '<div class="li" data-go="o-client"><div class="av">'+avChar(c.name)+
+          '</div><div><div class="nm">'+esc(c.name)+' 님</div><div class="sub">'+
+          esc(svc)+' · '+visits+'회</div></div><div class="rt">'+rt+'</div></div>';
+      }).join('');
+    }
+    runEffects('o-home');
+  }
+
+  (function loadData(){
+    if(location.protocol==='file:') return;            // 단독 실행 → 데모 유지
+    var slug=new URLSearchParams(location.search).get('d')||'minji';
+    fetch('./data/'+encodeURIComponent(slug)+'.json',{cache:'no-store'})
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(renderData)
+      .catch(function(){});                             // 실패 시 데모 HTML 유지
   })();
 
   renderTabs();

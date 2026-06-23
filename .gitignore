@@ -2,6 +2,7 @@
 runs/
 dist/
 dist_app/
+mockups/data/
 content/
 __pycache__/
 *.pyc
