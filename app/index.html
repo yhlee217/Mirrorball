@@ -110,6 +110,28 @@
   .exp-fill{height:100%;background:var(--sage);width:0;transition:width .9s ease;}
   .exp-n{font-size:12px;font-weight:800;color:var(--sage);width:30px;text-align:right;}
 
+  /* stats */
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:13px;}
+  .stat{background:var(--soft);border-radius:13px;padding:13px 14px;}
+  .stat .n{font-family:var(--serif);font-size:24px;font-weight:600;color:var(--accent-d);line-height:1;}
+  .stat .n .u{font-size:13px;font-family:var(--sans);color:var(--muted);font-weight:600;}
+  .stat .l{font-size:11.5px;color:var(--muted);margin-top:5px;}
+  .stat .d{font-size:11px;font-weight:700;margin-top:3px;}
+  .stat .d.up{color:var(--sage);} .stat .d.dn{color:var(--rose);}
+  .bars{display:flex;align-items:flex-end;gap:7px;height:96px;padding:6px 2px 0;}
+  .bars .b{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;}
+  .bars .bar{width:100%;background:var(--accent);border-radius:5px 5px 0 0;min-height:3px;transition:height .7s ease;}
+  .bars .bv{font-size:10px;color:var(--muted);margin-bottom:3px;font-weight:700;}
+  .bars .bl{font-size:9.5px;color:var(--muted);margin-top:5px;}
+  .svc{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--line);}
+  .svc:last-child{border-bottom:none;}
+  .svc .sn{font-size:13px;font-weight:600;flex:0 0 38%;}
+  .svc .sbar{flex:1;height:8px;background:var(--soft);border-radius:5px;overflow:hidden;}
+  .svc .sfill{height:100%;background:var(--sage);border-radius:5px;width:0;transition:width .7s ease;}
+  .svc .sc{font-size:11.5px;color:var(--muted);width:42px;text-align:right;}
+  .mini-link{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;
+    font-family:inherit;cursor:pointer;padding:0;color:var(--accent);font-weight:800;font-size:12px;}
+
   /* tabbar */
   .tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;background:var(--paper);
     border-top:1px solid var(--line);padding-bottom:var(--safe-bot);z-index:3;}
@@ -152,6 +174,7 @@
         <button class="chip" data-go="s-exposure"><div class="n" id="cExp">–</div><div class="l">AI 노출</div></button>
       </div>
       <div id="homeToday"></div>
+      <div id="homeStats"></div>
       <div class="card reveal">
         <div class="ch">바로가기</div>
         <div class="li" data-go="s-alerts"><div class="av">🔔</div><div class="bd"><div class="nm">오늘 챙길 고객</div><div class="sub">생일·재방문 시기 자동 정리</div></div><div class="rt">›</div></div>
@@ -180,6 +203,11 @@
     <!-- AI 노출 -->
     <section class="screen" id="s-exposure" data-title="AI 노출 케어">
       <div id="exposureBody"></div>
+    </section>
+
+    <!-- 통계 -->
+    <section class="screen" id="s-stats" data-title="기록 · 통계">
+      <div id="statsBody"></div>
     </section>
 
   </div>
@@ -274,7 +302,7 @@
         return '<div class="li" data-client="'+esc(b.id)+'"><div class="av">'+av(b.name)+'</div><div class="bd"><div class="nm">'+esc(b.name)+' 님</div><div class="sub">'+esc(b.service||'')+'</div></div><div class="rt">'+esc(b.time||'')+'</div></div>';
       }).join('')+'</div>';
     } else {
-      box.innerHTML='<div class="card"><div class="ch">오늘 예약</div>'+empty('🗓️','오늘 예약이 없어요','예약 정보가 연동되면 여기에 표시됩니다')+'</div>';
+      box.innerHTML='<div class="card"><div class="ch">오늘 예약</div>'+empty('🗓️','오늘 브리핑이 비어 있어요','실시간 예약은 네이버에서 관리 ·\n오늘 챙길 고객은 아침에 동기화돼요')+'</div>';
     }
   }
 
@@ -346,7 +374,56 @@
     setTimeout(function(){box.querySelectorAll('.exp-fill').forEach(function(f){f.style.width=f.getAttribute('data-w')+'%';});},60);
   }
 
-  function renderAll(){ renderHome();renderAlerts();renderClients();renderExposure(); }
+  // ── render: home 통계 요약 카드 ──
+  function renderHomeStats(){
+    var box=document.getElementById('homeStats');
+    var s=DATA&&DATA.stats;
+    if(!s||!s.total_visits){ box.innerHTML=''; return; }
+    var delta=s.this_month-s.last_month;
+    var dtxt=delta>0?('▲ '+delta):(delta<0?('▼ '+Math.abs(delta)):'–');
+    box.innerHTML='<div class="card reveal" style="padding:14px 15px"><button class="mini-link" data-go="s-stats"><span style="font-family:var(--serif);text-transform:uppercase;letter-spacing:.5px">이번 달 요약</span><span>자세히 ›</span></button>'+
+      '<div class="stat-grid" style="margin-top:11px;margin-bottom:0">'+
+        '<div class="stat"><div class="n">'+s.this_month+'<span class="u">건</span></div><div class="l">이번 달 방문</div><div class="d '+(delta>=0?'up':'dn')+'">'+dtxt+' vs 지난달</div></div>'+
+        '<div class="stat"><div class="n">'+s.revisit_rate+'<span class="u">%</span></div><div class="l">재방문율</div><div class="d">단골 '+s.returning_customers+'명</div></div>'+
+      '</div></div>';
+  }
+
+  // ── render: 통계 화면 ──
+  function renderStats(){
+    var box=document.getElementById('statsBody');
+    var s=DATA&&DATA.stats;
+    if(!s||!s.total_visits){
+      box.innerHTML=empty('📊','기록이 아직 없어요','네이버 예약 내보내기를 주기적으로 가져오면\n재방문율·인기 시술·매출 추이를 보여드려요');
+      return;
+    }
+    var mx=Math.max.apply(null,s.monthly.map(function(m){return m.count;}).concat([1]));
+    var bars=s.monthly.map(function(m){
+      var h=Math.round((m.count/mx)*72)+3;
+      return '<div class="b"><div class="bv">'+m.count+'</div><div class="bar" data-h="'+h+'" style="height:3px"></div><div class="bl">'+m.ym.slice(5)+'월</div></div>';
+    }).join('');
+    var tmx=(s.top_services[0]&&s.top_services[0].count)||1;
+    var svc=s.top_services.map(function(t){
+      return '<div class="svc"><div class="sn">'+esc(t.name)+'</div><div class="sbar"><div class="sfill" data-w="'+Math.round(t.count/tmx*100)+'"></div></div><div class="sc">'+t.count+'건 · '+t.pct+'%</div></div>';
+    }).join('');
+    box.innerHTML=
+      '<div class="sec-h">기간 '+esc(s.period.first)+' ~ '+esc(s.period.last)+' · 총 '+s.total_visits+'건</div>'+
+      '<div class="stat-grid reveal">'+
+        '<div class="stat"><div class="n">'+s.unique_customers+'<span class="u">명</span></div><div class="l">전체 고객</div></div>'+
+        '<div class="stat"><div class="n">'+s.revisit_rate+'<span class="u">%</span></div><div class="l">재방문율 · 단골 '+s.returning_customers+'명</div></div>'+
+        '<div class="stat"><div class="n">'+s.new_this_month+'<span class="u">명</span></div><div class="l">이번 달 신규</div></div>'+
+        (s.avg_price?('<div class="stat"><div class="n" style="font-size:19px">'+(s.avg_price).toLocaleString()+'<span class="u">원</span></div><div class="l">객단가 평균</div></div>'):
+          '<div class="stat"><div class="n">'+(s.busiest_weekday?esc(s.busiest_weekday):'–')+'</div><div class="l">가장 바쁜 요일'+(s.busiest_hour?(' · '+esc(s.busiest_hour)):'')+'</div></div>')+
+      '</div>'+
+      '<div class="card reveal" style="padding:13px 15px"><div class="ch" style="padding:0 0 4px">월별 방문 추이</div><div class="bars">'+bars+'</div></div>'+
+      '<div class="card reveal" style="padding:13px 15px"><div class="ch" style="padding:0 0 6px">인기 시술 TOP '+s.top_services.length+'</div>'+svc+'</div>'+
+      (s.revenue_this_month?('<div class="sec-h" style="margin-top:6px">이번 달 매출(완료 기준) '+s.revenue_this_month.toLocaleString()+'원</div>'):'');
+    setTimeout(function(){
+      box.querySelectorAll('.bar').forEach(function(b){b.style.height=b.getAttribute('data-h')+'px';});
+      box.querySelectorAll('.sfill').forEach(function(f){f.style.width=f.getAttribute('data-w')+'%';});
+    },60);
+  }
+
+  function renderAll(){ renderHome();renderHomeStats();renderAlerts();renderClients();renderExposure();renderStats(); }
 
   // ── data load (build_app.py → ./data/{slug}.json). 없으면 빈 상태 MVP ──
   (function load(){

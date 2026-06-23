@@ -26,11 +26,13 @@ import yaml
 
 # 논리 필드 → 네이버/일반 CSV 헤더 후보 (부분 일치, 공백 무시)
 COLUMN_ALIASES = {
+    "rid": ["예약번호", "예약id", "주문번호", "번호", "no", "id"],
     "date": ["예약일", "이용일", "방문일", "날짜", "예약날짜", "date"],
     "time": ["예약시간", "이용시간", "시간", "time"],
     "name": ["예약자", "예약자명", "고객명", "이름", "성함", "name"],
     "service": ["예약상품", "상품명", "상품", "서비스", "시술", "메뉴", "menu", "service"],
     "phone": ["연락처", "전화번호", "휴대폰", "휴대폰번호", "phone", "tel"],
+    "price": ["결제금액", "결제액", "금액", "가격", "이용금액", "price", "amount"],
     "status": ["예약상태", "상태", "status"],
 }
 
@@ -82,6 +84,19 @@ def _clean_time(v: str) -> str:
     return f"{h:02d}:{mi}"
 
 
+def _clean_price(v: str) -> int | None:
+    """'180,000원' / '18만원' → 정수. 비거나 숫자 없으면 None."""
+    v = (v or "").strip()
+    if not v:
+        return None
+    man = re.search(r"(\d+)\s*만", v)
+    if man:
+        rest = re.search(r"만\s*(\d+)", v)
+        return int(man.group(1)) * 10000 + (int(rest.group(1)) * 1000 if rest else 0)
+    digits = re.sub(r"[^\d]", "", v)
+    return int(digits) if digits else None
+
+
 def _clean_date(v: str) -> str:
     """'2026. 6. 23.' / '2026-06-23(화)' → 'YYYY-MM-DD'."""
     m = re.search(r"(\d{4})\D+(\d{1,2})\D+(\d{1,2})", (v or "").strip())
@@ -118,13 +133,20 @@ def parse_csv(path: str) -> list[dict]:
         name = cell("name")
         if not name:
             continue
-        out.append({
+        rec = {
             "date": _clean_date(cell("date")),
             "time": _clean_time(cell("time")),
             "name": name,
             "service": cell("service"),
             "phone": cell("phone"),
-        })
+        }
+        rid = cell("rid")
+        if rid:
+            rec["rid"] = rid
+        price = _clean_price(cell("price"))
+        if price is not None:
+            rec["price"] = price
+        out.append(rec)
     return out
 
 
@@ -138,6 +160,30 @@ def write_bookings(slug: str, bookings: list[dict], date: str | None = None) -> 
         encoding="utf-8",
     )
     return out
+
+
+def _rec_key(r: dict) -> str:
+    """dedup 키: 예약번호 우선, 없으면 날짜+시간+이름."""
+    return str(r.get("rid") or f"{r.get('date')}|{r.get('time')}|{r.get('name')}")
+
+
+def append_records(slug: str, rows: list[dict]) -> tuple[Path, int, int]:
+    """누적 원장 clients/{slug}/records.yaml 에 dedup 병합. (경로, 전체, 신규) 반환."""
+    out = Path("clients") / slug / "records.yaml"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    existing = []
+    if out.exists():
+        existing = yaml.safe_load(out.read_text(encoding="utf-8")) or []
+    seen = {_rec_key(r) for r in existing}
+    added = 0
+    for r in rows:
+        if _rec_key(r) not in seen:
+            existing.append(r)
+            seen.add(_rec_key(r))
+            added += 1
+    existing.sort(key=lambda r: (str(r.get("date")), str(r.get("time"))))
+    out.write_text(yaml.safe_dump(existing, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return out, len(existing), added
 
 
 def main() -> int:
@@ -155,7 +201,11 @@ def main() -> int:
 
     out = write_bookings(args.slug, bookings, args.date)
     n = len(yaml.safe_load(out.read_text(encoding="utf-8")) or [])
-    print(f"✓ {out}  (예약 {n}건{' · ' + args.date if args.date else ''})")
+    print(f"✓ {out}  (오늘/필터 예약 {n}건{' · ' + args.date if args.date else ''})")
+
+    # 누적 원장에 적재 → 통계·관리용 (전체 기간 보존)
+    ledger, total, added = append_records(args.slug, bookings)
+    print(f"✓ {ledger}  (누적 {total}건, 신규 +{added})")
     print("  연락처(phone)는 원장 로컬에만 — 배포물엔 build_app 이 제외합니다.")
     return 0
 

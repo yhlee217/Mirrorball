@@ -25,11 +25,28 @@ def test_parse_basic_and_cancel_excluded(tmp_path):
     ])
     rows = imp.parse_csv(str(p))
     assert len(rows) == 2                      # 취소 1건 제외
-    assert rows[0] == {
-        "date": "2026-06-23", "time": "14:00", "name": "지우",
-        "service": "레이어드펌", "phone": "010-1111-2222",
-    }
+    r0 = rows[0]
+    assert r0["date"] == "2026-06-23" and r0["time"] == "14:00"
+    assert r0["name"] == "지우" and r0["service"] == "레이어드펌"
+    assert r0["phone"] == "010-1111-2222" and r0["rid"] == "A1"   # 예약번호 캡처
     assert rows[1]["time"] == "16:30" and rows[1]["date"] == "2026-06-23"
+
+
+def test_price_parsing_and_records_append(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    p = tmp_path / "e.csv"
+    _write(p, [
+        ["예약번호", "예약일", "예약시간", "예약자명", "상품명", "결제금액", "상태"],
+        ["R1", "2026-06-23", "14:00", "지우", "펌", "180,000원", "완료"],
+        ["R2", "2026-06-23", "16:00", "박", "컷", "3만원", "완료"],
+    ])
+    rows = imp.parse_csv(str(p))
+    assert rows[0]["price"] == 180000 and rows[1]["price"] == 30000
+    # 누적 원장에 적재 + dedup
+    _, total, added = imp.append_records("minji", rows)
+    assert total == 2 and added == 2
+    _, total2, added2 = imp.append_records("minji", rows)  # 같은 예약번호 → 추가 0
+    assert total2 == 2 and added2 == 0
 
 
 def test_cp949_encoding(tmp_path):

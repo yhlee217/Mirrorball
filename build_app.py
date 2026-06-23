@@ -179,6 +179,12 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
         "clients": [build_customer(c) for c in customers],
     }
 
+    # 누적 원장이 있으면 통계 포함 (관리·분석용). PII(전화)는 stats 가 집계만 함.
+    recs_path = Path(client_dir) / "records.yaml"
+    if recs_path.exists():
+        import stats
+        data["stats"] = stats.compute(stats.load_records(client_dir), today)
+
     out = Path(dist) / f"{slug}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
