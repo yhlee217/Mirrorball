@@ -1,0 +1,56 @@
+name: build-and-deploy-profiles
+
+# 손님용 프로필을 빌드해 Cloudflare Pages 로 배포.
+# 필요한 repo 시크릿: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+# (둘 다 없으면 빌드 검증까지만 수행하고 배포는 건너뜀)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "designers/**"
+      - "templates/**"
+      - "core.py"
+      - "build.py"
+      - "schema.py"
+      - "validate.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Build all profiles
+        run: python build.py --all
+
+      - name: Smoke test output
+        run: |
+          test -d dist || { echo "dist/ 없음"; exit 1; }
+          find dist -name index.html | head
+          test -f dist/sitemap.xml && echo "sitemap OK" || echo "sitemap 없음(경고)"
+
+      - name: Deploy to Cloudflare Pages
+        if: ${{ env.CF_TOKEN != '' && env.CF_ACCOUNT != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=mirrorball-profiles
+
+      - name: Note (no secrets)
+        if: ${{ env.CF_TOKEN == '' || env.CF_ACCOUNT == '' }}
+        run: echo "Cloudflare 시크릿 미설정 → 빌드 검증만 수행, 배포 생략."
