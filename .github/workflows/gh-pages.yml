@@ -30,12 +30,15 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python build.py --all
+      - name: 원장 앱(MVP) 포함
+        run: mkdir -p dist/app && cp -r app/* dist/app/ && echo "app → dist/app"
       - name: 발행 메모(루트 안내 페이지)
         run: |
           test -f dist/index.html || cat > dist/index.html <<'HTML'
           <!doctype html><meta charset="utf-8"><title>Mirrorball</title>
-          <ul><li><a href="./hayewoni/">하예원 · 살롱톤</a></li>
-          <li><a href="./minji/">김민지</a></li></ul>
+          <ul><li><a href="./hayewoni/">하예원 · 살롱톤 (프로필)</a></li>
+          <li><a href="./minji/">김민지 (프로필)</a></li>
+          <li><a href="./app/">원장 컨시어지 앱 (MVP)</a></li></ul>
           HTML
       - name: 커스텀 도메인 적용(있으면)
         run: test -f CNAME && cp CNAME dist/CNAME && echo "CNAME → $(cat CNAME)" || echo "CNAME 없음(기본 github.io 사용)"

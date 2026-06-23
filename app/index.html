@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#6E5B47">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="컨시어지">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon.svg">
+<title>원장 컨시어지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F1EC; --paper:#FCFAF6; --ink:#2A2622; --muted:#8C8479;
+    --line:#E6DFD4; --accent:#6E5B47; --accent-d:#4E4031; --soft:#EFE9DF;
+    --sage:#5C7A57; --sage-bg:#EAF0E6; --gold:#9A7B33; --rose:#B0574A; --rose-bg:#F3E6E2;
+    --serif:'Cormorant Garamond',serif;
+    --sans:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;
+    line-height:1.6;-webkit-font-smoothing:antialiased;overflow:hidden;}
+  .app{max-width:480px;margin:0 auto;height:100dvh;display:flex;flex-direction:column;
+    background:var(--paper);position:relative;box-shadow:0 0 50px rgba(42,38,34,.08);}
+
+  /* top bar */
+  .bar{padding:calc(var(--safe-top) + 14px) 18px 12px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:10px;background:var(--paper);position:relative;z-index:2;}
+  .bar .ttl{font-weight:800;font-size:17px;flex:1;}
+  .bar .back{border:none;background:none;font-size:24px;color:var(--accent);cursor:pointer;
+    width:34px;height:34px;margin-left:-8px;display:none;}
+  .bar.has-back .back{display:block;}
+
+  /* stage / screens */
+  .stage{flex:1;overflow:hidden;position:relative;}
+  .screen{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:18px 18px calc(86px + var(--safe-bot));opacity:0;visibility:hidden;
+    transform:translateX(20px);transition:opacity .28s ease,transform .28s ease;}
+  .screen.active{opacity:1;visibility:visible;transform:none;}
+  .screen.exit-left{transform:translateX(-20px);}
+  .screen.from-left{transform:translateX(-20px);}
+
+  .hello .e{font-family:var(--serif);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);}
+  .hello h2{font-size:23px;font-weight:800;margin:3px 0 2px;}
+  .hello .s{font-size:13px;color:var(--muted);}
+
+  .chips{display:flex;gap:9px;margin:16px 0;}
+  .chip{flex:1;background:var(--soft);border-radius:14px;padding:13px 8px;text-align:center;border:none;cursor:pointer;font-family:inherit;}
+  .chip .n{font-family:var(--serif);font-size:25px;font-weight:600;color:var(--accent-d);line-height:1;}
+  .chip .l{font-size:11px;color:var(--muted);margin-top:5px;}
+
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin:0 0 13px;overflow:hidden;}
+  .card .ch{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.5px;padding:13px 15px 4px;text-transform:uppercase;font-family:var(--serif);}
+  .li{display:flex;align-items:center;gap:11px;padding:11px 15px;border-top:1px solid var(--line);cursor:pointer;}
+  .card .ch + .li{border-top:none;}
+  .li .av{width:38px;height:38px;border-radius:50%;background:var(--soft);display:flex;align-items:center;
+    justify-content:center;font-weight:700;color:var(--accent);flex-shrink:0;font-size:15px;}
+  .li .nm{font-weight:700;font-size:14.5px;}
+  .li .sub{font-size:12px;color:var(--muted);margin-top:1px;}
+  .li .rt{margin-left:auto;font-size:12px;color:var(--muted);text-align:right;white-space:nowrap;}
+  .li .bd{flex:1;min-width:0;}
+
+  .tag{font-size:10px;font-weight:800;border-radius:20px;padding:2px 8px;display:inline-block;}
+  .t-bday{background:var(--rose-bg);color:var(--rose);}
+  .t-revisit{background:var(--sage-bg);color:var(--sage);}
+  .t-season{background:#F2EAD8;color:var(--gold);}
+
+  /* care card */
+  .care{border:1px solid var(--line);border-radius:14px;padding:14px 15px;margin:0 0 12px;}
+  .care .hd{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+  .care .nm{font-weight:800;font-size:14.5px;}
+  .care .why{font-size:12.5px;color:var(--muted);margin-bottom:9px;}
+  .draft{background:#F2ECE1;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#3a332c;line-height:1.55;}
+  .draft .lab{font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--accent);font-weight:800;margin-bottom:3px;}
+  .row2{display:flex;gap:7px;margin-top:9px;}
+  .btn{flex:1;text-align:center;font-size:12.5px;font-weight:800;padding:9px;border-radius:10px;
+    background:var(--accent);color:#fff;border:none;cursor:pointer;font-family:inherit;text-decoration:none;display:block;}
+  .btn.ghost{background:var(--soft);color:var(--accent-d);}
+
+  /* empty state */
+  .empty{text-align:center;padding:42px 24px;color:var(--muted);}
+  .empty .ic{font-size:38px;margin-bottom:12px;opacity:.7;}
+  .empty .t{font-weight:700;font-size:15px;color:var(--ink);margin-bottom:5px;}
+  .empty .d{font-size:13px;line-height:1.6;}
+
+  .sec-h{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;
+    font-family:var(--serif);margin:4px 2px 10px;}
+
+  /* client detail */
+  .kv{padding:0 2px;}
+  .kv .r{padding:11px 0;border-bottom:1px solid var(--line);}
+  .kv .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+  .kv .v{font-size:14.5px;margin-top:2px;}
+  .pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+  .pill{font-size:12px;background:var(--soft);color:var(--accent-d);border-radius:20px;padding:3px 11px;}
+
+  /* exposure */
+  .exp-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);}
+  .exp-row:last-child{border-bottom:none;}
+  .exp-q{font-size:13px;flex:1;}
+  .exp-bar{width:84px;height:7px;background:var(--soft);border-radius:6px;overflow:hidden;}
+  .exp-fill{height:100%;background:var(--sage);width:0;transition:width .9s ease;}
+  .exp-n{font-size:12px;font-weight:800;color:var(--sage);width:30px;text-align:right;}
+
+  /* tabbar */
+  .tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;background:var(--paper);
+    border-top:1px solid var(--line);padding-bottom:var(--safe-bot);z-index:3;}
+  .tab{flex:1;border:none;background:none;padding:9px 0 8px;cursor:pointer;font-family:inherit;color:var(--muted);}
+  .tab .i{font-size:20px;line-height:1;}
+  .tab .l{font-size:10px;margin-top:3px;font-weight:700;}
+  .tab.on{color:var(--accent);}
+
+  /* toast */
+  .toast{position:absolute;left:50%;bottom:calc(96px + var(--safe-bot));transform:translateX(-50%) translateY(10px);
+    background:var(--accent-d);color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:30px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:5;white-space:nowrap;box-shadow:0 6px 18px rgba(42,38,34,.25);}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .reveal{animation:rise .5s ease both;}
+  @keyframes rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="bar" id="bar">
+    <button class="back" id="backBtn" aria-label="뒤로 가기">‹</button>
+    <div class="ttl" id="barTitle">컨시어지</div>
+  </div>
+
+  <div class="stage" id="stage">
+
+    <!-- 홈 -->
+    <section class="screen active" id="s-home" data-title="컨시어지">
+      <div class="hello reveal">
+        <div class="e" id="homeEyebrow">For the Designer</div>
+        <h2 id="homeHi">안녕하세요 👋</h2>
+        <div class="s" id="homeSub">오늘 하루도 시작해볼까요</div>
+      </div>
+      <div class="chips reveal">
+        <button class="chip" data-go="s-alerts"><div class="n" id="cBookings">0</div><div class="l">오늘 예약</div></button>
+        <button class="chip" data-go="s-alerts"><div class="n" id="cCare">0</div><div class="l">챙길 고객</div></button>
+        <button class="chip" data-go="s-exposure"><div class="n" id="cExp">–</div><div class="l">AI 노출</div></button>
+      </div>
+      <div id="homeToday"></div>
+      <div class="card reveal">
+        <div class="ch">바로가기</div>
+        <div class="li" data-go="s-alerts"><div class="av">🔔</div><div class="bd"><div class="nm">오늘 챙길 고객</div><div class="sub">생일·재방문 시기 자동 정리</div></div><div class="rt">›</div></div>
+        <div class="li" data-go="s-clients"><div class="av">👥</div><div class="bd"><div class="nm">고객 카르테</div><div class="sub">지난 시술·취향·대화 메모</div></div><div class="rt">›</div></div>
+        <div class="li" data-go="s-exposure"><div class="av">📈</div><div class="bd"><div class="nm">AI 노출 케어</div><div class="sub">검색·AI에 어떻게 보이는지</div></div><div class="rt">›</div></div>
+      </div>
+    </section>
+
+    <!-- 챙길 고객 -->
+    <section class="screen" id="s-alerts" data-title="오늘 챙길 고객">
+      <div class="sec-h">자동 발송 X · 원장님이 직접 한마디</div>
+      <div id="alertList"></div>
+    </section>
+
+    <!-- 고객 목록 -->
+    <section class="screen" id="s-clients" data-title="고객">
+      <div class="sec-h">탭하면 카르테가 열려요</div>
+      <div id="clientList"></div>
+    </section>
+
+    <!-- 고객 상세 -->
+    <section class="screen" id="s-client" data-title="고객 카르테">
+      <div id="clientDetail"></div>
+    </section>
+
+    <!-- AI 노출 -->
+    <section class="screen" id="s-exposure" data-title="AI 노출 케어">
+      <div id="exposureBody"></div>
+    </section>
+
+  </div>
+
+  <nav class="tabbar" id="tabbar"></nav>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function(){
+  var stage=document.getElementById('stage');
+  var bar=document.getElementById('bar');
+  var barTitle=document.getElementById('barTitle');
+  var toastEl=document.getElementById('toast');
+  var TABS=[['s-home','🏠','홈'],['s-alerts','🔔','알림'],['s-clients','👥','고객'],['s-exposure','📈','노출']];
+  var ROOTS=TABS.map(function(t){return t[0];});
+  var stack=['s-home'];
+  var DATA=null;
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function av(n){return esc(String(n||'·').trim().charAt(0));}
+
+  // ── router ──
+  function show(id,dir){
+    var cur=stage.querySelector('.screen.active');
+    var next=document.getElementById(id);
+    if(!next||cur===next){syncBar(id);return;}
+    next.classList.remove('exit-left','from-left');
+    if(dir==='back')next.classList.add('from-left');
+    void next.offsetWidth;
+    next.classList.add('active');
+    next.classList.remove('from-left');
+    next.scrollTop=0;
+    if(cur){
+      cur.classList.remove('active');
+      cur.classList.add(dir==='back'?'exit-left':'exit-left');
+      var c=cur;setTimeout(function(){c.classList.remove('exit-left');},300);
+    }
+    syncBar(id);
+  }
+  function syncBar(id){
+    var sc=document.getElementById(id);
+    barTitle.textContent=sc.getAttribute('data-title')||'컨시어지';
+    var isRoot=ROOTS.indexOf(id)>=0;
+    bar.classList.toggle('has-back',!isRoot);
+    renderTabs(id);
+  }
+  function go(id){ stack.push(id); show(id); }
+  function back(){ if(stack.length>1){stack.pop();show(stack[stack.length-1],'back');} }
+  function tab(id){ stack=[id]; show(id); }
+
+  document.getElementById('backBtn').addEventListener('click',back);
+  document.body.addEventListener('click',function(e){
+    var g=e.target.closest('[data-go]'); if(g){go(g.getAttribute('data-go'));return;}
+    var c=e.target.closest('[data-client]'); if(c){openClient(c.getAttribute('data-client'));return;}
+    var t=e.target.closest('[data-toast]'); if(t){toast(t.getAttribute('data-toast'));return;}
+  });
+
+  function renderTabs(active){
+    var bar=document.getElementById('tabbar');
+    bar.innerHTML=TABS.map(function(t){
+      var on=(t[0]===active||(stack[0]===t[0]));
+      return '<button class="tab'+(t[0]===active?' on':'')+'" data-tab="'+t[0]+'"><div class="i">'+t[1]+'</div><div class="l">'+t[2]+'</div></button>';
+    }).join('');
+    bar.querySelectorAll('[data-tab]').forEach(function(b){
+      b.addEventListener('click',function(){tab(b.getAttribute('data-tab'));});
+    });
+  }
+
+  function toast(msg){ toastEl.textContent=msg; toastEl.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(function(){toastEl.classList.remove('show');},1900); }
+
+  // ── empty state ──
+  function empty(ic,title,desc){
+    return '<div class="empty reveal"><div class="ic">'+ic+'</div><div class="t">'+esc(title)+'</div><div class="d">'+esc(desc)+'</div></div>';
+  }
+
+  // ── render: home ──
+  function renderHome(){
+    var d=DATA;
+    var nb=d?(d.bookings||[]).length:0, nc=d?(d.care||[]).length:0;
+    document.getElementById('cBookings').textContent=nb;
+    document.getElementById('cCare').textContent=nc;
+    document.getElementById('cExp').textContent=(d&&d.exposure&&d.exposure.score!=null)?d.exposure.score:'–';
+    if(d){
+      document.getElementById('homeEyebrow').textContent=(d.designer||'')+(d.salon?(' · '+d.salon):'')||'For the Designer';
+      document.getElementById('homeHi').textContent=(d.designer?d.designer+'님, ':'')+'안녕하세요 👋';
+      document.getElementById('homeSub').textContent='오늘 예약 '+nb+' · 챙길 고객 '+nc;
+    }
+    var box=document.getElementById('homeToday');
+    if(d&&d.bookings&&d.bookings.length){
+      box.innerHTML='<div class="card reveal"><div class="ch">오늘 예약</div>'+d.bookings.map(function(b){
+        return '<div class="li" data-client="'+esc(b.id)+'"><div class="av">'+av(b.name)+'</div><div class="bd"><div class="nm">'+esc(b.name)+' 님</div><div class="sub">'+esc(b.service||'')+'</div></div><div class="rt">'+esc(b.time||'')+'</div></div>';
+      }).join('')+'</div>';
+    } else {
+      box.innerHTML='<div class="card"><div class="ch">오늘 예약</div>'+empty('🗓️','오늘 예약이 없어요','예약 정보가 연동되면 여기에 표시됩니다')+'</div>';
+    }
+  }
+
+  // ── render: alerts ──
+  function renderAlerts(){
+    var box=document.getElementById('alertList');
+    var care=DATA?(DATA.care||[]):[];
+    if(!care.length){ box.innerHTML=empty('🔔','오늘 챙길 고객이 없어요','생일·리터치 시기가 된 단골이 생기면\n여기에서 알려드려요'); return; }
+    var cls={bday:'t-bday',revisit:'t-revisit',season:'t-season'};
+    box.innerHTML=care.map(function(c,i){
+      var draft=c.draft? '<div class="draft"><div class="lab">추천 문구 (직접 보내기)</div>'+esc(c.draft)+'</div>'
+        : '<div class="draft"><div class="lab">추천 문구</div><span style="color:var(--muted)">원장님 말투로 곧 채워드려요</span></div>';
+      return '<div class="care reveal" style="animation-delay:'+(i*0.06)+'s">'+
+        '<div class="hd"><span class="tag '+(cls[c.kind]||'t-season')+'">'+esc(c.label)+'</span><span class="nm">'+esc(c.name)+' 님</span></div>'+
+        '<div class="why">'+esc(c.why)+'</div>'+draft+
+        '<div class="row2"><button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기">카톡으로 직접</button>'+
+        (c.id?'<button class="btn ghost" data-client="'+esc(c.id)+'">고객 보기</button>':'<button class="btn ghost" data-toast="문구 수정">문구 수정</button>')+'</div></div>';
+    }).join('');
+  }
+
+  // ── render: clients ──
+  function renderClients(){
+    var box=document.getElementById('clientList');
+    var cl=DATA?(DATA.clients||[]):[];
+    if(!cl.length){ box.innerHTML=empty('👥','아직 등록된 고객이 없어요','단골 고객 정보를 정리해 드리면\n예약·생일·취향을 자동으로 챙겨드려요'); return; }
+    box.innerHTML='<div class="card">'+cl.map(function(c){
+      var v=c.loyalty_visits||0, rt=v>=4?'★ 단골':(v+'회');
+      var svc=(c.history&&c.history[0]&&c.history[0].service)||(c.booking&&c.booking.service)||'';
+      return '<div class="li" data-client="'+esc(c.id)+'"><div class="av">'+av(c.name)+'</div><div class="bd"><div class="nm">'+esc(c.name)+' 님</div><div class="sub">'+esc(svc)+(svc?' · ':'')+v+'회</div></div><div class="rt">'+rt+'</div></div>';
+    }).join('')+'</div>';
+  }
+
+  // ── render: client detail ──
+  function openClient(id){
+    var c=(DATA&&(DATA.clients||[]).filter(function(x){return String(x.id)===String(id);})[0])||null;
+    var box=document.getElementById('clientDetail');
+    if(!c){ box.innerHTML=empty('🙂','고객 정보를 찾을 수 없어요',''); go('s-client'); return; }
+    var hist=(c.history||[]).map(function(h){
+      return '<div class="li" style="cursor:default"><div class="bd"><div class="nm" style="font-weight:600">'+esc(h.service||'')+'</div>'+(h.notes?'<div class="sub">'+esc(h.notes)+'</div>':'')+'</div><div class="rt">'+esc(h.date||'')+'</div></div>';
+    }).join('')||('<div style="padding:14px 15px;color:var(--muted);font-size:13px">시술 이력이 아직 없어요</div>');
+    var prefer=(c.prefer||[]).map(function(p){return '<span class="pill">'+esc(p)+'</span>';}).join('');
+    box.innerHTML=
+      '<div class="hello reveal" style="display:flex;align-items:center;gap:13px;margin-bottom:8px">'+
+        '<div class="av" style="width:54px;height:54px;font-size:22px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent)">'+av(c.name)+'</div>'+
+        '<div><h2 style="margin:0;font-size:20px">'+esc(c.name)+' 님</h2><div class="s" style="color:var(--muted);font-size:13px">'+(c.loyalty_visits||0)+'회 방문'+(c.first_visit?(' · 첫 방문 '+esc(c.first_visit)):'')+'</div></div>'+
+      '</div>'+
+      (c.booking?'<div class="care reveal"><div class="why" style="margin:0 0 4px">다가오는 예약</div><div style="font-weight:800">'+esc(c.booking.date||'')+' '+esc(c.booking.time||'')+' · '+esc(c.booking.service||'')+'</div></div>':'')+
+      '<div class="kv reveal">'+
+        (prefer?'<div class="r"><div class="k">취향 · 메모</div><div class="pills">'+prefer+'</div></div>':'')+
+        (c.last_visit?'<div class="r"><div class="k">마지막 방문</div><div class="v">'+esc(c.last_visit)+'</div></div>':'')+
+      '</div>'+
+      '<div class="sec-h" style="margin-top:16px">시술 이력</div><div class="card">'+hist+'</div>'+
+      '<button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기" style="margin-top:4px">추천 문구 보내기</button>';
+    go('s-client');
+  }
+
+  // ── render: exposure ──
+  function renderExposure(){
+    var box=document.getElementById('exposureBody');
+    var ex=DATA&&DATA.exposure;
+    if(!ex||!ex.questions||!ex.questions.length){
+      box.innerHTML=empty('📈','노출 진단이 아직 없어요','손님이 AI·검색에 물어볼 질문으로\n노출을 진단해 여기에 보여드려요');
+      return;
+    }
+    box.innerHTML='<div class="card reveal"><div class="ch">질문별 노출 (언급 횟수)</div>'+ex.questions.map(function(q){
+      var pct=Math.min(100,(q.count||0)*20);
+      return '<div class="li" style="cursor:default;display:block"><div class="exp-row"><div class="exp-q">'+esc(q.q)+'</div><div class="exp-bar"><div class="exp-fill" data-w="'+pct+'"></div></div><div class="exp-n">'+(q.count||0)+'</div></div></div>';
+    }).join('')+'</div>';
+    setTimeout(function(){box.querySelectorAll('.exp-fill').forEach(function(f){f.style.width=f.getAttribute('data-w')+'%';});},60);
+  }
+
+  function renderAll(){ renderHome();renderAlerts();renderClients();renderExposure(); }
+
+  // ── data load (build_app.py → ./data/{slug}.json). 없으면 빈 상태 MVP ──
+  (function load(){
+    var slug=new URLSearchParams(location.search).get('d');
+    if(!slug){ renderAll(); return; }              // 데이터 없이 MVP
+    fetch('./data/'+encodeURIComponent(slug)+'.json',{cache:'no-store'})
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(j){ DATA=j; renderAll(); })
+      .catch(function(){ renderAll(); });
+  })();
+
+  renderTabs('s-home');
+  syncBar('s-home');
+})();
+</script>
+<script>
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+  }
+</script>
+</body>
+</html>

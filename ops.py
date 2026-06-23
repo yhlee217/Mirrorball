@@ -8,7 +8,8 @@
 사용법:
     python ops.py build [--all|designers/{slug}.yaml]   프로필 정적 빌드 → dist/
     python ops.py build-app [--all|clients/{slug}]       원장앱 데이터 빌드 → dist_app/
-    python ops.py preview [slug]                          앱 데이터 빌드+로컬 서버(미리보기)
+    python ops.py preview [slug]                          손님 프로토타입 로컬 미리보기
+    python ops.py app [slug]                              원장 앱(MVP) 로컬 미리보기
     python ops.py cards <example.yaml>                   카드 빌드
     python ops.py diagnose <target.yaml>                 AI 노출 진단(로컬, 키 필요)
     python ops.py copy <input.yaml>                      카피 생성(로컬)
@@ -61,6 +62,26 @@ def cmd_preview(rest: list[str]) -> int:
     return _run([PY, "-m", "http.server", "8000", "--directory", "mockups"])
 
 
+def cmd_app(rest: list[str]) -> int:
+    """원장 앱(app/)을 로컬에서 미리보기. slug 주면 그 고객 데이터까지 주입.
+    데이터 없이 열면 빈 상태(MVP)로 동작한다."""
+    import shutil
+
+    slug = rest[0] if rest else ""
+    if slug:
+        rc = _run([PY, "build_app.py", f"clients/{slug}"])
+        if rc != 0:
+            return rc
+        dst_dir = Path("app") / "data"
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(Path("dist_app") / f"{slug}.json", dst_dir / f"{slug}.json")
+        print(f"✓ http://localhost:8000/index.html?d={slug}  (데이터 주입)")
+    else:
+        print("✓ http://localhost:8000/index.html  (데이터 없이 MVP)")
+    print("  Ctrl+C 종료")
+    return _run([PY, "-m", "http.server", "8000", "--directory", "app"])
+
+
 def cmd_cards(rest: list[str]) -> int:
     if not rest:
         return _run([PY, "cards.py"])  # cards.py 자체 사용법 출력
@@ -103,6 +124,7 @@ COMMANDS = {
     "build": cmd_build,
     "build-app": cmd_build_app,
     "preview": cmd_preview,
+    "app": cmd_app,
     "cards": cmd_cards,
     "diagnose": cmd_diagnose,
     "copy": cmd_copy,
