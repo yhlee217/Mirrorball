@@ -25,6 +25,8 @@ from pathlib import Path
 
 import yaml
 
+import drafts
+
 
 def _load(path: str) -> dict:
     return yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
@@ -161,7 +163,7 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
                 "id": c.get("id"), "name": c.get("name"),
                 "kind": a["kind"], "label": a["label"], "why": a["why"],
                 "prefer": c.get("prefer", []),
-                "draft": "",  # copygen.py 로 채울 추천 문구(초안)
+                "draft": drafts.draft_for(a["kind"], c, today),  # 추천 문구(초안)
             })
     # 생일 먼저, 그다음 재방문
     order = {"bday": 0, "revisit": 1}
