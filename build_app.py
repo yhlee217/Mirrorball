@@ -187,9 +187,14 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
         import stats
         data["stats"] = stats.compute(stats.load_records(client_dir), today)
 
+    # AI 노출 진단 결과(diagnose.py 산출)가 있으면 노출 탭에 주입.
+    exp_path = Path(client_dir) / "exposure.yaml"
+    if exp_path.exists():
+        data["exposure"] = _load(str(exp_path))
+
     out = Path(dist) / f"{slug}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    out.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return {"slug": slug, "out": str(out), "care": len(care_list),
             "clients": len(customers)}
 

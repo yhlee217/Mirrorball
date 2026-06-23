@@ -147,6 +147,41 @@ def save_raw(
     return path, payload
 
 
+def exposure_from_records(records: list[dict], generated=None) -> dict:
+    """진단 records → 원장앱 노출 데이터(build_app/app 이 읽는 exposure 스키마).
+    질문별 '언급된 (질문,엔진,샘플) 수'를 count 로, 합을 score 로."""
+    from collections import OrderedDict
+    from datetime import date as _date
+
+    qs: "OrderedDict[str, int]" = OrderedDict()
+    for r in records:
+        q = r.get("question")
+        if q is None:
+            continue
+        qs.setdefault(q, 0)
+        ex = r.get("extraction") or {}
+        if ex.get("mentioned"):
+            qs[q] += 1
+    return {
+        "score": sum(qs.values()),
+        "generated": str(generated or _date.today()),
+        "questions": [{"q": q, "count": c} for q, c in qs.items()],
+    }
+
+
+def write_exposure(slug: str, records: list[dict], clients_dir: str = "clients") -> Path:
+    """clients/{slug}/exposure.yaml 로 저장 → build_app 이 앱 노출 탭에 주입."""
+    import yaml as _yaml
+
+    out = Path(clients_dir) / slug / "exposure.yaml"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        _yaml.safe_dump(exposure_from_records(records), allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    return out
+
+
 def print_summary(records: list[dict], report_path: Path | None) -> None:
     success = sum(1 for r in records if not r.get("error"))
     failed = sum(1 for r in records if r.get("error"))
@@ -205,6 +240,12 @@ def main() -> None:
         report_path = report.write_report(markdown, run_dir)
     except Exception as exc:  # 리포트 실패해도 raw 는 남는다
         print(f"리포트 생성 실패 (raw 는 저장됨): {type(exc).__name__}: {exc}")
+
+    try:
+        exp_path = write_exposure(slug, records)
+        print(f"앱 노출 데이터: {exp_path}  (build_app 이 노출 탭에 주입)")
+    except Exception as exc:
+        print(f"노출 데이터 저장 실패: {type(exc).__name__}: {exc}")
 
     print_summary(records, report_path)
 
