@@ -1,0 +1,14 @@
+{
+  "name": "살롱 컨시어지",
+  "short_name": "컨시어지",
+  "description": "미용사용 고객 관리·AI 노출 케어",
+  "start_url": "./app_prototype.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F1EC",
+  "theme_color": "#6E5B47",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
