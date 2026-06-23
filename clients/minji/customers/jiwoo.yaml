@@ -1,0 +1,19 @@
+id: jiwoo
+name: 지우
+contact: "(원장 직접 연락 — 배포물 미포함)"
+first_visit: 2026-01-18
+birthday: 11-04
+prefer: ["어깨 길이 유지", "자연스러운 컬"]
+care_cycle_days: 150        # 펌 리터치 주기
+loyalty_visits: 4
+booking:
+  date: 2026-06-18
+  time: "14:00"
+  service: 레이어드펌
+history:
+  - date: 2026-04-02
+    service: 레이어드펌
+    notes: 결 매끄럽게, 손질 편하게 원함
+  - date: 2026-01-15
+    service: 발레아주(8레벨)
+    notes: 밝은 톤 선호, 뿌리 티 안 나게

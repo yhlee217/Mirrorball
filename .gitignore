@@ -1,6 +1,7 @@
 .env
 runs/
 dist/
+dist_app/
 content/
 __pycache__/
 *.pyc

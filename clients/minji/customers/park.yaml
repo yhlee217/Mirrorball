@@ -1,0 +1,12 @@
+id: park
+name: 박○○
+contact: "(원장 직접 연락 — 배포물 미포함)"
+first_visit: 2025-12-20
+birthday: 06-23               # 데모: 오늘 생일 케이스
+prefer: ["밝은 톤"]
+care_cycle_days: 70          # 발레아주 리터치
+loyalty_visits: 2
+history:
+  - date: 2026-04-20
+    service: 발레아주
+    notes: 손상 신경 씀 → 다음엔 클리닉 묶기 제안

@@ -7,6 +7,7 @@
 
 사용법:
     python ops.py build [--all|designers/{slug}.yaml]   프로필 정적 빌드 → dist/
+    python ops.py build-app [--all|clients/{slug}]       원장앱 데이터 빌드 → dist_app/
     python ops.py cards <example.yaml>                   카드 빌드
     python ops.py diagnose <target.yaml>                 AI 노출 진단(로컬, 키 필요)
     python ops.py copy <input.yaml>                      카피 생성(로컬)
@@ -34,6 +35,11 @@ def _run(cmd: list[str]) -> int:
 def cmd_build(rest: list[str]) -> int:
     target = rest[0] if rest else "--all"
     return _run([PY, "build.py", target])
+
+
+def cmd_build_app(rest: list[str]) -> int:
+    target = rest[0] if rest else "--all"
+    return _run([PY, "build_app.py", target])
 
 
 def cmd_cards(rest: list[str]) -> int:
@@ -76,6 +82,7 @@ def cmd_status(_rest: list[str]) -> int:
 
 COMMANDS = {
     "build": cmd_build,
+    "build-app": cmd_build_app,
     "cards": cmd_cards,
     "diagnose": cmd_diagnose,
     "copy": cmd_copy,
