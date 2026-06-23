@@ -1,0 +1,52 @@
+name: deploy-github-pages
+
+# 손님용 프로필을 빌드해 GitHub Pages 로 발행.
+# 최초 1회: 저장소 Settings → Pages → Source 를 "GitHub Actions" 로 설정하면 라이브됩니다.
+# 발행 주소(프로젝트 페이지): https://yhlee217.github.io/Mirrorball/hayewoni/
+
+on:
+  push:
+    branches: [claude/charming-planck-hmgazi, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 동시 배포 1개만
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python build.py --all
+      - name: 발행 메모(루트 안내 페이지)
+        run: |
+          test -f dist/index.html || cat > dist/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>Mirrorball</title>
+          <ul><li><a href="./hayewoni/">하예원 · 살롱톤</a></li>
+          <li><a href="./minji/">김민지</a></li></ul>
+          HTML
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
