@@ -1,0 +1,24 @@
+# 얇은 brief — 디자이너가 캐주얼하게 준 사실 몇 개 (이것만으로 프로필 생성)
+slug: suaa
+display_name: "Suaa"
+korean_name: "김 수 아"
+role: "헤어디자이너"
+salon: "논스 헤어 합정점"
+region: "합정역"
+instagram: "suaa.hair"
+booking_url: ""
+photo_url: ""
+address_locality: "마포구 합정동"
+address_region: "서울"
+location:
+  address: "서울 마포구 합정동 [상세주소]"
+  directions: "합정역 도보 5분"
+services: ["단발컷", "내추럴펌", "곱슬 교정"]
+audience: "20~30대 직장인 여성, 첫 방문 불안한 분"
+must_not_claim: ["연예인", "1위", "수상", "방송"]
+facts:
+  - "미용 경력 8년, 강남 디자인실 3년"
+  - "단발·숏컷 라인 작업 자신 있음"
+  - "곱슬·반곱슬 자연스럽게 펴는 교정 잘함"
+  - "손상 신경 써서 약한 약제부터 단계적으로"
+  - "내추럴펌 유지 4~5개월, 첫 방문은 스타일 상담만도 환영"
