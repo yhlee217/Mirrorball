@@ -4,6 +4,7 @@ dist/
 dist_app/
 mockups/data/
 app/data/
+clients/*/bookings.yaml
 content/
 __pycache__/
 *.pyc

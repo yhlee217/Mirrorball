@@ -7,7 +7,7 @@ prefer: ["어깨 길이 유지", "자연스러운 컬"]
 care_cycle_days: 150        # 펌 리터치 주기
 loyalty_visits: 4
 booking:
-  date: 2026-06-18
+  date: 2026-06-23          # 데모: 오늘(config.today)과 동일 → '오늘 예약'에 표시
   time: "14:00"
   service: 레이어드펌
 history:

@@ -105,6 +105,47 @@ def build_customer(cust: dict) -> dict:
     }
 
 
+def _digits(s) -> str:
+    return "".join(ch for ch in str(s or "") if ch.isdigit())
+
+
+def resolve_bookings(client_dir: str, customers: list[dict], today: date) -> list[dict]:
+    """오늘의 예약 목록(name·service·time·id). 연락처(PII)는 출력하지 않는다.
+
+    우선순위: clients/{slug}/bookings.yaml(네이버 예약 내보내기) → 없으면 고객 yaml 의 booking.
+    네이버 예약 행은 이름/전화로 기존 고객과 매칭해 id 를 연결(없으면 id=null).
+    """
+    by_phone = {_digits(c.get("contact")): c for c in customers if _digits(c.get("contact"))}
+    by_name = {(c.get("name") or "").strip(): c for c in customers if c.get("name")}
+
+    bpath = Path(client_dir) / "bookings.yaml"
+    nv = _load(str(bpath)) if bpath.exists() else None
+    rows: list[dict]
+    if isinstance(nv, list) and nv:
+        rows = []
+        for b in nv:
+            if str(b.get("date")) != str(today):     # 오늘 예약만
+                continue
+            cust = by_phone.get(_digits(b.get("phone"))) or by_name.get((b.get("name") or "").strip())
+            rows.append({
+                "name": b.get("name"),
+                "service": b.get("service"),
+                "time": b.get("time"),
+                "id": cust.get("id") if cust else None,   # 매칭 실패해도 표시
+            })
+    else:
+        rows = [
+            {"name": c.get("name"),
+             "service": (c.get("booking") or {}).get("service"),
+             "time": (c.get("booking") or {}).get("time"),
+             "id": c.get("id")}
+            for c in customers
+            if c.get("booking") and str(_parse_date((c["booking"]).get("date"))) == str(today)
+        ]
+    rows.sort(key=lambda r: (r.get("time") or ""))
+    return rows
+
+
 def build_one(client_dir: str, dist: str = "dist_app") -> dict:
     cfg = _load(str(Path(client_dir) / "config.yaml"))
     slug = cfg.get("slug") or Path(client_dir).name
@@ -126,21 +167,14 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
     order = {"bday": 0, "revisit": 1}
     care_list.sort(key=lambda x: order.get(x["kind"], 9))
 
-    bookings = sorted(
-        (build_customer(c) for c in customers if c.get("booking")),
-        key=lambda c: (c["booking"].get("date", ""), c["booking"].get("time", "")),
-    )
+    bookings = resolve_bookings(client_dir, customers, today)
 
     data = {
         "slug": slug,
         "designer": cfg.get("display_name", slug),
         "salon": cfg.get("salon", ""),
         "today": str(today),
-        "bookings": [
-            {"name": c["name"], "service": c["booking"].get("service"),
-             "time": c["booking"].get("time"), "id": c["id"]}
-            for c in bookings
-        ],
+        "bookings": bookings,
         "care": care_list,
         "clients": [build_customer(c) for c in customers],
     }
