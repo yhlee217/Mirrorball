@@ -4,6 +4,9 @@ contact: "(원장 직접 연락 — 배포물 미포함)"
 first_visit: 2026-01-18
 birthday: 11-04
 prefer: ["어깨 길이 유지", "자연스러운 컬"]
+relations:
+  - to: park
+    type: 친구
 care_cycle_days: 150        # 펌 리터치 주기
 loyalty_visits: 4
 booking:

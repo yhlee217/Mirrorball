@@ -4,6 +4,9 @@ contact: "(원장 직접 연락 — 배포물 미포함)"
 first_visit: 2025-12-20
 birthday: 06-23               # 데모: 오늘 생일 케이스
 prefer: ["밝은 톤"]
+relations:
+  - to: jiwoo
+    type: 친구
 care_cycle_days: 70          # 발레아주 리터치
 loyalty_visits: 2
 history:

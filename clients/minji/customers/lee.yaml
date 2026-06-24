@@ -4,6 +4,7 @@ contact: "(원장 직접 연락 — 배포물 미포함)"
 first_visit: 2025-09-05
 birthday: 08-12
 prefer: ["밝은 톤", "화사하게"]
+referred_by: park          # 박○○님 소개로 방문
 care_cycle_days: 90          # 컬러 톤 정리 주기
 loyalty_visits: 3
 history:

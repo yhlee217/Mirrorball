@@ -26,6 +26,7 @@ from pathlib import Path
 import yaml
 
 import drafts
+import relations
 
 
 def _load(path: str) -> dict:
@@ -185,6 +186,14 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
 
     bookings = resolve_bookings(client_dir, customers, today)
 
+    clients = [build_customer(c) for c in customers]
+    rel = relations.resolve(customers)            # 가족·친구·소개 관계 해석
+    for cd in clients:
+        info = rel.get(cd["id"]) or {}
+        cd["relations"] = info.get("relations", [])
+        cd["referred_by"] = info.get("referred_by")
+        cd["referred"] = info.get("referred", [])
+
     data = {
         "slug": slug,
         "designer": cfg.get("display_name", slug),
@@ -192,7 +201,7 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
         "today": str(today),
         "bookings": bookings,
         "care": care_list,
-        "clients": [build_customer(c) for c in customers],
+        "clients": clients,
     }
 
     # 누적 장부가 있으면 통계 포함 (관리·분석용). PII(전화)는 stats 가 집계만 함.

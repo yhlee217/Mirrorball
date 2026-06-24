@@ -335,6 +335,21 @@
     }).join('')+'</div>';
   }
 
+  // 관계(가족·친구·소개) 행 — 칩 탭하면 그 고객 카르테로 이동
+  function relHtml(c){
+    var parts=[];
+    (c.relations||[]).forEach(function(r){
+      parts.push('<span class="pill" data-client="'+esc(r.id)+'" style="cursor:pointer">'+esc(r.type)+' · '+esc(r.name)+'님</span>');
+    });
+    if(c.referred_by){
+      parts.push('<span class="pill" data-client="'+esc(c.referred_by.id)+'" style="cursor:pointer">소개해주신 분 · '+esc(c.referred_by.name)+'님</span>');
+    }
+    if(c.referred&&c.referred.length){
+      parts.push('<span class="pill" style="background:var(--sage-bg);color:var(--sage)">소개해준 고객 '+c.referred.length+'명 · '+c.referred.map(function(x){return esc(x.name)+'님';}).join(', ')+'</span>');
+    }
+    return parts.length? '<div class="r"><div class="k">관계</div><div class="pills">'+parts.join('')+'</div></div>' : '';
+  }
+
   // ── render: client detail ──
   function openClient(id){
     var c=(DATA&&(DATA.clients||[]).filter(function(x){return String(x.id)===String(id);})[0])||null;
@@ -353,6 +368,7 @@
       '<div class="kv reveal">'+
         (prefer?'<div class="r"><div class="k">취향 · 메모</div><div class="pills">'+prefer+'</div></div>':'')+
         (c.last_visit?'<div class="r"><div class="k">마지막 방문</div><div class="v">'+esc(c.last_visit)+'</div></div>':'')+
+        relHtml(c)+
       '</div>'+
       '<div class="sec-h" style="margin-top:16px">시술 이력</div><div class="card">'+hist+'</div>'+
       ((c.aftercare&&c.aftercare.length)?(
