@@ -132,6 +132,18 @@
   .mini-link{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;
     font-family:inherit;cursor:pointer;padding:0;color:var(--accent);font-weight:800;font-size:12px;}
 
+  /* form */
+  .fld{margin-bottom:13px;}
+  .fld label{display:block;font-size:12px;font-weight:700;color:var(--accent-d);margin-bottom:5px;}
+  .fld input,.fld select,.fld textarea{width:100%;border:1px solid var(--line);border-radius:10px;
+    padding:11px 12px;font-size:16px;font-family:inherit;background:var(--paper);color:var(--ink);}
+  .fld textarea{resize:vertical;min-height:54px;line-height:1.5;}
+  .fld .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+  .fld2{display:flex;gap:9px;} .fld2>.fld{flex:1;}
+  .visit-row{display:flex;gap:8px;align-items:center;margin-bottom:7px;}
+  .visit-row input{flex:1;}
+  .del-x{border:none;background:var(--soft);color:var(--rose);border-radius:8px;width:34px;height:40px;font-size:16px;cursor:pointer;flex:0 0 auto;}
+
   /* tabbar */
   .tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;background:var(--paper);
     border-top:1px solid var(--line);padding-bottom:var(--safe-bot);z-index:3;}
@@ -191,13 +203,23 @@
 
     <!-- 고객 목록 -->
     <section class="screen" id="s-clients" data-title="고객">
-      <div class="sec-h">탭하면 카르테가 열려요</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button class="btn" id="addClientBtn" style="flex:2;">+ 고객 추가</button>
+        <button class="btn ghost" id="exportBtn" style="flex:1;">내보내기</button>
+        <button class="btn ghost" id="importBtn" style="flex:1;">가져오기</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none;">
+      </div>
       <div id="clientList"></div>
     </section>
 
     <!-- 고객 상세 -->
     <section class="screen" id="s-client" data-title="고객 카르테">
       <div id="clientDetail"></div>
+    </section>
+
+    <!-- 고객 추가/수정 -->
+    <section class="screen" id="s-edit" data-title="고객 추가">
+      <div id="editBody"></div>
     </section>
 
     <!-- AI 노출 -->
@@ -372,7 +394,8 @@
     box.innerHTML=
       '<div class="hello reveal" style="display:flex;align-items:center;gap:13px;margin-bottom:8px">'+
         '<div class="av" style="width:54px;height:54px;font-size:22px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent)">'+av(c.name)+'</div>'+
-        '<div><h2 style="margin:0;font-size:20px">'+esc(c.name)+' 님</h2><div class="s" style="color:var(--muted);font-size:13px">'+(c.loyalty_visits||0)+'회 방문'+(c.first_visit?(' · 첫 방문 '+esc(c.first_visit)):'')+'</div></div>'+
+        '<div style="flex:1"><h2 style="margin:0;font-size:20px">'+esc(c.name)+' 님</h2><div class="s" style="color:var(--muted);font-size:13px">'+(c.loyalty_visits||0)+'회 방문'+(c.first_visit?(' · 첫 방문 '+esc(c.first_visit)):'')+'</div></div>'+
+        '<button class="btn ghost" data-edit-client="'+esc(c.id)+'" style="flex:0 0 auto;width:auto;padding:8px 14px;">수정</button>'+
       '</div>'+
       (c.booking?'<div class="care reveal"><div class="why" style="margin:0 0 4px">다가오는 예약</div><div style="font-weight:800">'+esc(c.booking.date||'')+' '+esc(c.booking.time||'')+' · '+esc(c.booking.service||'')+'</div></div>':'')+
       '<div class="kv reveal">'+
@@ -457,14 +480,135 @@
 
   function renderAll(){ renderHome();renderHomeStats();renderAlerts();renderClients();renderExposure();renderStats(); }
 
-  // ── data load (build_app.py → ./data/{slug}.json). 없으면 빈 상태 MVP ──
-  (function load(){
+  // ══ 로컬 CRM: 직접 추가·수정 (localStorage + JS 파생) ══════════════
+  var SLUG = new URLSearchParams(location.search).get('d') ||
+             (typeof PREVIEW_DATA!=='undefined' && PREVIEW_DATA.slug) || 'my';
+  var LS_KEY = 'salon_crm_' + SLUG;
+  var META = {today: null, designer:'', salon:'', exposure:null, stats:null};
+  var CUSTS = [];
+
+  function lsLoad(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ return null; } }
+  function lsSave(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(CUSTS)); }catch(e){} }
+  function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+
+  // ── 파생 (build_app/drafts/aftercare/relations 의 JS 포팅) ──
+  function parseD(s){ if(!s) return null; var m=String(s).match(/(\d{4})-(\d{1,2})-(\d{1,2})/); return m?new Date(+m[1],+m[2]-1,+m[3]):null; }
+  function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function latest(c){ var bd=null,bs=null; (c.history||[]).forEach(function(h){var d=parseD(h.date); if(d&&(!bd||d>bd)){bd=d;bs=h.service;}}); return {service:bs,date:bd}; }
+  function monthsAgo(d,t){ return d?Math.max(1,Math.round((t-d)/2592000000)):null; }
+  var BENEFIT=[[['펌','볼륨'],'풀리기 전에 한 번 더 잡으면 한동안 손질이 편하실 거예요'],
+    [['발레아주','컬러','염색','톤','새치'],'뿌리 올라오기 전에 톤 정리하면 화사하게 유지돼요'],
+    [['클리닉','트리트먼트','케어'],'결이 가라앉기 전에 한 번 케어하면 컨디션이 오래가요'],
+    [['컷','커트','단발','숏'],'라인 흐트러지기 전에 다듬으면 스타일이 오래가요']];
+  function benefit(s){ s=s||''; for(var i=0;i<BENEFIT.length;i++){ if(BENEFIT[i][0].some(function(k){return s.indexOf(k)>=0;})) return BENEFIT[i][1]; } return '시기 맞춰 가볍게 정리하면 더 예쁘게 유지돼요'; }
+  var TIPS=[[['펌','볼륨'],['첫 24~48시간은 감거나 꽉 묶지 마세요 (컬이 자리잡는 시간)','전용 펌 샴푸·트리트먼트로 컬을 더 오래 유지','드라이는 디퓨저로 가볍게, 비비지 말고 쥐어짜듯']],
+    [['발레아주','컬러','염색','톤','새치','색'],['첫 2~3일은 약산성 샴푸로 색 빠짐 최소화','너무 뜨거운 물·잦은 샴푸는 탈색을 촉진해요','자외선·수영장 염소는 변색 원인 — 외출 시 주의']],
+    [['클리닉','트리트먼트','케어'],['3~4일은 강한 세정 대신 영양을 유지해 주세요','고데기·드라이는 온도를 한 단계 낮춰서']],
+    [['컷','커트','단발','숏'],['2~3주에 한 번 끝 정리하면 라인이 오래가요','드라이 방향만 잡아줘도 모양이 살아요']]];
+  function tipsFor(s){ s=s||''; for(var i=0;i<TIPS.length;i++){ if(TIPS[i][0].some(function(k){return s.indexOf(k)>=0;})) return TIPS[i][1]; } return ['가벼운 관리로도 스타일이 오래 유지돼요. 궁금한 점은 편하게 물어보세요!']; }
+  function alertsFor(c,t){ var out=[]; var bd=String(c.birthday||''); if(bd){ var p=bd.split('-'); if(p.length>=2 && +p[p.length-2]===t.getMonth()+1 && +p[p.length-1]===t.getDate()) out.push({kind:'bday',label:'생일',why:'오늘 생일'}); }
+    var lv=latest(c).date, cyc=+c.care_cycle_days||0; if(lv&&cyc){ var due=new Date(lv.getTime()+cyc*86400000); var dl=Math.round((due-t)/86400000); if(dl<=7){ var svc=latest(c).service||'시술'; out.push({kind:'revisit',label:'재방문',why:svc+' 리터치 시기('+(dl<0?'지남':dl+'일 내')+')'}); } } return out; }
+  function draftFor(kind,c,t){ var nm=c.name||'고객'; if(kind==='bday'){ var pr=(c.prefer||[])[0]; return nm+'님 생일 축하드려요 :) '+(pr?pr+' 느낌으로 기분 전환도 좋아요. 편하게 연락 주세요!':'머리도 기분도 새롭게 하고 싶으시면 편하게 연락 주세요!'); }
+    if(kind==='revisit'){ var l=latest(c), m=monthsAgo(l.date,t); return (l.service&&m? nm+'님 '+l.service+' 하신 지 '+m+'개월쯤 됐네요. ':nm+'님, 오랜만이에요. ')+benefit(l.service)+' 시간 되실 때 편하게 봐요!'; }
+    return nm+'님, 가볍게 정리 어떠세요? 편하게 연락 주세요!'; }
+  function resolveRel(cs){ var byId={},brought={}; cs.forEach(function(c){ if(c.id) byId[c.id]=c; }); cs.forEach(function(c){ if(c.referred_by){ (brought[c.referred_by]=brought[c.referred_by]||[]).push(c.id); } });
+    var nm=function(id){ return (byId[id]&&byId[id].name)||id; }; var out={};
+    cs.forEach(function(c){ if(!c.id) return; out[c.id]={ relations:(c.relations||[]).filter(function(r){return r.to;}).map(function(r){return {id:r.to,name:nm(r.to),type:r.type||'지인'};}),
+      referred_by:(c.referred_by&&byId[c.referred_by])?{id:c.referred_by,name:nm(c.referred_by)}:null,
+      referred:(brought[c.id]||[]).map(function(i){return {id:i,name:nm(i)};}) }; }); return out; }
+  function upcoming(cs,ts){ var rows=[]; cs.forEach(function(c){ var b=c.booking||{}; if(!b.date) return; var d=ymd(parseD(b.date)||new Date()); if(d<ts) return; rows.push({name:c.name,service:b.service,time:b.time,date:d,id:c.id}); }); rows.sort(function(a,b){return (a.date+a.time)<(b.date+b.time)?-1:1;}); return rows; }
+  function derive(){
+    var ts=META.today||todayStr(), t=parseD(ts)||new Date(); var rel=resolveRel(CUSTS);
+    var care=[]; CUSTS.forEach(function(c){ alertsFor(c,t).forEach(function(a){ care.push({id:c.id,name:c.name,kind:a.kind,label:a.label,why:a.why,prefer:c.prefer||[],draft:draftFor(a.kind,c,t)}); }); });
+    var ord={bday:0,revisit:1}; care.sort(function(a,b){return (ord[a.kind]==null?9:ord[a.kind])-(ord[b.kind]==null?9:ord[b.kind]);});
+    var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}; return {id:c.id,name:c.name,prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]}; });
+    DATA={slug:SLUG,designer:META.designer,salon:META.salon,today:ts,exposure:META.exposure,stats:META.stats,bookings:upcoming(CUSTS,ts),care:care,clients:clients};
+  }
+  function refresh(){ derive(); renderAll(); }
+
+  // ── 고객 추가/수정 폼 ──
+  function uid(){ return 'c'+Math.abs(Date.now()%1e9).toString(36)+Math.floor((performance.now()%1000)).toString(36); }
+  function editClient(id){
+    var c = id? JSON.parse(JSON.stringify(CUSTS.filter(function(x){return x.id===id;})[0]||{})) : {id:'',name:'',prefer:[],history:[]};
+    var others = CUSTS.filter(function(x){return x.id!==id;});
+    var opt = function(sel){ return '<option value="">— 없음 —</option>'+others.map(function(o){return '<option value="'+esc(o.id)+'"'+((sel===o.id)?' selected':'')+'>'+esc(o.name)+'님</option>';}).join(''); };
+    var rel0 = (c.relations&&c.relations[0])||{};
+    var visits = (c.history||[]).map(function(h,i){ return '<div class="visit-row"><input data-v="date" data-i="'+i+'" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" value="'+esc(h.date||'')+'"><input data-v="service" data-i="'+i+'" type="text" placeholder="시술명" value="'+esc(h.service||'')+'"><button class="del-x" data-delv="'+i+'" type="button">✕</button></div>'; }).join('');
+    document.getElementById('s-edit').setAttribute('data-title', id?'고객 수정':'고객 추가');
+    document.getElementById('editBody').innerHTML=
+      '<div class="fld"><label>이름 *</label><input id="f-name" type="text" value="'+esc(c.name||'')+'" placeholder="성함"></div>'+
+      '<div class="fld2"><div class="fld"><label>생일 (MM-DD)</label><input id="f-bday" type="text" inputmode="numeric" placeholder="예: 11-04" value="'+esc(c.birthday||'')+'"></div>'+
+      '<div class="fld"><label>총 방문 횟수</label><input id="f-loyal" type="number" inputmode="numeric" value="'+esc(c.loyalty_visits!=null?c.loyalty_visits:'')+'"></div></div>'+
+      '<div class="fld"><label>취향 · 메모 (쉼표로 구분)</label><textarea id="f-prefer" placeholder="예: 밝은 톤, 손상 신경 씀">'+esc((c.prefer||[]).join(', '))+'</textarea></div>'+
+      '<div class="fld2"><div class="fld"><label>재방문 주기 (일)</label><input id="f-cycle" type="number" inputmode="numeric" placeholder="예: 펌 90 / 새치 28" value="'+esc(c.care_cycle_days||'')+'"><div class="hint">넣으면 리터치 시기에 알림</div></div></div>'+
+      '<div class="fld"><label>다음 예약</label><div class="fld2"><input id="f-bdate" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" value="'+esc((c.booking||{}).date||'')+'"><input id="f-bsvc" type="text" placeholder="시술(선택)" value="'+esc((c.booking||{}).service||'')+'"></div></div>'+
+      '<div class="fld"><label>시술 이력 <button class="del-x" id="addVisit" type="button" style="color:var(--accent);width:auto;padding:0 10px;height:28px;font-size:12px;font-weight:800;">+ 방문 추가</button></label><div id="visits">'+visits+'</div></div>'+
+      '<div class="fld2"><div class="fld"><label>가족·친구</label><select id="f-relto">'+opt(rel0.to)+'</select></div>'+
+      '<div class="fld"><label>관계</label><input id="f-reltype" type="text" placeholder="가족/친구/자매" value="'+esc(rel0.type||'')+'"></div></div>'+
+      '<div class="fld"><label>소개해주신 분</label><select id="f-refby">'+opt(c.referred_by)+'</select></div>'+
+      '<button class="btn" id="saveClient" data-id="'+esc(id||'')+'" style="margin-top:6px;">저장</button>'+
+      (id?'<button class="btn ghost" id="delClient" data-id="'+esc(id)+'" style="margin-top:8px;color:var(--rose);">이 고객 삭제</button>':'');
+    go('s-edit');
+  }
+  function collectForm(){
+    var get=function(id){var e=document.getElementById(id);return e?e.value.trim():'';};
+    var visits=[]; document.querySelectorAll('#visits .visit-row').forEach(function(row){
+      var dt=row.querySelector('[data-v="date"]').value.trim(), sv=row.querySelector('[data-v="service"]').value.trim();
+      if(dt||sv) visits.push({date:dt,service:sv});
+    });
+    var obj={ name:get('f-name'), birthday:get('f-bday'), prefer:get('f-prefer').split(',').map(function(s){return s.trim();}).filter(Boolean), history:visits };
+    var loyal=get('f-loyal'); if(loyal) obj.loyalty_visits=+loyal;
+    var cyc=get('f-cycle'); if(cyc) obj.care_cycle_days=+cyc;
+    var bdate=get('f-bdate'); if(bdate) obj.booking={date:bdate, service:get('f-bsvc')};
+    var relto=get('f-relto'), reltype=get('f-reltype'); if(relto) obj.relations=[{to:relto, type:reltype||'지인'}];
+    var refby=get('f-refby'); if(refby) obj.referred_by=refby;
+    return obj;
+  }
+  function saveClient(id){
+    var obj=collectForm(); if(!obj.name){ toast('이름을 입력해 주세요'); return; }
+    if(id){ for(var i=0;i<CUSTS.length;i++){ if(CUSTS[i].id===id){ obj.id=id; CUSTS[i]=obj; break; } } }
+    else { obj.id=uid(); CUSTS.push(obj); }
+    lsSave(); refresh(); back(); toast('저장했어요');
+  }
+  function delClient(id){ CUSTS=CUSTS.filter(function(c){return c.id!==id;}); lsSave(); refresh(); stack=['s-clients']; show('s-clients','back'); toast('삭제했어요'); }
+
+  // ── 내보내기 / 가져오기 (백업·기기 이동) ──
+  function exportData(){
+    var blob=new Blob([JSON.stringify(CUSTS,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=SLUG+'-customers.json'; a.click(); toast('백업 파일을 내려받았어요');
+  }
+  function importData(file){
+    var r=new FileReader(); r.onload=function(){ try{ var arr=JSON.parse(r.result); if(Array.isArray(arr)){ CUSTS=arr; lsSave(); refresh(); toast('가져왔어요 ('+arr.length+'명)'); } else toast('형식이 올바르지 않아요'); }catch(e){ toast('읽기 실패'); } }; r.readAsText(file);
+  }
+
+  // ── 이벤트 배선 ──
+  document.body.addEventListener('click', function(e){
+    if(e.target.closest('#addClientBtn')){ editClient(null); return; }
+    if(e.target.closest('#exportBtn')){ exportData(); return; }
+    if(e.target.closest('#importBtn')){ document.getElementById('importFile').click(); return; }
+    if(e.target.closest('#addVisit')){ var v=document.getElementById('visits'); var i=v.children.length; v.insertAdjacentHTML('beforeend','<div class="visit-row"><input data-v="date" data-i="'+i+'" type="text" inputmode="numeric" placeholder="YYYY-MM-DD"><input data-v="service" data-i="'+i+'" type="text" placeholder="시술명"><button class="del-x" data-delv="'+i+'" type="button">✕</button></div>'); return; }
+    var dv=e.target.closest('[data-delv]'); if(dv){ dv.parentNode.remove(); return; }
+    var sv=e.target.closest('#saveClient'); if(sv){ saveClient(sv.getAttribute('data-id')||null); return; }
+    var dc=e.target.closest('#delClient'); if(dc){ delClient(dc.getAttribute('data-id')); return; }
+    var ed=e.target.closest('[data-edit-client]'); if(ed){ editClient(ed.getAttribute('data-edit-client')); return; }
+  });
+  document.getElementById('importFile').addEventListener('change', function(e){ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
+
+  // ── 부팅: 빌드 시드 또는 PREVIEW_DATA → 최초 1회 로컬에 적재, 이후 로컬 우선 ──
+  function boot(base){
+    META.today=todayStr();
+    if(base){ META.designer=base.designer||''; META.salon=base.salon||''; META.exposure=base.exposure||null; META.stats=base.stats||null; }
+    var local=lsLoad();
+    CUSTS = (local!=null)? local : ((base&&base.seed)? base.seed.slice() : []);
+    if(local==null) lsSave();
+    refresh();
+  }
+  (function start(){
+    if(typeof PREVIEW_DATA!=='undefined'){ boot(PREVIEW_DATA); return; }
     var slug=new URLSearchParams(location.search).get('d');
-    if(!slug){ renderAll(); return; }              // 데이터 없이 MVP
+    if(!slug){ boot(null); return; }
     fetch('./data/'+encodeURIComponent(slug)+'.json',{cache:'no-store'})
-      .then(function(r){return r.ok?r.json():null;})
-      .then(function(j){ DATA=j; renderAll(); })
-      .catch(function(){ renderAll(); });
+      .then(function(r){return r.ok?r.json():null;}).then(function(j){ boot(j); }).catch(function(){ boot(null); });
   })();
 
   renderTabs('s-home');

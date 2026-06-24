@@ -197,6 +197,9 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
         cd["referred_by"] = info.get("referred_by")
         cd["referred"] = info.get("referred", [])
 
+    # 앱이 로컬에서 직접 추가·수정할 수 있도록 '원본 입력'도 시드로 제공(연락처 PII 제외).
+    seed = [{k: v for k, v in (c or {}).items() if k != "contact"} for c in customers]
+
     data = {
         "slug": slug,
         "designer": cfg.get("display_name", slug),
@@ -205,6 +208,7 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
         "bookings": bookings,
         "care": care_list,
         "clients": clients,
+        "seed": seed,            # 원본 고객 입력(앱 로컬 편집의 출발점)
     }
 
     # 누적 장부가 있으면 통계 포함 (관리·분석용). PII(전화)는 stats 가 집계만 함.
