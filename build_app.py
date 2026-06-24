@@ -127,13 +127,14 @@ def _digits(s) -> str:
 
 
 def resolve_bookings(client_dir: str, customers: list[dict], today: date) -> list[dict]:
-    """오늘의 예약 목록(name·service·time·id). 연락처(PII)는 출력하지 않는다.
+    """다가오는 예약 목록(오늘 이후, name·service·time·id·date). 연락처(PII)는 제외.
 
     우선순위: clients/{slug}/bookings.yaml(네이버 예약 내보내기) → 없으면 고객 yaml 의 booking.
     네이버 예약 행은 이름/전화로 기존 고객과 매칭해 id 를 연결(없으면 id=null).
     """
     by_phone = {_digits(c.get("contact")): c for c in customers if _digits(c.get("contact"))}
     by_name = {(c.get("name") or "").strip(): c for c in customers if c.get("name")}
+    tstr = str(today)
 
     bpath = Path(client_dir) / "bookings.yaml"
     nv = _load(str(bpath)) if bpath.exists() else None
@@ -141,25 +142,27 @@ def resolve_bookings(client_dir: str, customers: list[dict], today: date) -> lis
     if isinstance(nv, list) and nv:
         rows = []
         for b in nv:
-            if str(b.get("date")) != str(today):     # 오늘 예약만
+            d = str(_parse_date(b.get("date")) or b.get("date"))
+            if d < tstr:                              # 지난 예약 제외(오늘 이후)
                 continue
             cust = by_phone.get(_digits(b.get("phone"))) or by_name.get((b.get("name") or "").strip())
             rows.append({
-                "name": b.get("name"),
-                "service": b.get("service"),
-                "time": b.get("time"),
+                "name": b.get("name"), "service": b.get("service"),
+                "time": b.get("time"), "date": d,
                 "id": cust.get("id") if cust else None,   # 매칭 실패해도 표시
             })
     else:
-        rows = [
-            {"name": c.get("name"),
-             "service": (c.get("booking") or {}).get("service"),
-             "time": (c.get("booking") or {}).get("time"),
-             "id": c.get("id")}
-            for c in customers
-            if c.get("booking") and str(_parse_date((c["booking"]).get("date"))) == str(today)
-        ]
-    rows.sort(key=lambda r: (r.get("time") or ""))
+        rows = []
+        for c in customers:
+            bk = c.get("booking") or {}
+            if not bk:
+                continue
+            d = str(_parse_date(bk.get("date")) or "")
+            if d < tstr:
+                continue
+            rows.append({"name": c.get("name"), "service": bk.get("service"),
+                         "time": bk.get("time"), "date": d, "id": c.get("id")})
+    rows.sort(key=lambda r: (r.get("date") or "", r.get("time") or ""))
     return rows
 
 

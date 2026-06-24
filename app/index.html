@@ -169,7 +169,7 @@
         <div class="s" id="homeSub">오늘 하루도 시작해볼까요</div>
       </div>
       <div class="chips reveal">
-        <button class="chip" data-go="s-alerts"><div class="n" id="cBookings">0</div><div class="l">오늘 예약</div></button>
+        <button class="chip" data-go="s-alerts"><div class="n" id="cBookings">0</div><div class="l">다가오는 예약</div></button>
         <button class="chip" data-go="s-alerts"><div class="n" id="cCare">0</div><div class="l">챙길 고객</div></button>
         <button class="chip" data-go="s-exposure"><div class="n" id="cExp">–</div><div class="l">AI 노출</div></button>
       </div>
@@ -229,6 +229,15 @@
 
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function av(n){return esc(String(n||'·').trim().charAt(0));}
+  function dateLabel(ds,todayStr){
+    if(!ds) return '';
+    if(ds===todayStr) return '오늘';
+    var a=new Date(ds+'T00:00:00'), b=new Date(todayStr+'T00:00:00');
+    var diff=Math.round((a-b)/86400000);
+    if(diff===1) return '내일';
+    var wd=['일','월','화','수','목','금','토'][a.getDay()];
+    return (a.getMonth()+1)+'.'+a.getDate()+'('+wd+')';
+  }
 
   // ── router ──
   function show(id,dir){
@@ -294,15 +303,16 @@
     if(d){
       document.getElementById('homeEyebrow').textContent=(d.designer||'')+(d.salon?(' · '+d.salon):'')||'For the Designer';
       document.getElementById('homeHi').textContent=(d.designer?d.designer+'님, ':'')+'안녕하세요 👋';
-      document.getElementById('homeSub').textContent='오늘 예약 '+nb+' · 챙길 고객 '+nc;
+      document.getElementById('homeSub').textContent='다가오는 예약 '+nb+' · 챙길 고객 '+nc;
     }
     var box=document.getElementById('homeToday');
     if(d&&d.bookings&&d.bookings.length){
-      box.innerHTML='<div class="card reveal"><div class="ch">오늘 예약</div>'+d.bookings.map(function(b){
-        return '<div class="li" data-client="'+esc(b.id)+'"><div class="av">'+av(b.name)+'</div><div class="bd"><div class="nm">'+esc(b.name)+' 님</div><div class="sub">'+esc(b.service||'')+'</div></div><div class="rt">'+esc(b.time||'')+'</div></div>';
+      box.innerHTML='<div class="card reveal"><div class="ch">다가오는 예약</div>'+d.bookings.map(function(b){
+        var sub=esc(b.service||'')+(b.time?(' · '+esc(b.time)):'');
+        return '<div class="li" data-client="'+esc(b.id)+'"><div class="av">'+av(b.name)+'</div><div class="bd"><div class="nm">'+esc(b.name)+' 님</div><div class="sub">'+sub+'</div></div><div class="rt">'+dateLabel(b.date,d.today)+'</div></div>';
       }).join('')+'</div>';
     } else {
-      box.innerHTML='<div class="card"><div class="ch">오늘 예약</div>'+empty('🗓️','오늘 브리핑이 비어 있어요','실시간 예약은 네이버에서 관리 ·\n오늘 챙길 고객은 아침에 동기화돼요')+'</div>';
+      box.innerHTML='<div class="card"><div class="ch">다가오는 예약</div>'+empty('🗓️','다가오는 예약이 없어요','실시간 예약은 네이버에서 관리 ·\n오늘 챙길 고객은 아침에 동기화돼요')+'</div>';
     }
   }
 
