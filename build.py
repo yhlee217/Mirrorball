@@ -83,6 +83,13 @@ def build_one(path: str, dist: str = "dist") -> dict:
         if site_url:
             en_url = site_url.rstrip("/") + "/en/"
 
+    # 예약·프로필 QR (segno 설치 시). 인쇄·인스타·거울용.
+    try:
+        import qr as _qr
+        _qr.for_designer(path, dist)
+    except Exception as exc:
+        warnings.append(f"QR 생성 건너뜀: {type(exc).__name__}: {exc}")
+
     return {
         "slug": data["slug"],
         "out_path": out,
