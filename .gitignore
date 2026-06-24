@@ -10,3 +10,4 @@ content/
 __pycache__/
 *.pyc
 .pytest_cache/
+clients/hayewoni/
