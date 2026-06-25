@@ -31,15 +31,27 @@ AUDIO_EXT = {".m4a", ".mp3", ".wav", ".aac", ".mp4", ".webm", ".caf", ".ogg"}
 
 
 # ── ③ STT: 로컬 Whisper (무료). 없으면 안내. ─────────────────────────
-def transcribe(audio_path: str) -> str:
-    try:
-        from faster_whisper import WhisperModel
-    except ImportError as e:
-        raise RuntimeError(
-            "로컬 STT 미설치 — Mac 에서:  pip install faster-whisper\n"
-            "  (무료·무제한. Claude 는 음성 변환을 못 하므로 변환은 Whisper 가 담당)"
-        ) from e
-    model = WhisperModel("base", compute_type="int8")   # 작은 모델로도 한국어 충분
+_MODEL = None
+
+
+def load_model(size: str = "base"):
+    """Whisper 모델을 한 번만 로드해 캐시(watch 모드에서 매 파일 재로딩 방지)."""
+    global _MODEL
+    if _MODEL is None:
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError as e:
+            raise RuntimeError(
+                "로컬 STT 미설치 — Mac 에서:  pip install faster-whisper\n"
+                "  (무료·무제한. Claude 는 음성 변환을 못 하므로 변환은 Whisper 가 담당)"
+            ) from e
+        import os
+        _MODEL = WhisperModel(os.getenv("WHISPER_MODEL", size), compute_type="int8")
+    return _MODEL
+
+
+def transcribe(audio_path: str, model=None) -> str:
+    model = model or load_model()
     segments, _ = model.transcribe(audio_path, language="ko")
     return " ".join(s.text.strip() for s in segments).strip()
 
@@ -167,9 +179,9 @@ def rebuild_app(client_dir: str) -> None:
         print(f"  (앱 데이터 재빌드 건너뜀: {exc})")
 
 
-def process(audio: str, client_dir: str) -> dict:
+def process(audio: str, client_dir: str, model=None) -> dict:
     print(f"· 변환(Whisper): {audio}")
-    transcript = transcribe(audio)
+    transcript = transcribe(audio, model=model)
     print(f"  받아쓰기: {transcript[:60]}…")
     summary = summarize(transcript)
     res = apply_summary(client_dir, summary)
@@ -187,6 +199,7 @@ def watch(folder: str, client_dir: str) -> int:
     src = Path(folder)
     done = src / "_done"
     done.mkdir(exist_ok=True)
+    model = load_model()             # 한 번만 로드 → 이후 각 파일은 추론만(빠름)
     print(f"감시 시작: {src}  (새 오디오 → 자동 처리)  Ctrl+C 종료")
     seen: set[str] = set()
     while True:
@@ -194,7 +207,7 @@ def watch(folder: str, client_dir: str) -> int:
             if f.suffix.lower() in AUDIO_EXT and f.name not in seen:
                 seen.add(f.name)
                 try:
-                    process(str(f), client_dir)
+                    process(str(f), client_dir, model=model)
                     f.rename(done / f.name)
                 except Exception as exc:
                     print(f"  처리 실패({f.name}): {exc}")

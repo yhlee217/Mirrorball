@@ -42,9 +42,17 @@ python voicenote.py apply transcript.txt --client clients/hayewoni
 python voicenote.py prompt transcript.txt
 ```
 
+## "매번 STT 돌리는" 불편 없애기 — 상시 자동
+`watch` 는 **한 번 켜두면 끝**. 새 녹음이 폴더에 들어오는 즉시 자동 변환·요약·반영된다(매 파일 수동 실행 X).
+- **속도**: Whisper 모델은 시작 때 한 번만 로드 → 이후 각 녹음은 추론만(짧은 메모 몇 초). 동기화 지연 포함 보통 1분 이내.
+- **항상 켜두기(로그인 시 자동 시작·죽으면 재시작)**: `scripts/voicenote.launchd.plist` 의 `{PROJECT}/{FOLDER}/{SLUG}/{ANTHROPIC_API_KEY}` 를 채워
+  `~/Library/LaunchAgents/` 로 복사 후 `launchctl load`. → Mac 이 켜져 있는 동안 늘 감시.
+
 ## 사람이 하는 일 (최소)
 1. 시술 끝나고 **녹음 시작 → "김문규님, 오늘 다운펌 …"** 처럼 이름부터 말하기
-2. 끝. (Mac watcher 가 켜져 있으면 자동으로 카르테에 정리돼 들어감)
+2. 끝. (launchd 로 watcher 를 등록해두면 STT 를 **단 한 번도 직접 돌리지 않는다**)
+
+> "녹음하자마자 즉시"는 아니다(동기화+처리 수초~1분). 진짜 즉시가 필요하면 → 앱의 🎤 실시간 받아쓰기(클라우드·Mac 불필요).
 
 ## 매칭·안전장치
 - 말한 이름으로 고객 **자동 매칭**(정확→부분 일치). 못 찾으면 건너뛰고 사유 출력(임의 기입 안 함).
