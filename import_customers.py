@@ -143,12 +143,51 @@ def write_customers(slug: str, customers: list[dict]) -> int:
     return n
 
 
+def import_file(path: str, slug: str) -> int:
+    customers = dedupe(parse_customers(path))
+    n = write_customers(slug, customers)
+    print(f"✓ {path}: 인식 {len(customers)} · 신규 {n}명 저장(기존 보존)")
+    return n
+
+
+def watch_folder(folder: str, slug: str) -> int:
+    """폴더에 새 고객목록(CSV)이 떨어지면 자동 임포트(처리분 _done/ 이동).
+    핸드SOS 내보내기를 이메일/클라우드→이 폴더로 떨어뜨리면 PC 가 알아서 흡수."""
+    import time
+
+    src = Path(folder)
+    done = src / "_done"
+    done.mkdir(parents=True, exist_ok=True)
+    print(f"감시 시작: {src}  (새 CSV → 자동 임포트)  Ctrl+C 종료")
+    seen: set[str] = set()
+    while True:
+        for f in sorted(src.glob("*.csv")):
+            if f.name in seen:
+                continue
+            seen.add(f.name)
+            try:
+                import_file(str(f), slug)
+                try:
+                    import build_app
+                    build_app.build_one(f"clients/{slug}")
+                except Exception:
+                    pass
+                f.rename(done / f.name)
+            except Exception as exc:
+                print(f"  실패({f.name}): {exc}")
+        time.sleep(5)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="고객 목록 CSV → 카르테")
     ap.add_argument("csv")
     ap.add_argument("--slug", required=True)
     ap.add_argument("--dry", action="store_true", help="저장하지 않고 미리보기")
+    ap.add_argument("--watch", action="store_true", help="csv 인자를 폴더로 보고 새 파일 자동 임포트")
     args = ap.parse_args()
+
+    if args.watch:
+        return watch_folder(args.csv, args.slug)
 
     try:
         customers = dedupe(parse_customers(args.csv))
