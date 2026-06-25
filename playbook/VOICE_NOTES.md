@@ -18,14 +18,16 @@ Mac 의 watcher (voicenote.py watch)
 
 ## 비용
 - 녹음(폰 기본앱)·클라우드 동기화·STT(로컬 Whisper) = **0원**
-- 요약 = **Claude**(쓰시는 그 AI). 메모 1건당 토큰 소량.
+- 요약 = **이미 쓰는 Claude Code(CLI)** 그대로 호출 → 별도 API 키·결제 불필요(구독 범위).
 
 ## 1회 설정 (Mac)
 ```bash
 pip install faster-whisper          # 무료 로컬 STT
-export ANTHROPIC_API_KEY=...        # Claude 요약용 (없으면 prompt 모드로 수동)
+# 요약은 '이미 쓰는 Claude Code(CLI)' 를 그대로 사용 → API 키 불필요(구독 인증).
+#   (claude 명령이 로그인돼 있으면 끝. 강제: VOICENOTE_LLM=cli)
 # 폰 녹음이 떨어지는 클라우드 폴더를 Mac 에서 동기화해 두기 (iCloud Drive 추천)
 ```
+> 요약 백엔드 우선순위: **Claude CLI(키 X)** → ANTHROPIC_API_KEY(선택) → 수동(prompt 모드).
 
 ## 운영 — 저녁 배치 (권장)
 바로 될 필요 없음 → **그날 밤 한 번에 처리해 다음날 준비**.

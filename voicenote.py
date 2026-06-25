@@ -76,24 +76,58 @@ def summarize_prompt(transcript: str) -> str:
     )
 
 
-def summarize(transcript: str) -> dict:
+def _summarize_via_cli(prompt: str) -> str | None:
+    """이미 쓰는 Claude Code(CLI)를 헤드리스로 호출 — API 키 불필요(구독 인증)."""
+    import shutil
+    import subprocess
+
+    exe = shutil.which("claude")
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "-p", prompt], capture_output=True, text=True, timeout=180)
+    except Exception:
+        return None
+    out = (r.stdout or "").strip()
+    return out if (r.returncode == 0 and out) else None
+
+
+def _summarize_via_api(prompt: str) -> str | None:
+    """ANTHROPIC_API_KEY 가 있으면 API 사용(선택)."""
     import os
 
     key = os.getenv("ANTHROPIC_API_KEY")
     if not key:
-        raise RuntimeError(
-            "Claude 요약 키 없음(ANTHROPIC_API_KEY). 자동 요약을 쓰려면 키를 설정하거나,\n"
-            "  python voicenote.py prompt <transcript> 로 프롬프트를 받아 Claude 에 직접 붙여넣어 처리하세요."
-        )
+        return None
     import anthropic
 
     client = anthropic.Anthropic(api_key=key)
-    model = os.getenv("CLAUDE_MODEL", "claude-3-5-haiku-latest")
     msg = client.messages.create(
-        model=model, max_tokens=600,
-        messages=[{"role": "user", "content": summarize_prompt(transcript)}],
+        model=os.getenv("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
+        max_tokens=600, messages=[{"role": "user", "content": prompt}],
     )
-    return parse_summary(msg.content[0].text)
+    return msg.content[0].text
+
+
+def summarize(transcript: str) -> dict:
+    """요약·구조화. 우선순위: Claude CLI(키 불필요) → Anthropic API → 안내.
+    VOICENOTE_LLM=cli|api 로 강제 가능."""
+    import os
+
+    prompt = summarize_prompt(transcript)
+    mode = os.getenv("VOICENOTE_LLM", "auto")
+    order = {"cli": [_summarize_via_cli], "api": [_summarize_via_api]}.get(
+        mode, [_summarize_via_cli, _summarize_via_api])
+    for fn in order:
+        out = fn(prompt)
+        if out:
+            return parse_summary(out)
+    raise RuntimeError(
+        "자동 요약 불가. 다음 중 하나:\n"
+        "  · Claude Code(CLI) 설치·로그인 → 키 없이 자동 (권장)\n"
+        "  · ANTHROPIC_API_KEY 설정 → API 사용\n"
+        "  · python voicenote.py prompt <transcript> 로 프롬프트를 받아 Claude 에 붙여넣어 수동 처리"
+    )
 
 
 def parse_summary(text: str) -> dict:

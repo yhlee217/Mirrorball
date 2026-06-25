@@ -23,7 +23,10 @@
   <key>WorkingDirectory</key><string>{PROJECT}</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>ANTHROPIC_API_KEY</key><string>{ANTHROPIC_API_KEY}</string>
+    <!-- 요약은 Claude Code(CLI)를 사용 → API 키 불필요. 단 launchd 는 로그인 PATH/인증을
+         못 물려받을 수 있으니, CLI 경로를 명시하고(아래 PATH) claude 가 로그인돼 있어야 함.
+         CLI 인증이 launchd 에서 안 잡히면 '사용자 crontab' 으로 batch 를 돌리는 편이 안전. -->
+    <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
     <key>WHISPER_MODEL</key><string>base</string>
   </dict>
   <key>RunAtLoad</key><true/>
