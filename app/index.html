@@ -561,16 +561,19 @@
   }
 
   // ── 음성 입력(브라우저 내장 STT, 비용 0·기기에서) ──
+  // iOS Safari 는 말 중간에 자동 종료됨 → 사용자가 멈추기 전엔 자동 재시작해 길게 받아쓴다.
   function attachMic(target, btn, hint){
     if(!btn||!target) return;
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if(!SR){ btn.style.display='none'; if(hint) hint.textContent='이 브라우저는 음성 입력을 지원하지 않아요 (Safari/Chrome 권장)'; return; }
     var rec=new SR(); rec.lang='ko-KR'; rec.interimResults=true; rec.continuous=true;
-    var on=false, base='';
-    btn.onclick=function(){ if(on){ rec.stop(); return; } base=target.value?target.value.replace(/\s+$/,'')+' ':''; try{ rec.start(); }catch(e){} };
-    rec.onstart=function(){ on=true; btn.classList.add('rec'); btn.textContent='● 듣는 중 (탭하면 멈춤)'; if(hint) hint.textContent='말씀하세요…'; };
-    rec.onend=function(){ on=false; btn.classList.remove('rec'); btn.textContent='🎤 음성 입력'; if(hint) hint.textContent=''; };
-    rec.onerror=function(e){ if(hint) hint.textContent=(e&&e.error==='not-allowed')?'마이크 권한을 허용해 주세요':'음성 인식 오류 — 다시 시도'; };
+    var want=false, base='';
+    function begin(){ base=target.value?target.value.replace(/\s+$/,'')+' ':''; try{ rec.start(); }catch(e){} }
+    btn.onclick=function(){ if(want){ want=false; rec.stop(); return; } want=true; begin(); };
+    rec.onstart=function(){ btn.classList.add('rec'); btn.textContent='● 듣는 중 (탭하면 멈춤)'; if(hint) hint.textContent='말씀하세요…'; };
+    rec.onend=function(){ if(want){ begin(); return; }  // 사용자가 멈추기 전엔 자동 이어듣기
+      btn.classList.remove('rec'); btn.textContent='🎤 음성 입력'; if(hint) hint.textContent=''; };
+    rec.onerror=function(e){ var er=e&&e.error; if(er==='not-allowed'||er==='service-not-allowed'){ want=false; if(hint) hint.textContent='마이크 권한을 허용해 주세요'; } };
     rec.onresult=function(e){ var t=''; for(var i=e.resultIndex;i<e.results.length;i++){ t+=e.results[i][0].transcript; } target.value=base+t; };
   }
 
