@@ -133,21 +133,88 @@ def match_customer(name: str, customers: list[dict]) -> dict | None:
     return None
 
 
+# ── 시간 기반 매칭: 녹음 시각 ↔ 네이버 예약 시간 ──────────────────────
+def recording_dt(path: str):
+    """녹음 파일의 시각(생성시간 우선, 없으면 수정시간)."""
+    import os
+    from datetime import datetime as _dt
+
+    st = os.stat(path)
+    ts = getattr(st, "st_birthtime", None) or st.st_mtime
+    return _dt.fromtimestamp(ts)
+
+
+def load_bookings(client_dir: str) -> list[dict]:
+    p = Path(client_dir) / "bookings.yaml"
+    if not p.exists():
+        return []
+    data = yaml.safe_load(p.read_text(encoding="utf-8"))
+    return data if isinstance(data, list) else []
+
+
+def _hm(t):
+    m = re.search(r"(\d{1,2}):(\d{2})", str(t or ""))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def match_by_time(rec_dt, bookings: list[dict], before_h: float = 0.5, after_h: float = 5):
+    """녹음 시각 기준, 같은 날 예약 중 '직전에 시작한' 시술을 고른다(끝나고 녹음하는 패턴)."""
+    day = rec_dt.strftime("%Y-%m-%d")
+    cands = []
+    for b in bookings:
+        if str(b.get("date")) != day:
+            continue
+        hm = _hm(b.get("time"))
+        if not hm:
+            continue
+        bt = rec_dt.replace(hour=hm[0], minute=hm[1], second=0, microsecond=0)
+        diff = (rec_dt - bt).total_seconds() / 3600.0   # >0 = 시작 이후
+        cands.append((diff, b))
+    after = sorted([c for c in cands if 0 <= c[0] <= after_h], key=lambda c: c[0])
+    if after:
+        return after[0][1]                              # 시작 직후(가장 가까운) = 가장 최근 시술
+    near = sorted([c for c in cands if -before_h <= c[0] < 0], key=lambda c: -c[0])
+    return near[0][1] if near else None
+
+
+def resolve_customer(summary: dict, customers: list[dict],
+                     bookings: list[dict] | None = None, rec_dt=None):
+    """이름(말함) + 시간(녹음↔예약) 교차로 고객 결정. (customer, method, note)."""
+    by_name = match_customer(summary.get("customer_name", ""), customers)
+    by_time = None
+    if rec_dt is not None and bookings:
+        b = match_by_time(rec_dt, bookings)
+        if b:
+            by_time = match_customer(b.get("name", ""), customers)
+    if by_name and by_time:
+        if by_name is by_time:
+            return by_name, "name+time", ""
+        return by_name, "name(시간 후보와 불일치)", f"시간기준: {by_time.get('name')}님"
+    if by_name:
+        return by_name, "name", ""
+    if by_time:
+        return by_time, "time", "이름 미언급 — 예약시간으로 추정"
+    return None, "none", ""
+
+
 def _load(p: Path) -> dict:
     return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
 
 
-def apply_summary(client_dir: str, summary: dict, today: str | None = None) -> dict:
-    """요약을 매칭 고객 yaml 에 반영(메모 누적 + 태그 병합). 결과 상태 반환."""
+def apply_summary(client_dir: str, summary: dict, today: str | None = None,
+                  rec_dt=None) -> dict:
+    """요약을 매칭 고객 yaml 에 반영(메모 누적 + 태그 병합). 결과 상태 반환.
+    rec_dt(녹음 시각) 주면 네이버 예약시간(bookings.yaml)과 대조해 이름 없이도 매칭."""
     today = today or str(date.today())
     cdir = Path(client_dir) / "customers"
     paths = sorted(cdir.glob("*.yaml"))
     customers = [(p, _load(p)) for p in paths]
 
-    target = match_customer(summary.get("customer_name", ""), [c for _, c in customers])
+    target, method, note = resolve_customer(
+        summary, [c for _, c in customers], load_bookings(client_dir), rec_dt)
     if target is None:
         return {"matched": False, "name": summary.get("customer_name", ""),
-                "reason": "일치하는 고객 없음 — 새 고객으로 추가하거나 이름 확인 필요"}
+                "reason": "이름·예약시간 어느 것으로도 못 찾음 — 확인 필요"}
 
     path = next(p for p, c in customers if c is target)
     memo_line = f"[{today}] {summary.get('summary', '').strip()}"
@@ -168,7 +235,8 @@ def apply_summary(client_dir: str, summary: dict, today: str | None = None) -> d
         target["care_cycle_days"] = int(summary["care_cycle_days"])
 
     path.write_text(yaml.safe_dump(target, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    return {"matched": True, "id": target.get("id"), "name": target.get("name"), "path": str(path)}
+    return {"matched": True, "id": target.get("id"), "name": target.get("name"),
+            "path": str(path), "method": method, "note": note}
 
 
 def rebuild_app(client_dir: str) -> None:
@@ -184,10 +252,11 @@ def process(audio: str, client_dir: str, model=None) -> dict:
     transcript = transcribe(audio, model=model)
     print(f"  받아쓰기: {transcript[:60]}…")
     summary = summarize(transcript)
-    res = apply_summary(client_dir, summary)
+    res = apply_summary(client_dir, summary, rec_dt=recording_dt(audio))
     if res["matched"]:
         rebuild_app(client_dir)
-        print(f"✓ {res['name']}님 카르테에 반영 → 앱 갱신")
+        tag = f"[{res.get('method')}]" + (f" {res['note']}" if res.get("note") else "")
+        print(f"✓ {res['name']}님 카르테에 반영 → 앱 갱신  {tag}")
     else:
         print(f"✗ {res['reason']} (이름: {res['name']})")
     return res
@@ -214,9 +283,33 @@ def watch(folder: str, client_dir: str) -> int:
         time.sleep(5)
 
 
+def batch(folder: str, client_dir: str) -> int:
+    """폴더의 모든 오디오를 한 번에 처리(저녁 배치용). 처리분은 _done/ 으로."""
+    src = Path(folder)
+    done = src / "_done"
+    done.mkdir(exist_ok=True)
+    files = [f for f in sorted(src.iterdir()) if f.suffix.lower() in AUDIO_EXT]
+    if not files:
+        print("처리할 오디오가 없습니다.")
+        return 0
+    model = load_model()
+    ok = miss = 0
+    for f in files:
+        try:
+            res = process(str(f), client_dir, model=model)
+            f.rename(done / f.name)
+            ok += 1 if res.get("matched") else 0
+            miss += 0 if res.get("matched") else 1
+        except Exception as exc:
+            print(f"  처리 실패({f.name}): {exc}")
+            miss += 1
+    print(f"\n배치 완료: 반영 {ok} · 미매칭/실패 {miss} (총 {len(files)})")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="음성 메모 → 카르테 자동 반영")
-    ap.add_argument("cmd", choices=["process", "watch", "apply", "prompt"])
+    ap.add_argument("cmd", choices=["process", "batch", "watch", "apply", "prompt"])
     ap.add_argument("target", help="오디오/폴더/텍스트 경로")
     ap.add_argument("--client", help="clients/{slug}")
     args = ap.parse_args()
@@ -230,6 +323,8 @@ def main() -> int:
         return 2
     if args.cmd == "process":
         process(args.target, args.client)
+    elif args.cmd == "batch":
+        batch(args.target, args.client)
     elif args.cmd == "watch":
         watch(args.target, args.client)
     elif args.cmd == "apply":   # 이미 텍스트로 변환된 경우(예: Voice Memos 자동 텍스트)

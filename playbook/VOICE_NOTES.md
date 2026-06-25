@@ -27,19 +27,29 @@ export ANTHROPIC_API_KEY=...        # Claude 요약용 (없으면 prompt 모드�
 # 폰 녹음이 떨어지는 클라우드 폴더를 Mac 에서 동기화해 두기 (iCloud Drive 추천)
 ```
 
-## 운영
+## 운영 — 저녁 배치 (권장)
+바로 될 필요 없음 → **그날 밤 한 번에 처리해 다음날 준비**.
 ```bash
-# 폴더 감시 — 새 녹음이 오면 자동 처리
-python voicenote.py watch ~/Library/Mobile\ Documents/.../VoiceNotes --client clients/hayewoni
+# 폴더의 그날 녹음 전체를 한 번에 처리(처리분은 _done/ 으로 이동)
+python voicenote.py batch ~/Library/Mobile\ Documents/.../VoiceNotes --client clients/hayewoni
+```
+매일 밤 자동 실행 — 둘 중 하나:
+- **cron**: `0 22 * * * cd /path/Mirrorball && python voicenote.py batch <폴더> --client clients/hayewoni`
+- **launchd**: `scripts/voicenote.launchd.plist` 에서 `<key>RunAtLoad</key>` 를 빼고
+  `<key>StartCalendarInterval</key><dict><key>Hour</key><integer>22</integer></dict>` 로 바꾸면 매일 22시 배치.
 
-# 한 파일만 처리
+## 시간 기반 자동 매칭 (이름 안 말해도 됨)
+녹음 **파일 시각** ↔ `clients/{slug}/bookings.yaml`(네이버 예약 시간)을 대조해 고객을 추정한다.
+- 규칙: 녹음 시각 직전에 **시작한 시술**의 예약자 = 그 고객 (끝나고 녹음하는 패턴).
+- 말로 이름까지 했으면 **이름 + 시간 교차검증**(method: `name+time`). 둘이 다르면 이름 우선 + 경고.
+- 시간 매칭을 쓰려면 그날 `import_naver.py` 로 예약을 먼저 넣어두면 됨(같은 저녁 배치에 함께).
+
+## 그 외 명령
+```bash
+python voicenote.py watch <폴더> --client clients/hayewoni   # 상시 감시(즉시 처리형)
 python voicenote.py process 메모.m4a --client clients/hayewoni
-
-# 이미 텍스트면(예: iOS18 음성메모 자동 텍스트) 변환 건너뛰고 반영
-python voicenote.py apply transcript.txt --client clients/hayewoni
-
-# 키 없이 수동: 프롬프트만 받아 Claude 에 붙여넣기
-python voicenote.py prompt transcript.txt
+python voicenote.py apply transcript.txt --client clients/hayewoni  # iOS18 자동 텍스트 등
+python voicenote.py prompt transcript.txt                    # 키 없이 Claude 수동 요약
 ```
 
 ## "매번 STT 돌리는" 불편 없애기 — 상시 자동

@@ -62,3 +62,45 @@ def test_apply_summary_no_match(tmp_path):
 def test_summarize_prompt_has_schema_and_transcript():
     p = vn.summarize_prompt("오늘 김문규님 다운펌")
     assert "customer_name" in p and "김문규" in p and "JSON" in p
+
+
+from datetime import datetime
+
+BOOKINGS = [
+    {"date": "2026-06-26", "time": "14:00", "name": "김문규"},
+    {"date": "2026-06-26", "time": "16:00", "name": "조희진"},
+]
+
+
+def test_match_by_time_picks_recent_appointment():
+    # 16:30 녹음 → 직전 시작한 16:00(조희진)
+    b = vn.match_by_time(datetime(2026, 6, 26, 16, 30), BOOKINGS)
+    assert b["name"] == "조희진"
+    # 14:40 녹음 → 14:00(김문규)
+    b2 = vn.match_by_time(datetime(2026, 6, 26, 14, 40), BOOKINGS)
+    assert b2["name"] == "김문규"
+
+
+def test_match_by_time_other_day_none():
+    assert vn.match_by_time(datetime(2026, 6, 27, 14, 30), BOOKINGS) is None
+
+
+def test_resolve_by_time_when_no_name():
+    custs = [{"id": "k", "name": "김문규"}, {"id": "j", "name": "조희진"}]
+    cust, method, note = vn.resolve_customer(
+        {"customer_name": ""}, custs, BOOKINGS, datetime(2026, 6, 26, 16, 20))
+    assert cust["id"] == "j" and method == "time"
+
+
+def test_resolve_name_and_time_agree():
+    custs = [{"id": "k", "name": "김문규"}, {"id": "j", "name": "조희진"}]
+    cust, method, _ = vn.resolve_customer(
+        {"customer_name": "조희진님"}, custs, BOOKINGS, datetime(2026, 6, 26, 16, 20))
+    assert cust["id"] == "j" and method == "name+time"
+
+
+def test_resolve_name_wins_on_conflict():
+    custs = [{"id": "k", "name": "김문규"}, {"id": "j", "name": "조희진"}]
+    cust, method, note = vn.resolve_customer(
+        {"customer_name": "김문규"}, custs, BOOKINGS, datetime(2026, 6, 26, 16, 20))
+    assert cust["id"] == "k" and "불일치" in method and "조희진" in note
