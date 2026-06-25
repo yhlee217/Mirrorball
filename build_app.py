@@ -106,6 +106,7 @@ def build_customer(cust: dict) -> dict:
     return {
         "id": cust.get("id"),
         "name": cust.get("name"),
+        "memo": cust.get("memo", ""),
         "prefer": cust.get("prefer", []),
         "loyalty_visits": cust.get("loyalty_visits", len(cust.get("history", []) or [])),
         "first_visit": str(cust["first_visit"]) if cust.get("first_visit") else None,

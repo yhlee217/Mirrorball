@@ -143,6 +143,10 @@
   .visit-row{display:flex;gap:8px;align-items:center;margin-bottom:7px;}
   .visit-row input{flex:1;}
   .del-x{border:none;background:var(--soft);color:var(--rose);border-radius:8px;width:34px;height:40px;font-size:16px;cursor:pointer;flex:0 0 auto;}
+  .mic{border:1px solid var(--line);background:var(--paper);color:var(--accent);border-radius:18px;
+    padding:4px 11px;font-size:11.5px;font-weight:800;cursor:pointer;font-family:inherit;float:right;margin-top:-2px;}
+  .mic.rec{background:#F3E6E2;color:var(--rose);border-color:#E7CFC8;animation:pulse 1.1s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
 
   /* tabbar */
   .tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;background:var(--paper);
@@ -398,8 +402,9 @@
         '<button class="btn ghost" data-edit-client="'+esc(c.id)+'" style="flex:0 0 auto;width:auto;padding:8px 14px;">수정</button>'+
       '</div>'+
       (c.booking?'<div class="care reveal"><div class="why" style="margin:0 0 4px">다가오는 예약</div><div style="font-weight:800">'+esc(c.booking.date||'')+' '+esc(c.booking.time||'')+' · '+esc(c.booking.service||'')+'</div></div>':'')+
+      (c.memo?'<div class="card reveal" style="padding:12px 15px"><div class="ch" style="padding:0 0 5px">상담 메모</div><div style="font-size:13.5px;line-height:1.6;color:var(--ink);white-space:pre-wrap">'+esc(c.memo)+'</div></div>':'')+
       '<div class="kv reveal">'+
-        (prefer?'<div class="r"><div class="k">취향 · 메모</div><div class="pills">'+prefer+'</div></div>':'')+
+        (prefer?'<div class="r"><div class="k">취향</div><div class="pills">'+prefer+'</div></div>':'')+
         (c.last_visit?'<div class="r"><div class="k">마지막 방문</div><div class="v">'+esc(c.last_visit)+'</div></div>':'')+
         relHtml(c)+
       '</div>'+
@@ -521,7 +526,7 @@
     var ts=META.today||todayStr(), t=parseD(ts)||new Date(); var rel=resolveRel(CUSTS);
     var care=[]; CUSTS.forEach(function(c){ alertsFor(c,t).forEach(function(a){ care.push({id:c.id,name:c.name,kind:a.kind,label:a.label,why:a.why,prefer:c.prefer||[],draft:draftFor(a.kind,c,t)}); }); });
     var ord={bday:0,revisit:1}; care.sort(function(a,b){return (ord[a.kind]==null?9:ord[a.kind])-(ord[b.kind]==null?9:ord[b.kind]);});
-    var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}; return {id:c.id,name:c.name,prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]}; });
+    var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}; return {id:c.id,name:c.name,memo:c.memo||'',prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]}; });
     DATA={slug:SLUG,designer:META.designer,salon:META.salon,today:ts,exposure:META.exposure,stats:META.stats,bookings:upcoming(CUSTS,ts),care:care,clients:clients};
   }
   function refresh(){ derive(); renderAll(); }
@@ -540,6 +545,9 @@
       '<div class="fld2"><div class="fld"><label>생일 (MM-DD)</label><input id="f-bday" type="text" inputmode="numeric" placeholder="예: 11-04" value="'+esc(c.birthday||'')+'"></div>'+
       '<div class="fld"><label>총 방문 횟수</label><input id="f-loyal" type="number" inputmode="numeric" value="'+esc(c.loyalty_visits!=null?c.loyalty_visits:'')+'"></div></div>'+
       '<div class="fld"><label>취향 · 메모 (쉼표로 구분)</label><textarea id="f-prefer" placeholder="예: 밝은 톤, 손상 신경 씀">'+esc((c.prefer||[]).join(', '))+'</textarea></div>'+
+      '<div class="fld"><label>상담 메모 <button class="mic" id="micMemo" type="button">🎤 음성 입력</button></label>'+
+        '<textarea id="f-memo" placeholder="시술 끝나고 🎤 눌러 말하면 받아 적어요 — 대화 주제·요청·주의점">'+esc(c.memo||'')+'</textarea>'+
+        '<div class="hint" id="micHint"></div></div>'+
       '<div class="fld2"><div class="fld"><label>재방문 주기 (일)</label><input id="f-cycle" type="number" inputmode="numeric" placeholder="예: 펌 90 / 새치 28" value="'+esc(c.care_cycle_days||'')+'"><div class="hint">넣으면 리터치 시기에 알림</div></div></div>'+
       '<div class="fld"><label>다음 예약</label><div class="fld2"><input id="f-bdate" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" value="'+esc((c.booking||{}).date||'')+'"><input id="f-bsvc" type="text" placeholder="시술(선택)" value="'+esc((c.booking||{}).service||'')+'"></div></div>'+
       '<div class="fld"><label>시술 이력 <button class="del-x" id="addVisit" type="button" style="color:var(--accent);width:auto;padding:0 10px;height:28px;font-size:12px;font-weight:800;">+ 방문 추가</button></label><div id="visits">'+visits+'</div></div>'+
@@ -549,14 +557,30 @@
       '<button class="btn" id="saveClient" data-id="'+esc(id||'')+'" style="margin-top:6px;">저장</button>'+
       (id?'<button class="btn ghost" id="delClient" data-id="'+esc(id)+'" style="margin-top:8px;color:var(--rose);">이 고객 삭제</button>':'');
     go('s-edit');
+    attachMic(document.getElementById('f-memo'), document.getElementById('micMemo'), document.getElementById('micHint'));
   }
+
+  // ── 음성 입력(브라우저 내장 STT, 비용 0·기기에서) ──
+  function attachMic(target, btn, hint){
+    if(!btn||!target) return;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SR){ btn.style.display='none'; if(hint) hint.textContent='이 브라우저는 음성 입력을 지원하지 않아요 (Safari/Chrome 권장)'; return; }
+    var rec=new SR(); rec.lang='ko-KR'; rec.interimResults=true; rec.continuous=true;
+    var on=false, base='';
+    btn.onclick=function(){ if(on){ rec.stop(); return; } base=target.value?target.value.replace(/\s+$/,'')+' ':''; try{ rec.start(); }catch(e){} };
+    rec.onstart=function(){ on=true; btn.classList.add('rec'); btn.textContent='● 듣는 중 (탭하면 멈춤)'; if(hint) hint.textContent='말씀하세요…'; };
+    rec.onend=function(){ on=false; btn.classList.remove('rec'); btn.textContent='🎤 음성 입력'; if(hint) hint.textContent=''; };
+    rec.onerror=function(e){ if(hint) hint.textContent=(e&&e.error==='not-allowed')?'마이크 권한을 허용해 주세요':'음성 인식 오류 — 다시 시도'; };
+    rec.onresult=function(e){ var t=''; for(var i=e.resultIndex;i<e.results.length;i++){ t+=e.results[i][0].transcript; } target.value=base+t; };
+  }
+
   function collectForm(){
     var get=function(id){var e=document.getElementById(id);return e?e.value.trim():'';};
     var visits=[]; document.querySelectorAll('#visits .visit-row').forEach(function(row){
       var dt=row.querySelector('[data-v="date"]').value.trim(), sv=row.querySelector('[data-v="service"]').value.trim();
       if(dt||sv) visits.push({date:dt,service:sv});
     });
-    var obj={ name:get('f-name'), birthday:get('f-bday'), prefer:get('f-prefer').split(',').map(function(s){return s.trim();}).filter(Boolean), history:visits };
+    var obj={ name:get('f-name'), birthday:get('f-bday'), memo:get('f-memo'), prefer:get('f-prefer').split(',').map(function(s){return s.trim();}).filter(Boolean), history:visits };
     var loyal=get('f-loyal'); if(loyal) obj.loyalty_visits=+loyal;
     var cyc=get('f-cycle'); if(cyc) obj.care_cycle_days=+cyc;
     var bdate=get('f-bdate'); if(bdate) obj.booking={date:bdate, service:get('f-bsvc')};
