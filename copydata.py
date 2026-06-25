@@ -30,5 +30,9 @@ def service_noun() -> str:
     return load().get("service_noun", "시술")
 
 
+def quick_tags() -> list:
+    return load().get("quick_tags", []) or []
+
+
 def business_type() -> str:
     return load().get("business_type", "HairSalon")

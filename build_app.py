@@ -216,6 +216,7 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
             "benefit": copydata.benefit(),
             "aftercare": copydata.aftercare(),
             "service_noun": copydata.service_noun(),
+            "quick_tags": copydata.quick_tags(),
         },
     }
 
