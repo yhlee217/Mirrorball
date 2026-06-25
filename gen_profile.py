@@ -27,6 +27,10 @@ import rag
 
 PROMPT = Path(__file__).parent / "prompts" / "profile_copy.md.j2"
 
+# RAG 검색에 쓰는 상황 신호어(업종 중립이 아니라 헤어 기본값) — 복제 시 brief 의
+# signal_keywords 로 덮어쓰거나 이 상수만 교체. (예: 네일=연장/오프/큐티클/속눈썹=리프트)
+DEFAULT_SIGNAL_KEYWORDS = ["유지", "손상", "첫 방문", "리터치", "볼륨"]
+
 # brief 에서 그대로 디자이너 yaml 로 넘어가는 정적 필드
 _PASSTHROUGH = ("slug", "display_name", "korean_name", "role", "salon",
                 "instagram", "booking_url", "photo_url", "site_url",
@@ -41,11 +45,11 @@ def build_case(brief: dict) -> dict:
     """RAG 검색용 case_input: 시술·신호어를 facts/services 에서 모은다."""
     services = brief.get("services", []) or []
     fact_text = " ".join(brief.get("facts", []) or [])
+    signals = brief.get("signal_keywords") or DEFAULT_SIGNAL_KEYWORDS
     return {
         "service": services[0] if services else "",
         "audience": brief.get("audience", ""),
-        "keywords": services + [w for w in ["유지", "손상", "첫 방문", "리터치", "볼륨"]
-                                if w in fact_text],
+        "keywords": services + [w for w in signals if w in fact_text],
     }
 
 

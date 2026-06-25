@@ -25,6 +25,7 @@ from pathlib import Path
 
 import yaml
 
+import copydata
 import drafts
 import relations
 
@@ -210,6 +211,12 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
         "care": care_list,
         "clients": clients,
         "seed": seed,            # 원본 고객 입력(앱 로컬 편집의 출발점)
+        # 업종별 카피 데이터 — 앱 JS 가 이 단일 소스로 benefit/aftercare 산출(이중정의 제거)
+        "config": {
+            "benefit": copydata.benefit(),
+            "aftercare": copydata.aftercare(),
+            "service_noun": copydata.service_noun(),
+        },
     }
 
     # 누적 장부가 있으면 통계 포함 (관리·분석용). PII(전화)는 stats 가 집계만 함.

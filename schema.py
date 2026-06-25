@@ -23,7 +23,7 @@ def person_ld(data: dict) -> dict:
         "alternateName": data.get("instagram", ""),
         "jobTitle": data.get("role", ""),
         "worksFor": {
-            "@type": "HairSalon",
+            "@type": data.get("business_type", "HairSalon"),
             "name": data.get("salon", ""),
             "address": {
                 "@type": "PostalAddress",

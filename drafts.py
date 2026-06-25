@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+import copydata
+
 
 def _pd(v):
     if v is None:
@@ -44,21 +46,14 @@ def _months_ago(d: date | None, today: date) -> int | None:
     return max(1, round((today - d).days / 30))
 
 
-# 시술 키워드 → 재방문 권유의 '구체적 이유' (과장 없이)
-_BENEFIT = [
-    (("펌", "perm"), "풀리기 전에 한 번 더 잡으면 한동안 손질이 편하실 거예요"),
-    (("발레아주", "컬러", "염색", "톤"), "뿌리 올라오기 전에 톤 정리하면 화사하게 유지돼요"),
-    (("클리닉", "트리트먼트"), "결이 가라앉기 전에 한 번 케어하면 컨디션이 오래가요"),
-    (("컷", "커트", "단발"), "라인 흐트러지기 전에 다듬으면 스타일이 오래가요"),
-]
-
-
 def _benefit(service: str | None) -> str:
+    """시술 키워드 → 재방문 권유 이유. 데이터는 kb/copy.yaml(copydata)."""
     s = service or ""
-    for keys, msg in _BENEFIT:
-        if any(k in s for k in keys):
-            return msg
-    return "시기 맞춰 가볍게 정리하면 더 예쁘게 유지돼요"
+    cfg = copydata.benefit()
+    for rule in cfg.get("rules", []) or []:
+        if any(k in s for k in rule.get("keywords", []) or []):
+            return rule.get("text", "")
+    return cfg.get("default", "")
 
 
 def draft_bday(cust: dict) -> str:

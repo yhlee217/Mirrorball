@@ -501,16 +501,12 @@
   function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function latest(c){ var bd=null,bs=null; (c.history||[]).forEach(function(h){var d=parseD(h.date); if(d&&(!bd||d>bd)){bd=d;bs=h.service;}}); return {service:bs,date:bd}; }
   function monthsAgo(d,t){ return d?Math.max(1,Math.round((t-d)/2592000000)):null; }
-  var BENEFIT=[[['펌','볼륨'],'풀리기 전에 한 번 더 잡으면 한동안 손질이 편하실 거예요'],
-    [['발레아주','컬러','염색','톤','새치'],'뿌리 올라오기 전에 톤 정리하면 화사하게 유지돼요'],
-    [['클리닉','트리트먼트','케어'],'결이 가라앉기 전에 한 번 케어하면 컨디션이 오래가요'],
-    [['컷','커트','단발','숏'],'라인 흐트러지기 전에 다듬으면 스타일이 오래가요']];
-  function benefit(s){ s=s||''; for(var i=0;i<BENEFIT.length;i++){ if(BENEFIT[i][0].some(function(k){return s.indexOf(k)>=0;})) return BENEFIT[i][1]; } return '시기 맞춰 가볍게 정리하면 더 예쁘게 유지돼요'; }
-  var TIPS=[[['펌','볼륨'],['첫 24~48시간은 감거나 꽉 묶지 마세요 (컬이 자리잡는 시간)','전용 펌 샴푸·트리트먼트로 컬을 더 오래 유지','드라이는 디퓨저로 가볍게, 비비지 말고 쥐어짜듯']],
-    [['발레아주','컬러','염색','톤','새치','색'],['첫 2~3일은 약산성 샴푸로 색 빠짐 최소화','너무 뜨거운 물·잦은 샴푸는 탈색을 촉진해요','자외선·수영장 염소는 변색 원인 — 외출 시 주의']],
-    [['클리닉','트리트먼트','케어'],['3~4일은 강한 세정 대신 영양을 유지해 주세요','고데기·드라이는 온도를 한 단계 낮춰서']],
-    [['컷','커트','단발','숏'],['2~3주에 한 번 끝 정리하면 라인이 오래가요','드라이 방향만 잡아줘도 모양이 살아요']]];
-  function tipsFor(s){ s=s||''; for(var i=0;i<TIPS.length;i++){ if(TIPS[i][0].some(function(k){return s.indexOf(k)>=0;})) return TIPS[i][1]; } return ['가벼운 관리로도 스타일이 오래 유지돼요. 궁금한 점은 편하게 물어보세요!']; }
+  // 업종별 카피는 빌드(build_app)가 주입한 DATA.config(=kb/copy.yaml) 단일 소스에서.
+  // 데이터 없는 단독 실행용 최소 폴백(업종 중립).
+  var CONFIG = { benefit:{ default:'시기 맞춰 가볍게 정리하면 더 예쁘게 유지돼요', rules:[] },
+                 aftercare:{ default:['가벼운 관리로도 오래 유지돼요. 궁금한 점은 편하게 물어보세요!'], rules:[] } };
+  function benefit(s){ s=s||''; var b=CONFIG.benefit||{}, rs=b.rules||[]; for(var i=0;i<rs.length;i++){ if((rs[i].keywords||[]).some(function(k){return s.indexOf(k)>=0;})) return rs[i].text; } return b.default||''; }
+  function tipsFor(s){ s=s||''; var a=CONFIG.aftercare||{}, rs=a.rules||[]; for(var i=0;i<rs.length;i++){ if((rs[i].keywords||[]).some(function(k){return s.indexOf(k)>=0;})) return rs[i].tips||[]; } return a.default||[]; }
   function alertsFor(c,t){ var out=[]; var bd=String(c.birthday||''); if(bd){ var p=bd.split('-'); if(p.length>=2 && +p[p.length-2]===t.getMonth()+1 && +p[p.length-1]===t.getDate()) out.push({kind:'bday',label:'생일',why:'오늘 생일'}); }
     var lv=latest(c).date, cyc=+c.care_cycle_days||0; if(lv&&cyc){ var due=new Date(lv.getTime()+cyc*86400000); var dl=Math.round((due-t)/86400000); if(dl<=7){ var svc=latest(c).service||'시술'; out.push({kind:'revisit',label:'재방문',why:svc+' 리터치 시기('+(dl<0?'지남':dl+'일 내')+')'}); } } return out; }
   function draftFor(kind,c,t){ var nm=c.name||'고객'; if(kind==='bday'){ var pr=(c.prefer||[])[0]; return nm+'님 생일 축하드려요 :) '+(pr?pr+' 느낌으로 기분 전환도 좋아요. 편하게 연락 주세요!':'머리도 기분도 새롭게 하고 싶으시면 편하게 연락 주세요!'); }
@@ -624,7 +620,8 @@
   // ── 부팅: 빌드 시드 또는 PREVIEW_DATA → 최초 1회 로컬에 적재, 이후 로컬 우선 ──
   function boot(base){
     META.today=todayStr();
-    if(base){ META.designer=base.designer||''; META.salon=base.salon||''; META.exposure=base.exposure||null; META.stats=base.stats||null; }
+    if(base){ META.designer=base.designer||''; META.salon=base.salon||''; META.exposure=base.exposure||null; META.stats=base.stats||null;
+      if(base.config){ CONFIG = base.config; } }     // 업종 카피 단일 소스 주입
     var local=lsLoad();
     CUSTS = (local!=null)? local : ((base&&base.seed)? base.seed.slice() : []);
     if(local==null) lsSave();
