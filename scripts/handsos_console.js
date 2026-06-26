@@ -57,12 +57,12 @@
       let name = '', phone = '', custno = '', prev = '';
       if (ci) {
         const tt = ci.textContent;
-        name = pick(tt, /고객명\s*[:：]\s*([^"\n+]+)/);
+        name = pick(tt, /고객명\s*[:：]\s*([^"\n+*]+)/);   // *(불릿)에서 끊어 이름만
         phone = pick(tt, /전화\s*번호\s*[:：]\s*([0-9\-]+)/);
         custno = pick(tt, /고객\s*번호\s*[:：]\s*([0-9]+)/);
         prev = pick(tt, /이전방문\s*[:：]\s*([0-9.\-]+)/);
       }
-      const ownName = name || cell(HM.고객명);
+      const ownName = cell(HM.고객명) || name;            // 고객명 셀(깨끗) 우선, 툴팁은 폴백
 
       // 상세메뉴: title 속성 우선
       let service = '';

@@ -34,7 +34,13 @@ COLS = {
     "price": ["결제액", "판매가", "결제금액", "금액"],
     "staff": ["담당", "담당자"],
     "custno": ["고객번호", "회원번호"],
+    "memo": ["메모", "비고", "특이사항"],
 }
+
+
+def _clean_name(v: str) -> str:
+    """핸드SOS 고객명 칸에 툴팁이 섞여 들어온 경우 정제 ('배상웅*전화 번호:..' → '배상웅')."""
+    return re.split(r"[*]|전화\s*번호|고객\s*번호", (v or "").strip(), 1)[0].strip()
 
 
 def _norm(s: str) -> str:
@@ -97,6 +103,7 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
         raise ValueError(f"필수 컬럼(고객명/날짜) 인식 실패. 헤더: {rows[0]}")
 
     out: list[dict] = []
+    last_date = ""
     for r in rows[1:]:
         def cell(f: str) -> str:
             i = cmap.get(f)
@@ -104,13 +111,24 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
 
         if staff and cmap.get("staff") is not None and staff not in cell("staff"):
             continue
-        name, d = cell("name"), _date(cell("date"))
+        name = _clean_name(cell("name"))
+        d = _date(cell("date"))
+        if d:
+            last_date = d
+        elif name:                     # 연속행(같은 방문 추가 시술): 직전 방문 날짜 이어받기
+            d = last_date
         if not name or not d:
             continue
         rec = {"date": d, "name": name, "service": _service(cell("service"))}
         ph = cell("phone")
         if ph:
             rec["phone"] = ph
+        cn = re.sub(r"\D", "", cell("custno")).lstrip("0")
+        if cn:
+            rec["custno"] = cn
+        me = cell("memo")
+        if me:
+            rec["memo"] = me
         p = _price(cell("price"))
         if p is not None:
             rec["price"] = p
@@ -125,27 +143,44 @@ def _cid(name: str, phone: str) -> str:
 
 
 def build_customers(rows: list[dict]) -> list[dict]:
-    """거래 행 → 고객 마스터(이름+전화로 묶음). 방문은 '날짜 distinct' 로 카운트."""
-    groups: dict[tuple, list[dict]] = defaultdict(list)
+    """거래 행 → 고객 마스터. 고객번호 우선으로 묶고(없으면 이름+전화), 방문=distinct 날짜.
+    시술은 날짜별로 합치고, 메모는 그 방문의 notes 로."""
+    groups: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
-        key = (r["name"], re.sub(r"\D", "", r.get("phone", "")))
+        cn = (r.get("custno") or "").strip()
+        ph = re.sub(r"\D", "", r.get("phone", ""))
+        key = ("no:" + cn) if cn else ("np:" + r["name"] + "|" + ph)
         groups[key].append(r)
 
     customers = []
-    for (name, phone), recs in groups.items():
-        by_date: dict[str, list[str]] = defaultdict(list)
+    for recs in groups.values():
+        name = recs[0]["name"]
+        phone = next((r.get("phone") for r in recs if r.get("phone")), "")
+        custno = next((r.get("custno") for r in recs if r.get("custno")), "")
+        svc: dict[str, list[str]] = defaultdict(list)
+        notes: dict[str, list[str]] = defaultdict(list)
         for r in recs:
             if r.get("service"):
-                by_date[r["date"]].append(r["service"])
-        dates = sorted(by_date)
-        history = [{"date": d, "service": " · ".join(dict.fromkeys(by_date[d]))} for d in dates]
-        cust = {
-            "id": _cid(name, phone),
+                svc[r["date"]].append(r["service"])
+            if r.get("memo"):
+                notes[r["date"]].append(r["memo"])
+        dates = sorted(set(svc) | set(notes))
+        history = []
+        for d in dates:
+            h = {"date": d, "service": " · ".join(dict.fromkeys(svc.get(d, []))) or None}
+            note = " / ".join(dict.fromkeys(notes.get(d, [])))
+            if note:
+                h["notes"] = note
+            history.append(h)
+        cust: dict = {
+            "id": (f"c{custno}" if custno else _cid(name, phone)),
             "name": name,
-            "loyalty_visits": len(dates),       # 방문 = distinct 날짜
+            "loyalty_visits": len(dates),
         }
         if phone:
             cust["contact"] = phone
+        if custno:
+            cust["custno"] = custno
         if dates:
             cust["first_visit"] = dates[0]
         if history:

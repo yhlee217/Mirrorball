@@ -76,3 +76,55 @@ def test_missing_required_raises(tmp_path):
         assert False
     except ValueError:
         pass
+
+
+# ── 실제 핸드SOS 내보내기 형식(고객명 칸에 툴팁 오염, 전화번호·고객번호·메모 별도 칸) ──
+H2 = ["날짜", "고객명", "전화번호", "고객번호", "이전방문", "상세메뉴", "담당", "결제액", "메모"]
+
+
+def test_clean_polluted_name_and_custno_memo(tmp_path):
+    p = tmp_path / "h.csv"
+    _w(p, [H2,
+           ["2026-06-26", "배상웅*전화 번호: 010-2114-7305*고객 번호: 0005120", "010-2114-7305", "0005120",
+            "2026-05-29", "남자컷(부원장)", "하예원", "28000", "손상 신경 씀"]])
+    rows = ih.parse_rows(str(p))
+    r = rows[0]
+    assert r["name"] == "배상웅"           # 툴팁 제거
+    assert r["phone"] == "010-2114-7305"
+    assert r["custno"] == "5120"           # 숫자만
+    assert r["memo"] == "손상 신경 씀"
+
+
+def test_date_carryforward_continuation(tmp_path):
+    p = tmp_path / "h.csv"
+    _w(p, [H2,
+           ["2026-06-26", "배상웅", "010-1", "100", "", "컷", "하예원", "28000", ""],
+           ["", "배상웅", "010-1", "100", "", "염색", "하예원", "60000", ""]])  # 연속행: 날짜 빈칸
+    rows = ih.parse_rows(str(p))
+    assert len(rows) == 2 and rows[1]["date"] == "2026-06-26"   # 직전 날짜 이어받음
+
+
+def test_custno_grouping_and_memo_notes(tmp_path):
+    p = tmp_path / "h.csv"
+    _w(p, [H2,
+           ["2026-01-02", "조희진", "010-9", "0002767", "", "뿌리염색", "하예원", "30000", "수다 좋아함"],
+           ["2026-06-26", "조희진", "010-9", "0002767", "", "모발클리닉", "하예원", "80000", "임신 중"]])
+    custs = ih.build_customers(ih.parse_rows(str(p)))
+    assert len(custs) == 1                          # 고객번호로 한 명
+    c = custs[0]
+    assert c["id"] == "c2767" and c["loyalty_visits"] == 2 and c["custno"] == "2767"
+    notes = [h.get("notes") for h in c["history"]]
+    assert "임신 중" in notes and "수다 좋아함" in notes   # 메모 → 방문 노트
+
+
+def test_build_app_redacts_phone_in_notes(tmp_path):
+    import build_app
+    cdir = tmp_path / "clients" / "demo"
+    (cdir / "customers").mkdir(parents=True)
+    (cdir / "config.yaml").write_text("slug: demo\ntoday: 2026-06-23\n", encoding="utf-8")
+    (cdir / "customers" / "x.yaml").write_text(
+        "id: x\nname: 김\nhistory:\n  - date: 2026-06-01\n    service: 컷\n    notes: '연락 010-1234-5678 로'\n",
+        encoding="utf-8")
+    build_app.build_one(str(cdir), dist=str(tmp_path / "out"))
+    blob = (tmp_path / "out" / "demo.json").read_text(encoding="utf-8")
+    assert "010-1234-5678" not in blob and "[연락처]" in blob   # 메모 속 번호 마스킹

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import glob
 import json
+import re
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -32,6 +33,20 @@ import relations
 
 def _load(path: str) -> dict:
     return yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+
+
+# 전화번호 PII 안전망 — 메모/노트 등 자유입력에 섞인 번호를 앱 데이터에서 일괄 마스킹.
+_PHONE_RE = re.compile(r"01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}")
+
+
+def _redact_pii(obj):
+    if isinstance(obj, str):
+        return _PHONE_RE.sub("[연락처]", obj)
+    if isinstance(obj, list):
+        return [_redact_pii(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _redact_pii(v) for k, v in obj.items()}
+    return obj
 
 
 def _parse_date(v) -> date | None:
@@ -233,6 +248,7 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
 
     out = Path(dist) / f"{slug}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
+    data = _redact_pii(data)   # 메모 등 자유입력에 섞인 전화번호 최종 마스킹(PII 안전망)
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return {"slug": slug, "out": str(out), "care": len(care_list),
             "clients": len(customers)}
