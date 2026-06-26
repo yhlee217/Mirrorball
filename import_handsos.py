@@ -43,6 +43,27 @@ def _clean_name(v: str) -> str:
     return re.split(r"[*]|전화\s*번호|고객\s*번호", (v or "").strip(), 1)[0].strip()
 
 
+# 메모에서 네이버 예약 자동문구·메뉴/가격 줄 제거 → 사람 특징 메모만 남김
+_MEMO_BOILER = [
+    re.compile(r"네이버\s*예약건"), re.compile(r"잔여금[^!]*현장결제할게요!?"),
+    re.compile(r"N-?Pay로\s*현장결제할게요!?"), re.compile(r"미결제금액\s*[:：]\s*[\d,]+원?"),
+    re.compile(r"\[네이버담당자[^\]]*\]"), re.compile(r"Pay\s*구분\s*[:：]\s*\S+"),
+    re.compile(r"현장결제할게요!?"), re.compile(r"예약시술메뉴\s*[:：]"),
+    re.compile(r"모발 클리닉 서비스 사용 완료"),
+]
+_MEMO_MENU = re.compile(r"[가-힣A-Za-z0-9()+_.&\s]*[:：]\s*[\d,\s]+\s*원")
+
+
+def _clean_memo(m: str) -> str:
+    m = m or ""
+    for r in _MEMO_BOILER:
+        m = r.sub(" ", m)
+    m = _MEMO_MENU.sub(" ", m)
+    m = re.sub(r"요청사항\s*[:：]", " ", m)        # 마커 제거, 내용은 유지
+    m = re.sub(r"\s+", " ", m).strip(" -·:/()")
+    return m if len(m) >= 2 else ""
+
+
 def _norm(s: str) -> str:
     return re.sub(r"\s+", "", (s or "")).lower()
 
@@ -126,7 +147,7 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
         cn = re.sub(r"\D", "", cell("custno")).lstrip("0")
         if cn:
             rec["custno"] = cn
-        me = cell("memo")
+        me = _clean_memo(cell("memo"))      # 보일러플레이트·메뉴/가격 제거
         if me:
             rec["memo"] = me
         p = _price(cell("price"))
