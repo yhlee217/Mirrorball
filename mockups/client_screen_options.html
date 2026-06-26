@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>고객 화면 개선안 5</title>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F1EC; --paper:#FCFAF6; --ink:#2A2622; --muted:#8C8479; --line:#E6DFD4;
+    --accent:#6E5B47; --accent-d:#4E4031; --soft:#EFE9DF; --sage:#5C7A57; --sage-bg:#EAF0E6;
+    --gold:#9A7B33; --gold-bg:#F4ECD8; --rose:#B0574A; --rose-bg:#F3E6E2;
+    --serif:'Cormorant Garamond',serif; --sans:'Pretendard',-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);padding:28px 18px 60px;-webkit-font-smoothing:antialiased;}
+  .head{text-align:center;max-width:900px;margin:0 auto 26px;}
+  .head .e{font-family:var(--serif);font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);font-weight:600;}
+  .head h1{font-family:var(--serif);font-size:30px;font-weight:600;margin:6px 0;}
+  .head p{font-size:14px;color:var(--muted);}
+  .grid{display:flex;flex-wrap:wrap;gap:26px;justify-content:center;align-items:flex-start;}
+  .opt{flex:0 0 320px;}
+  .opt .cap{margin-bottom:10px;}
+  .opt .cap .t{font-size:16px;font-weight:800;color:var(--accent-d);}
+  .opt .cap .t b{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;background:var(--accent);color:#fff;border-radius:50%;font-size:12px;margin-right:7px;}
+  .opt .cap .d{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.5;}
+  .opt .cap .why{font-size:11.5px;color:var(--sage);font-weight:700;margin-top:4px;}
+  .phone{background:var(--paper);border:1px solid var(--line);border-radius:26px;box-shadow:0 12px 30px rgba(42,38,34,.10);overflow:hidden;}
+  .bar{padding:14px 16px 11px;border-bottom:1px solid var(--line);font-weight:800;font-size:16px;}
+  .body{padding:13px 14px 16px;min-height:430px;}
+  .search{display:flex;gap:7px;margin-bottom:11px;}
+  .search input{flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:#fff;color:var(--muted);}
+  .search .sort{border:1px solid var(--line);border-radius:9px;padding:0 9px;font-size:11.5px;color:var(--accent-d);display:flex;align-items:center;background:#fff;}
+  .cnt{font-size:11px;color:var(--muted);margin:0 2px 8px;font-family:var(--serif);letter-spacing:.5px;}
+  .av{width:38px;height:38px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent);flex-shrink:0;font-size:15px;}
+  .chip{font-size:10.5px;font-weight:700;border-radius:20px;padding:2px 8px;background:var(--soft);color:var(--accent-d);display:inline-block;}
+  .chip.warn{background:var(--rose-bg);color:var(--rose);} .chip.ok{background:var(--sage-bg);color:var(--sage);} .chip.gold{background:var(--gold-bg);color:var(--gold);}
+
+  /* 공통 카드 */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:13px;overflow:hidden;}
+
+  /* 옵션1 — 정보 위계 */
+  .o1 .li{display:flex;gap:11px;padding:13px 14px;border-bottom:1px solid var(--line);align-items:center;}
+  .o1 .li:last-child{border-bottom:none;}
+  .o1 .nm{font-weight:700;font-size:15px;}
+  .o1 .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+  .o1 .tags{margin-top:6px;display:flex;gap:5px;}
+  .o1 .rt{margin-left:auto;text-align:right;}
+  .o1 .vn{font-weight:800;font-size:14px;color:var(--accent-d);} .o1 .vl{font-size:10px;color:var(--muted);}
+
+  /* 옵션2 — 상태 신호 */
+  .o2 .li{display:flex;gap:11px;padding:12px 14px;border-bottom:1px solid var(--line);align-items:center;}
+  .o2 .li:last-child{border-bottom:none;}
+  .o2 .av{position:relative;}
+  .o2 .ring-gold{box-shadow:0 0 0 2px var(--gold);} .o2 .ring-sage{box-shadow:0 0 0 2px var(--sage);} .o2 .ring-gray{box-shadow:0 0 0 2px var(--line);}
+  .o2 .nm{font-weight:700;font-size:14.5px;}
+  .o2 .sub{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .o2 .rt{margin-left:auto;text-align:right;font-size:11px;}
+  .o2 .due{color:var(--rose);font-weight:800;} .o2 .recent{color:var(--muted);} .o2 .new{color:var(--sage);font-weight:800;}
+
+  /* 옵션3 — 특징 카드 */
+  .o3 .cc{border:1px solid var(--line);border-radius:13px;padding:12px 13px;margin-bottom:10px;background:var(--paper);}
+  .o3 .cc:last-child{margin-bottom:0;}
+  .o3 .hd{display:flex;gap:9px;align-items:center;}
+  .o3 .nm{font-weight:800;font-size:15px;}
+  .o3 .meta{font-size:11px;color:var(--muted);margin-left:auto;}
+  .o3 .feat{font-size:12.5px;color:var(--ink);line-height:1.5;margin:8px 0 8px;background:#F2ECE1;border-radius:9px;padding:8px 10px;}
+  .o3 .tags{display:flex;gap:5px;flex-wrap:wrap;}
+
+  /* 옵션4 — 섹션 + 인덱스 */
+  .o4{display:flex;}
+  .o4 .list{flex:1;}
+  .o4 .sec{font-size:11px;font-weight:800;color:var(--accent);background:var(--soft);padding:5px 12px;letter-spacing:.5px;position:sticky;top:0;}
+  .o4 .li{display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);align-items:center;}
+  .o4 .av{width:32px;height:32px;font-size:13px;}
+  .o4 .nm{font-weight:700;font-size:14px;}
+  .o4 .sub{font-size:11px;color:var(--muted);}
+  .o4 .rt{margin-left:auto;font-size:11px;color:var(--muted);}
+  .o4 .idx{flex:0 0 20px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:0 2px;}
+  .o4 .idx span{font-size:10px;color:var(--accent);text-align:center;font-weight:700;}
+  .o4 .idx span.on{color:var(--accent-d);}
+
+  /* 옵션5 — 2단 밀도 그리드 */
+  .o5 .gr{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .o5 .g{border:1px solid var(--line);border-radius:11px;padding:11px 10px;text-align:center;background:var(--paper);}
+  .o5 .av{margin:0 auto 7px;width:42px;height:42px;font-size:16px;}
+  .o5 .nm{font-weight:700;font-size:13.5px;}
+  .o5 .sub{font-size:10.5px;color:var(--muted);margin-top:2px;}
+  .o5 .tag{margin-top:6px;}
+  .o5 .star{color:var(--gold);font-size:10px;}
+</style>
+</head>
+<body>
+<div class="head">
+  <div class="e">For the Designer · 고객 화면</div>
+  <h1>고객 목록 개선안 5</h1>
+  <p>같은 데이터(395명 중 단골 위주)를 5가지 방식으로. 마음에 드는 번호(혼합 가능)를 골라주세요.</p>
+</div>
+
+<div class="grid">
+
+  <!-- 옵션 1 -->
+  <div class="opt">
+    <div class="cap"><div class="t"><b>1</b>정보 위계 정리</div>
+      <div class="d">이름을 키우고 부가정보는 흐리게, 방문수는 우측 배지. 태그 2개까지.</div>
+      <div class="why">✓ 가장 안전한 기본 개선 · 한 줄에 핵심만</div></div>
+    <div class="phone"><div class="bar">고객</div><div class="body">
+      <div class="search"><input value="이름·고객번호·태그 검색"><div class="sort">방문순 ▾</div></div>
+      <div class="cnt">전체 395명</div>
+      <div class="card o1">
+        <div class="li"><div class="av">조</div><div><div class="nm">조희진 님</div><div class="sub">모발클리닉 · 최근 6/26</div><div class="tags"><span class="chip">손상민감</span><span class="chip">드라이선호</span></div></div><div class="rt"><div class="vn">24회</div><div class="vl">★ 단골</div></div></div>
+        <div class="li"><div class="av">송</div><div><div class="nm">송주영 님</div><div class="sub">여자컷 · 최근 6/18</div><div class="tags"><span class="chip">가족동반</span></div></div><div class="rt"><div class="vn">13회</div><div class="vl">★ 단골</div></div></div>
+        <div class="li"><div class="av">오</div><div><div class="nm">오문석 님</div><div class="sub">다운펌 · 최근 6/12</div><div class="tags"><span class="chip">다운펌강하게</span></div></div><div class="rt"><div class="vn">10회</div><div class="vl">★ 단골</div></div></div>
+        <div class="li"><div class="av">박</div><div><div class="nm">박서연 님</div><div class="sub">발레아주 · 최근 6/24</div><div class="tags"><span class="chip">밝은톤</span></div></div><div class="rt"><div class="vn">1회</div><div class="vl">신규</div></div></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- 옵션 2 -->
+  <div class="opt">
+    <div class="cap"><div class="t"><b>2</b>상태 신호 (한눈에 챙길 사람)</div>
+      <div class="d">아바타 테두리 색=등급(단골·신규), 우측에 "재방문 임박/N일 전". 챙길 사람부터 눈에.</div>
+      <div class="why">✓ 스캔용 · 누구를 먼저 챙길지 즉시 파악</div></div>
+    <div class="phone"><div class="bar">고객</div><div class="body">
+      <div class="search"><input value="검색"><div class="sort">최근순 ▾</div></div>
+      <div class="cnt">전체 395명 · 재방문 임박 3</div>
+      <div class="card o2">
+        <div class="li"><div class="av ring-gold">조</div><div><div class="nm">조희진 님 <span class="chip gold">단골</span></div><div class="sub">모발클리닉 · 24회</div></div><div class="rt"><div class="due">재방문 임박</div><div class="recent">28일 전</div></div></div>
+        <div class="li"><div class="av ring-gold">오</div><div><div class="nm">오문석 님 <span class="chip gold">단골</span></div><div class="sub">다운펌 · 10회</div></div><div class="rt"><div class="recent">14일 전</div></div></div>
+        <div class="li"><div class="av ring-sage">박</div><div><div class="nm">박서연 님 <span class="chip ok">신규</span></div><div class="sub">발레아주 · 1회</div></div><div class="rt"><div class="new">첫방문 케어</div><div class="recent">2일 전</div></div></div>
+        <div class="li"><div class="av ring-gray">이</div><div><div class="nm">이부창 님</div><div class="sub">남자컷 · 8회</div></div><div class="rt"><div class="due">재방문 임박</div><div class="recent">31일 전</div></div></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- 옵션 3 -->
+  <div class="opt">
+    <div class="cap"><div class="t"><b>3</b>특징 카드 (사람 기억)</div>
+      <div class="d">분석된 '특징 한 줄'을 크게. 이름 보면 어떤 사람인지 바로 떠오름.</div>
+      <div class="why">✓ 메모 분석 결과를 가장 잘 살림 · 응대 준비</div></div>
+    <div class="phone"><div class="bar">고객</div><div class="body">
+      <div class="search"><input value="검색"><div class="sort">방문순 ▾</div></div>
+      <div class="cnt">전체 395명</div>
+      <div class="o3">
+        <div class="cc"><div class="hd"><div class="av">조</div><div class="nm">조희진 님</div><div class="meta">24회 · 6/26</div></div><div class="feat">모발 손상에 매우 민감, 드라이 선호. 두피 안 좋아 다운펌 4주 주기 권유.</div><div class="tags"><span class="chip warn">손상민감</span><span class="chip">드라이선호</span><span class="chip">4주주기</span></div></div>
+        <div class="cc"><div class="hd"><div class="av">김</div><div class="nm">김혜지 님</div><div class="meta">9회 · 6/20</div></div><div class="feat">두피 빨개진 경험으로 두피 민감, 탈모·머릿결 고민. 상담 적극적.</div><div class="tags"><span class="chip warn">두피민감</span><span class="chip warn">탈모고민</span></div></div>
+        <div class="cc"><div class="hd"><div class="av">오</div><div class="nm">오문석 님</div><div class="meta">10회 · 6/12</div></div><div class="feat">다운펌을 더 강하게 눌러주길 원함 → 다음엔 강도 ↑.</div><div class="tags"><span class="chip">다운펌강하게</span></div></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- 옵션 4 -->
+  <div class="opt">
+    <div class="cap"><div class="t"><b>4</b>그룹 + 점프 인덱스</div>
+      <div class="d">단골/일반/신규(또는 ㄱㄴㄷ)로 묶고, 우측 인덱스로 빠르게 점프. 395명에 강함.</div>
+      <div class="why">✓ 많은 고객을 빠르게 탐색</div></div>
+    <div class="phone"><div class="bar">고객</div><div class="body" style="padding:13px 6px 16px 14px;">
+      <div class="search" style="margin-right:8px;"><input value="검색"><div class="sort">그룹 ▾</div></div>
+      <div class="o4">
+        <div class="list card" style="overflow:hidden;">
+          <div class="sec">★ 단골 (87)</div>
+          <div class="li"><div class="av">조</div><div><div class="nm">조희진</div><div class="sub">모발클리닉 · 24회</div></div><div class="rt">6/26</div></div>
+          <div class="li"><div class="av">송</div><div><div class="nm">송주영</div><div class="sub">여자컷 · 13회</div></div><div class="rt">6/18</div></div>
+          <div class="sec">일반 (274)</div>
+          <div class="li"><div class="av">이</div><div><div class="nm">이부창</div><div class="sub">남자컷 · 8회</div></div><div class="rt">5/30</div></div>
+          <div class="sec">신규 (34)</div>
+          <div class="li"><div class="av">박</div><div><div class="nm">박서연</div><div class="sub">발레아주 · 1회</div></div><div class="rt">6/24</div></div>
+        </div>
+        <div class="idx"><span class="on">★</span><span>ㄱ</span><span>ㄴ</span><span class="on">ㅂ</span><span>ㅅ</span><span>ㅇ</span><span>ㅈ</span><span>ㅎ</span></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- 옵션 5 -->
+  <div class="opt">
+    <div class="cap"><div class="t"><b>5</b>2단 밀도 그리드</div>
+      <div class="d">2열 카드로 한 화면에 더 많이. 빠르게 훑고 탭해서 열기.</div>
+      <div class="why">✓ 한눈에 많이 · 스크롤 최소</div></div>
+    <div class="phone"><div class="bar">고객</div><div class="body">
+      <div class="search"><input value="검색"><div class="sort">방문순 ▾</div></div>
+      <div class="cnt">전체 395명</div>
+      <div class="o5"><div class="gr">
+        <div class="g"><div class="av">조</div><div class="nm">조희진 <span class="star">★</span></div><div class="sub">24회 · 클리닉</div><div class="tag"><span class="chip warn">손상민감</span></div></div>
+        <div class="g"><div class="av">송</div><div class="nm">송주영 <span class="star">★</span></div><div class="sub">13회 · 컷</div><div class="tag"><span class="chip">가족동반</span></div></div>
+        <div class="g"><div class="av">오</div><div class="nm">오문석 <span class="star">★</span></div><div class="sub">10회 · 다운펌</div><div class="tag"><span class="chip">강하게</span></div></div>
+        <div class="g"><div class="av">김</div><div class="nm">김혜지 <span class="star">★</span></div><div class="sub">9회 · 염색</div><div class="tag"><span class="chip warn">두피민감</span></div></div>
+        <div class="g"><div class="av">이</div><div class="nm">이부창</div><div class="sub">8회 · 컷</div></div>
+        <div class="g"><div class="av">박</div><div class="nm">박서연</div><div class="sub">1회 · 발레아주</div><div class="tag"><span class="chip ok">신규</span></div></div>
+      </div></div>
+    </div></div>
+  </div>
+
+</div>
+</body>
+</html>
