@@ -153,6 +153,26 @@
   .qtag.on{background:var(--accent);color:#fff;border-color:var(--accent);}
   .qtag:active{transform:scale(.96);}
 
+  /* 고객 뷰 전환 */
+  .vsw{display:flex;gap:5px;margin-bottom:9px;background:var(--soft);border-radius:11px;padding:3px;}
+  .vsw button{flex:1;border:none;background:none;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--muted);
+    padding:7px 0;border-radius:8px;cursor:pointer;}
+  .vsw button.on{background:var(--paper);color:var(--accent-d);box-shadow:0 1px 3px rgba(42,38,34,.1);}
+  /* 뷰: 특징 카드 */
+  .cv-feat{font-size:12.5px;color:var(--ink);line-height:1.5;background:#F2ECE1;border-radius:9px;padding:8px 10px;margin:7px 0;}
+  /* 뷰: 그룹 섹션 */
+  .cv-sec{font-size:11px;font-weight:800;color:var(--accent);background:var(--soft);padding:6px 13px;letter-spacing:.5px;}
+  /* 뷰: 격자 */
+  .cv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .cv-g{border:1px solid var(--line);border-radius:12px;padding:12px 10px;text-align:center;cursor:pointer;}
+  .cv-g .av{margin:0 auto 7px;}
+  .cv-g .gn{font-weight:700;font-size:13.5px;}
+  .cv-g .gs{font-size:10.5px;color:var(--muted);margin-top:2px;}
+  /* 아바타 등급 링 + 상태색 */
+  .av.r-gold{box-shadow:0 0 0 2px var(--gold);} .av.r-sage{box-shadow:0 0 0 2px var(--sage);}
+  .st-due{color:var(--rose);font-weight:800;font-size:11px;} .st-new{color:var(--sage);font-weight:800;font-size:11px;}
+  .st-rec{color:var(--muted);font-size:11px;}
+
   /* tabbar */
   .tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;background:var(--paper);
     border-top:1px solid var(--line);padding-bottom:var(--safe-bot);z-index:3;}
@@ -217,6 +237,13 @@
         <button class="btn ghost" id="exportBtn" style="flex:1;">내보내기</button>
         <button class="btn ghost" id="importBtn" style="flex:1;">가져오기</button>
         <input type="file" id="importFile" accept="application/json" style="display:none;">
+      </div>
+      <div class="vsw" id="clientViews">
+        <button data-view="list" class="on">목록</button>
+        <button data-view="signal">신호</button>
+        <button data-view="trait">특징</button>
+        <button data-view="grouped">그룹</button>
+        <button data-view="grid">격자</button>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:11px;">
         <input id="clientSearch" type="search" placeholder="이름·고객번호·태그·특징 검색"
@@ -374,35 +401,92 @@
     }).join('');
   }
 
-  // ── render: clients ──
+  // ── render: clients (5뷰 전환) ──
   var clientQuery='', clientSortKey='visits';
+  var clientView=(function(){try{return localStorage.getItem('crm_view')||'list';}catch(e){return 'list';}})();
+  function cdays(c){ if(!c.last_visit) return null; var d=parseD(c.last_visit); return d?Math.round((new Date()-d)/86400000):null; }
+  function ctier(c){ var v=c.loyalty_visits||0; return v>=4?'단골':(v<=1?'신규':'일반'); }
+  function csvc(c){ return (c.history&&c.history[0]&&c.history[0].service)||(c.booking&&c.booking.service)||''; }
+
+  var VIEWS={
+    // 1. 목록 — 정보 위계
+    list:function(cl){ return '<div class="card">'+cl.map(function(c){
+      var v=c.loyalty_visits||0, rt=v>=4?'★ 단골':(v+'회');
+      var tags=(c.prefer||[]).slice(0,2).map(function(t){return '<span class="pill" style="font-size:10.5px;padding:2px 8px">'+esc(t)+'</span>';}).join(' ');
+      var dd=cdays(c);
+      return '<div class="li" data-client="'+esc(c.id)+'" style="align-items:flex-start"><div class="av">'+av(c.name)+'</div>'+
+        '<div class="bd"><div class="nm">'+esc(c.name)+' 님</div><div class="sub">'+esc(csvc(c))+(dd!=null?' · '+dd+'일 전':'')+'</div>'+
+        (tags?'<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap">'+tags+'</div>':'')+'</div>'+
+        '<div class="rt"><div style="font-weight:800;color:var(--accent-d)">'+v+'회</div><div style="font-size:10px;color:var(--muted)">'+(v>=4?'★ 단골':(v<=1?'신규':''))+'</div></div></div>';
+    }).join('')+'</div>'; },
+
+    // 2. 신호 — 등급 링 + 재방문/최근
+    signal:function(cl){ return '<div class="card">'+cl.map(function(c){
+      var t=ctier(c), ring=t==='단골'?' r-gold':(t==='신규'?' r-sage':'');
+      var badge=t==='단골'?'<span class="tag t-season" style="background:var(--gold-bg,#F4ECD8);color:var(--gold)">단골</span>':(t==='신규'?'<span class="tag t-revisit">신규</span>':'');
+      var dd=cdays(c), cyc=c.care_cycle_days;
+      var right;
+      if(t==='신규') right='<div class="st-new">첫방문 케어</div>';
+      else if(cyc&&dd!=null&&dd>=cyc-7) right='<div class="st-due">재방문 임박</div>';
+      else right='';
+      right+= dd!=null? '<div class="st-rec">'+dd+'일 전</div>':'';
+      return '<div class="li" data-client="'+esc(c.id)+'"><div class="av'+ring+'">'+av(c.name)+'</div>'+
+        '<div class="bd"><div class="nm">'+esc(c.name)+' 님 '+badge+'</div><div class="sub">'+esc(csvc(c))+' · '+(c.loyalty_visits||0)+'회</div></div>'+
+        '<div class="rt">'+right+'</div></div>';
+    }).join('')+'</div>'; },
+
+    // 3. 특징 — 분석된 한 줄 강조
+    trait:function(cl){ return cl.map(function(c){
+      var tags=(c.prefer||[]).slice(0,4).map(function(t){return '<span class="pill" style="font-size:10.5px;padding:2px 8px">'+esc(t)+'</span>';}).join(' ');
+      var feat=c.memo?'<div class="cv-feat">'+esc(c.memo)+'</div>':'';
+      return '<div class="card" data-client="'+esc(c.id)+'" style="padding:12px 13px;margin-bottom:10px;cursor:pointer">'+
+        '<div style="display:flex;align-items:center;gap:9px"><div class="av">'+av(c.name)+'</div><div class="nm" style="font-weight:800">'+esc(c.name)+' 님</div>'+
+        '<div style="margin-left:auto;font-size:11px;color:var(--muted)">'+(c.loyalty_visits||0)+'회</div></div>'+
+        feat+(tags?'<div style="display:flex;gap:5px;flex-wrap:wrap">'+tags+'</div>':'')+'</div>';
+    }).join(''); },
+
+    // 4. 그룹 — 단골/일반/신규 섹션
+    grouped:function(cl){
+      var g={단골:[],일반:[],신규:[]}; cl.forEach(function(c){ g[ctier(c)].push(c); });
+      var out='<div class="card" style="overflow:hidden">';
+      ['단골','일반','신규'].forEach(function(k){
+        if(!g[k].length) return;
+        out+='<div class="cv-sec">'+(k==='단골'?'★ ':'')+k+' ('+g[k].length+')</div>';
+        out+=g[k].map(function(c){ var dd=cdays(c);
+          return '<div class="li" data-client="'+esc(c.id)+'"><div class="av" style="width:32px;height:32px;font-size:13px">'+av(c.name)+'</div>'+
+            '<div class="bd"><div class="nm" style="font-size:14px">'+esc(c.name)+'</div><div class="sub">'+esc(csvc(c))+' · '+(c.loyalty_visits||0)+'회</div></div>'+
+            '<div class="rt" style="font-size:11px;color:var(--muted)">'+(dd!=null?dd+'일 전':'')+'</div></div>';
+        }).join('');
+      });
+      return out+'</div>';
+    },
+
+    // 5. 격자 — 2단 밀도
+    grid:function(cl){ return '<div class="cv-grid">'+cl.map(function(c){
+      var v=c.loyalty_visits||0, star=v>=4?' <span style="color:var(--gold);font-size:10px">★</span>':'';
+      var tag=(c.prefer&&c.prefer[0])?'<div style="margin-top:6px"><span class="pill" style="font-size:10px;padding:2px 7px">'+esc(c.prefer[0])+'</span></div>':'';
+      return '<div class="cv-g" data-client="'+esc(c.id)+'"><div class="av">'+av(c.name)+'</div><div class="gn">'+esc(c.name)+star+'</div><div class="gs">'+v+'회 · '+esc(csvc(c)||'')+'</div>'+tag+'</div>';
+    }).join('')+'</div>'; },
+  };
+
   function renderClients(){
     var box=document.getElementById('clientList');
     var all=DATA?(DATA.clients||[]):[];
-    if(!all.length){ box.innerHTML=empty('👥','아직 등록된 고객이 없어요','단골 고객 정보를 정리해 드리면\n예약·생일·취향을 자동으로 챙겨드려요'); var cc0=document.getElementById('clientCount'); if(cc0)cc0.textContent=''; return; }
-    // 검색: 이름·고객번호·태그·특징(메모)
+    var cc=document.getElementById('clientCount');
+    if(!all.length){ box.innerHTML=empty('👥','아직 등록된 고객이 없어요','단골 고객 정보를 정리해 드리면\n예약·생일·취향을 자동으로 챙겨드려요'); if(cc)cc.textContent=''; return; }
     var q=clientQuery.trim().toLowerCase();
     var cl=q? all.filter(function(c){
-      return (c.name||'').toLowerCase().indexOf(q)>=0
-        || String(c.custno||'').indexOf(q)>=0
-        || (c.prefer||[]).join(' ').toLowerCase().indexOf(q)>=0
-        || (c.memo||'').toLowerCase().indexOf(q)>=0;
+      return (c.name||'').toLowerCase().indexOf(q)>=0 || String(c.custno||'').indexOf(q)>=0
+        || (c.prefer||[]).join(' ').toLowerCase().indexOf(q)>=0 || (c.memo||'').toLowerCase().indexOf(q)>=0;
     }) : all.slice();
-    // 정렬
     cl.sort(function(a,b){
       if(clientSortKey==='name') return (a.name||'').localeCompare(b.name||'','ko');
       if(clientSortKey==='recent') return (b.last_visit||'').localeCompare(a.last_visit||'');
       return (b.loyalty_visits||0)-(a.loyalty_visits||0);
     });
-    var cc=document.getElementById('clientCount');
     if(cc) cc.textContent=q? (cl.length+'명 검색됨 / 전체 '+all.length) : ('전체 '+all.length+'명');
     if(!cl.length){ box.innerHTML=empty('🔎','검색 결과가 없어요','다른 이름·태그로 찾아보세요'); return; }
-    box.innerHTML='<div class="card">'+cl.map(function(c){
-      var v=c.loyalty_visits||0, rt=v>=4?'★ 단골':(v+'회');
-      var svc=(c.history&&c.history[0]&&c.history[0].service)||(c.booking&&c.booking.service)||'';
-      var tag=(c.prefer&&c.prefer[0])?' · '+esc(c.prefer[0]):'';
-      return '<div class="li" data-client="'+esc(c.id)+'"><div class="av">'+av(c.name)+'</div><div class="bd"><div class="nm">'+esc(c.name)+' 님</div><div class="sub">'+esc(svc)+(svc?' · ':'')+v+'회'+tag+'</div></div><div class="rt">'+rt+'</div></div>';
-    }).join('')+'</div>';
+    box.innerHTML=(VIEWS[clientView]||VIEWS.list)(cl);
   }
 
   // 관계(가족·친구·소개) 행 — 칩 탭하면 그 고객 카르테로 이동
@@ -668,6 +752,18 @@
   document.getElementById('importFile').addEventListener('change', function(e){ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
   document.getElementById('clientSearch').addEventListener('input', function(e){ clientQuery=e.target.value; renderClients(); });
   document.getElementById('clientSort').addEventListener('change', function(e){ clientSortKey=e.target.value; renderClients(); });
+  (function(){
+    var sw=document.getElementById('clientViews');
+    function paint(){ [].forEach.call(sw.querySelectorAll('[data-view]'), function(b){
+      b.classList.toggle('on', b.getAttribute('data-view')===clientView); }); }
+    paint();
+    sw.addEventListener('click', function(e){
+      var b=e.target.closest('[data-view]'); if(!b) return;
+      clientView=b.getAttribute('data-view');
+      try{ localStorage.setItem('crm_view', clientView); }catch(err){}
+      paint(); renderClients();
+    });
+  })();
 
   // ── 부팅: 빌드 시드 또는 PREVIEW_DATA → 최초 1회 로컬에 적재, 이후 로컬 우선 ──
   // preview=true(미리보기 파일): 로컬 무시하고 번들 데이터를 항상 보여줌(이전 미리보기 잔여 데이터 방지)
