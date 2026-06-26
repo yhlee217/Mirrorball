@@ -639,17 +639,18 @@
   document.getElementById('importFile').addEventListener('change', function(e){ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
 
   // ── 부팅: 빌드 시드 또는 PREVIEW_DATA → 최초 1회 로컬에 적재, 이후 로컬 우선 ──
-  function boot(base){
+  // preview=true(미리보기 파일): 로컬 무시하고 번들 데이터를 항상 보여줌(이전 미리보기 잔여 데이터 방지)
+  function boot(base, preview){
     META.today=todayStr();
     if(base){ META.designer=base.designer||''; META.salon=base.salon||''; META.exposure=base.exposure||null; META.stats=base.stats||null;
       if(base.config){ CONFIG = base.config; } }     // 업종 카피 단일 소스 주입
-    var local=lsLoad();
+    var local=preview?null:lsLoad();
     CUSTS = (local!=null)? local : ((base&&base.seed)? base.seed.slice() : []);
-    if(local==null) lsSave();
+    if(!preview && local==null) lsSave();
     refresh();
   }
   (function start(){
-    if(typeof PREVIEW_DATA!=='undefined'){ boot(PREVIEW_DATA); return; }
+    if(typeof PREVIEW_DATA!=='undefined'){ boot(PREVIEW_DATA, true); return; }
     var slug=new URLSearchParams(location.search).get('d');
     if(!slug){ boot(null); return; }
     fetch('./data/'+encodeURIComponent(slug)+'.json',{cache:'no-store'})
