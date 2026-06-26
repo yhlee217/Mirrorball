@@ -212,12 +212,22 @@
 
     <!-- 고객 목록 -->
     <section class="screen" id="s-clients" data-title="고객">
-      <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <div style="display:flex;gap:8px;margin-bottom:9px;">
         <button class="btn" id="addClientBtn" style="flex:2;">+ 고객 추가</button>
         <button class="btn ghost" id="exportBtn" style="flex:1;">내보내기</button>
         <button class="btn ghost" id="importBtn" style="flex:1;">가져오기</button>
         <input type="file" id="importFile" accept="application/json" style="display:none;">
       </div>
+      <div style="display:flex;gap:8px;margin-bottom:11px;">
+        <input id="clientSearch" type="search" placeholder="이름·고객번호·태그·특징 검색"
+          style="flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:15px;font-family:inherit;background:var(--paper);color:var(--ink);">
+        <select id="clientSort" style="border:1px solid var(--line);border-radius:10px;padding:0 8px;font-size:13px;font-family:inherit;background:var(--paper);color:var(--accent-d);">
+          <option value="visits">방문 많은순</option>
+          <option value="recent">최근 방문순</option>
+          <option value="name">이름순</option>
+        </select>
+      </div>
+      <div class="sec-h" id="clientCount" style="margin:0 2px 8px;"></div>
       <div id="clientList"></div>
     </section>
 
@@ -365,14 +375,33 @@
   }
 
   // ── render: clients ──
+  var clientQuery='', clientSortKey='visits';
   function renderClients(){
     var box=document.getElementById('clientList');
-    var cl=DATA?(DATA.clients||[]):[];
-    if(!cl.length){ box.innerHTML=empty('👥','아직 등록된 고객이 없어요','단골 고객 정보를 정리해 드리면\n예약·생일·취향을 자동으로 챙겨드려요'); return; }
+    var all=DATA?(DATA.clients||[]):[];
+    if(!all.length){ box.innerHTML=empty('👥','아직 등록된 고객이 없어요','단골 고객 정보를 정리해 드리면\n예약·생일·취향을 자동으로 챙겨드려요'); var cc0=document.getElementById('clientCount'); if(cc0)cc0.textContent=''; return; }
+    // 검색: 이름·고객번호·태그·특징(메모)
+    var q=clientQuery.trim().toLowerCase();
+    var cl=q? all.filter(function(c){
+      return (c.name||'').toLowerCase().indexOf(q)>=0
+        || String(c.custno||'').indexOf(q)>=0
+        || (c.prefer||[]).join(' ').toLowerCase().indexOf(q)>=0
+        || (c.memo||'').toLowerCase().indexOf(q)>=0;
+    }) : all.slice();
+    // 정렬
+    cl.sort(function(a,b){
+      if(clientSortKey==='name') return (a.name||'').localeCompare(b.name||'','ko');
+      if(clientSortKey==='recent') return (b.last_visit||'').localeCompare(a.last_visit||'');
+      return (b.loyalty_visits||0)-(a.loyalty_visits||0);
+    });
+    var cc=document.getElementById('clientCount');
+    if(cc) cc.textContent=q? (cl.length+'명 검색됨 / 전체 '+all.length) : ('전체 '+all.length+'명');
+    if(!cl.length){ box.innerHTML=empty('🔎','검색 결과가 없어요','다른 이름·태그로 찾아보세요'); return; }
     box.innerHTML='<div class="card">'+cl.map(function(c){
       var v=c.loyalty_visits||0, rt=v>=4?'★ 단골':(v+'회');
       var svc=(c.history&&c.history[0]&&c.history[0].service)||(c.booking&&c.booking.service)||'';
-      return '<div class="li" data-client="'+esc(c.id)+'"><div class="av">'+av(c.name)+'</div><div class="bd"><div class="nm">'+esc(c.name)+' 님</div><div class="sub">'+esc(svc)+(svc?' · ':'')+v+'회</div></div><div class="rt">'+rt+'</div></div>';
+      var tag=(c.prefer&&c.prefer[0])?' · '+esc(c.prefer[0]):'';
+      return '<div class="li" data-client="'+esc(c.id)+'"><div class="av">'+av(c.name)+'</div><div class="bd"><div class="nm">'+esc(c.name)+' 님</div><div class="sub">'+esc(svc)+(svc?' · ':'')+v+'회'+tag+'</div></div><div class="rt">'+rt+'</div></div>';
     }).join('')+'</div>';
   }
 
@@ -403,7 +432,7 @@
     box.innerHTML=
       '<div class="hello reveal" style="display:flex;align-items:center;gap:13px;margin-bottom:8px">'+
         '<div class="av" style="width:54px;height:54px;font-size:22px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent)">'+av(c.name)+'</div>'+
-        '<div style="flex:1"><h2 style="margin:0;font-size:20px">'+esc(c.name)+' 님</h2><div class="s" style="color:var(--muted);font-size:13px">'+(c.loyalty_visits||0)+'회 방문'+(c.first_visit?(' · 첫 방문 '+esc(c.first_visit)):'')+'</div></div>'+
+        '<div style="flex:1"><h2 style="margin:0;font-size:20px">'+esc(c.name)+' 님'+(c.custno?'<span style="font-size:11px;font-weight:600;color:var(--muted);margin-left:7px">#'+esc(c.custno)+'</span>':'')+'</h2><div class="s" style="color:var(--muted);font-size:13px">'+(c.loyalty_visits||0)+'회 방문'+(c.first_visit?(' · 첫 방문 '+esc(c.first_visit)):'')+'</div></div>'+
         '<button class="btn ghost" data-edit-client="'+esc(c.id)+'" style="flex:0 0 auto;width:auto;padding:8px 14px;">수정</button>'+
       '</div>'+
       (c.booking?'<div class="care reveal"><div class="why" style="margin:0 0 4px">다가오는 예약</div><div style="font-weight:800">'+esc(c.booking.date||'')+' '+esc(c.booking.time||'')+' · '+esc(c.booking.service||'')+'</div></div>':'')+
@@ -527,7 +556,7 @@
     var ts=META.today||todayStr(), t=parseD(ts)||new Date(); var rel=resolveRel(CUSTS);
     var care=[]; CUSTS.forEach(function(c){ alertsFor(c,t).forEach(function(a){ care.push({id:c.id,name:c.name,kind:a.kind,label:a.label,why:a.why,prefer:c.prefer||[],draft:draftFor(a.kind,c,t)}); }); });
     var ord={bday:0,revisit:1}; care.sort(function(a,b){return (ord[a.kind]==null?9:ord[a.kind])-(ord[b.kind]==null?9:ord[b.kind]);});
-    var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}; return {id:c.id,name:c.name,memo:c.memo||'',prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]}; });
+    var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}; return {id:c.id,custno:c.custno||'',name:c.name,memo:c.memo||'',prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]}; });
     DATA={slug:SLUG,designer:META.designer,salon:META.salon,today:ts,exposure:META.exposure,stats:META.stats,bookings:upcoming(CUSTS,ts),care:care,clients:clients};
   }
   function refresh(){ derive(); renderAll(); }
@@ -637,6 +666,8 @@
     var ed=e.target.closest('[data-edit-client]'); if(ed){ editClient(ed.getAttribute('data-edit-client')); return; }
   });
   document.getElementById('importFile').addEventListener('change', function(e){ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
+  document.getElementById('clientSearch').addEventListener('input', function(e){ clientQuery=e.target.value; renderClients(); });
+  document.getElementById('clientSort').addEventListener('change', function(e){ clientSortKey=e.target.value; renderClients(); });
 
   // ── 부팅: 빌드 시드 또는 PREVIEW_DATA → 최초 1회 로컬에 적재, 이후 로컬 우선 ──
   // preview=true(미리보기 파일): 로컬 무시하고 번들 데이터를 항상 보여줌(이전 미리보기 잔여 데이터 방지)

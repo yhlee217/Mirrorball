@@ -121,6 +121,7 @@ def build_customer(cust: dict) -> dict:
     svc = _latest_service(cust)
     return {
         "id": cust.get("id"),
+        "custno": cust.get("custno", ""),     # 핸드SOS 고객번호(PK)
         "name": cust.get("name"),
         "memo": cust.get("memo", ""),
         "prefer": cust.get("prefer", []),
