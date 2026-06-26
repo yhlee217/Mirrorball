@@ -1,100 +1,123 @@
-/* 핸드SOS 매출상세목록 → CSV 자동 다운로드 (설치 0 · 브라우저 콘솔용)  v2: iframe 대응
+/* 핸드SOS 매출상세목록 → CSV (설치 0 · 콘솔용)  v3: iframe + gotoP 페이징 + 상세보기 툴팁 추출
  *
- * 사용:
- *  1) 핸드SOS 웹 로그인 → 매출분석 > 매출상세목록 → 기간 전체 → '검색' → 표가 보이게.
- *  2) F12 → 'Console(콘솔)' 탭.  (컨텍스트 드롭다운은 'top' 그대로 두면 됨 — 이 버전이 iframe 까지 찾음)
- *  3) 이 코드를 통째로 복사해 붙여넣고 Enter.
- *  4) 자동으로 페이지를 넘기며 수집 → handsos_매출상세.csv 다운로드.
- *
- * 표가 cross-origin iframe 이라 접근이 막히면: 콘솔 좌상단 컨텍스트 드롭다운('top ▾')을
- * 핸드SOS 내용 프레임으로 바꾼 뒤 다시 붙여넣어 실행.
+ * 사용: 매출상세목록(기간 전체) 검색 → 표 보이게 → F12 > Console > 이 코드 붙여넣고 Enter.
+ * 결과 handsos_매출상세.csv (날짜·고객명·전화번호전체·고객번호·이전방문·상세메뉴·담당·결제액·메모)
  */
 (async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
-  // top 문서 + 접근 가능한 모든 (중첩) iframe 문서 수집
   const allDocs = () => {
     const out = [document];
     const scan = (d) => {
-      let frames = [];
-      try { frames = [...d.querySelectorAll('iframe,frame')]; } catch (e) { return; }
-      for (const f of frames) {
-        let cd = null;
-        try { cd = f.contentDocument; } catch (e) { cd = null; }
-        if (cd && !out.includes(cd)) { out.push(cd); scan(cd); }
-      }
+      let fs = []; try { fs = [...d.querySelectorAll('iframe,frame')]; } catch (e) { return; }
+      for (const f of fs) { let cd = null; try { cd = f.contentDocument; } catch (e) {} if (cd && !out.includes(cd)) { out.push(cd); scan(cd); } }
     };
-    scan(document);
-    return out;
+    scan(document); return out;
   };
-
-  const findTable = () => {
+  const findCtx = () => {
     for (const d of allDocs()) {
       let t = null;
-      try {
-        t = [...d.querySelectorAll('table')]
-          .find((tb) => /고객명/.test(tb.innerText) && /날짜/.test(tb.innerText));
-      } catch (e) { t = null; }
+      try { t = [...d.querySelectorAll('table')].find((tb) => /고객명/.test(tb.innerText) && /날짜/.test(tb.innerText)); } catch (e) {}
       if (t) return { doc: d, t };
     }
     return null;
   };
 
-  const bodyText = () => allDocs().map((d) => {
-    try { return d.body ? d.body.innerText : ''; } catch (e) { return ''; }
-  }).join('\n');
+  const ctx0 = findCtx();
+  if (!ctx0) { console.warn("'고객명/날짜' 표 못 찾음 — 매출상세목록이 보이는지 확인"); return; }
 
-  const totalCount = (() => {
-    const m = bodyText().match(/총\s*([\d,]+)\s*개/);
-    return m ? parseInt(m[1].replace(/,/g, ''), 10) : 0;
-  })();
+  const bodyText = allDocs().map((d) => { try { return d.body ? d.body.innerText : ''; } catch (e) { return ''; } }).join('\n');
+  const totalN = parseInt(((bodyText.match(/총\s*([\d,]+)\s*개/) || [])[1] || '0').replace(/,/g, ''), 10);
+  const maxPage = totalN ? Math.ceil(totalN / 20) + 3 : 400;
 
-  const clickText = (doc, t) => {
-    let els = [];
-    try { els = [...doc.querySelectorAll('a,button,li,span,div')]; } catch (e) { return false; }
-    const el = els.find((e) => e.textContent.trim() === t && e.offsetParent !== null);
-    if (el) { (el.closest('a,button,li') || el).click(); return true; }
-    return false;
-  };
-
-  const isDataRow = (c) => /\d{2,4}\D\d{1,2}\D\d{1,2}/.test(c[0] || '');
+  // 헤더 → 컬럼 인덱스
+  const hrow = [...ctx0.t.querySelectorAll('tr')].find((r) => /고객명/.test(r.innerText));
+  const heads = hrow ? [...hrow.children].map((c) => norm(c.innerText)) : [];
+  const col = (name) => heads.findIndex((h) => h.includes(name));
+  const HM = { 날짜: col('날짜'), 고객명: col('고객명'), 상세메뉴: col('상세메뉴'), 메뉴: col('메뉴'), 담당: col('담당'), 결제액: col('결제액') };
 
   const seen = new Set();
-  const rows = [];
-  let header = null;
+  const recs = [];
+  let last = { name: '', phone: '', custno: '' };
 
-  for (let p = 1; p <= 400; p++) {
-    const f = findTable();
-    if (!f) {
-      console.warn("'고객명/날짜' 표를 못 찾음 — 매출상세목록이 보이는지 확인. "
-        + "여전히 안 되면 콘솔 컨텍스트 드롭다운을 핸드SOS 프레임으로 바꿔 재실행.");
-      break;
+  const pick = (txt, re) => norm((txt.match(re) || [])[1] || '');
+
+  function harvestPage(t) {
+    for (const tr of [...t.querySelectorAll('tr')]) {
+      if (tr.querySelector('th')) continue;                 // 헤더행
+      const cells = [...tr.children];
+      const cell = (i) => (i >= 0 && i < cells.length) ? norm(cells[i].innerText) : '';
+
+      const dRaw = cell(HM.날짜);
+      const date = (dRaw.match(/\d{2,4}\D\d{1,2}\D\d{1,2}/) || [''])[0];
+
+      // 고객정보 툴팁(숨김 → textContent)
+      const ci = tr.querySelector('[id^="strCustomerInfo"]');
+      let name = '', phone = '', custno = '', prev = '';
+      if (ci) {
+        const tt = ci.textContent;
+        name = pick(tt, /고객명\s*[:：]\s*([^"\n+]+)/);
+        phone = pick(tt, /전화\s*번호\s*[:：]\s*([0-9\-]+)/);
+        custno = pick(tt, /고객\s*번호\s*[:：]\s*([0-9]+)/);
+        prev = pick(tt, /이전방문\s*[:：]\s*([0-9.\-]+)/);
+      }
+      const ownName = name || cell(HM.고객명);
+
+      // 상세메뉴: title 속성 우선
+      let service = '';
+      if (HM.상세메뉴 >= 0 && cells[HM.상세메뉴]) service = cells[HM.상세메뉴].getAttribute('title') || norm(cells[HM.상세메뉴].innerText);
+      if (!service) service = cell(HM.메뉴);
+      const price = cell(HM.결제액).replace(/[^\d]/g, '');
+
+      if (!date && !ownName && !service && !price) continue;  // 빈 채움행
+      if (ownName) { last = { name: ownName, phone, custno }; }
+      else { name = last.name; phone = phone || last.phone; custno = custno || last.custno; }
+      const finalName = ownName || last.name;
+
+      // 시술 메모 툴팁
+      const md = tr.querySelector('[id^="saleStrMemoList"]');
+      const memo = md ? norm(md.textContent.replace(/상세보기/, '')) : '';
+
+      const rec = {
+        날짜: date, 고객명: finalName, 전화번호: phone || '', 고객번호: custno || '',
+        이전방문: prev, 상세메뉴: service, 담당: cell(HM.담당), 결제액: price, 메모: memo,
+      };
+      const key = [date, finalName, service, price, memo].join('|');
+      if (!seen.has(key)) { seen.add(key); recs.push(rec); }
     }
-    const trs = [...f.t.querySelectorAll('tr')].map((tr) =>
-      [...tr.querySelectorAll('th,td')].map((td) => (td.innerText || '').replace(/\s+/g, ' ').trim()));
-    if (!header) header = trs.find((r) => r.includes('고객명')) || trs[0];
-
-    const before = seen.size;
-    for (const r of trs) {
-      if (isDataRow(r)) { const k = r.join('|'); if (!seen.has(k)) { seen.add(k); rows.push(r); } }
-    }
-    console.log(`${p}p · 누적 ${rows.length}${totalCount ? ' / ' + totalCount : ''}`);
-    if (totalCount && rows.length >= totalCount) break;
-
-    let moved = clickText(f.doc, String(p + 1));
-    if (!moved) { for (const a of ['›', '▶', '>', '다음', 'Next']) { if (clickText(f.doc, a)) { moved = true; break; } } }
-    if (!moved) { console.log('다음 페이지 없음 — 마지막'); break; }
-    await sleep(900);
-    if (seen.size === before && p > 1) break;
   }
 
-  if (!rows.length) { console.warn('수집된 행 없음'); return; }
-  const esc = (c) => '"' + String(c || '').replace(/"/g, '""') + '"';
-  const csv = [header, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+  for (let p = 1; p <= maxPage; p++) {
+    const ctx = findCtx(); if (!ctx) break;
+    const before = recs.length;
+    harvestPage(ctx.t);
+    console.log(`${p}p · 누적 ${recs.length}${totalN ? ' / ' + totalN : ''}`);
+    if (totalN && recs.length >= totalN) break;
+
+    let moved = false;
+    const win = ctx.doc.defaultView;
+    if (win && typeof win.gotoP === 'function') { try { win.gotoP(p + 1); moved = true; } catch (e) {} }
+    if (!moved) {
+      const re = new RegExp('gotoP\\(\\s*' + (p + 1) + '\\b');
+      const el = [...ctx.doc.querySelectorAll('td,a,span,li')].find((e) => {
+        const oc = (e.getAttribute && e.getAttribute('onclick')) || '';
+        return re.test(oc) || norm(e.textContent) === String(p + 1);
+      });
+      if (el) { el.click(); moved = true; }
+    }
+    if (!moved) { console.log('다음 페이지 없음 — 마지막'); break; }
+    await sleep(1000);
+    if (recs.length === before && p > 1) break;
+  }
+
+  if (!recs.length) { console.warn('수집된 행 없음'); return; }
+  const cols = ['날짜', '고객명', '전화번호', '고객번호', '이전방문', '상세메뉴', '담당', '결제액', '메모'];
+  const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const csv = [cols.join(','), ...recs.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'handsos_매출상세.csv';
+  a.href = URL.createObjectURL(blob); a.download = 'handsos_매출상세.csv';
   document.body.appendChild(a); a.click(); a.remove();
-  console.log('✓ 완료 — ' + rows.length + '건 CSV 다운로드');
+  console.log('✓ 완료 — ' + recs.length + '건 CSV 다운로드 (전화번호·고객번호·이전방문·메모 포함)');
 })();
