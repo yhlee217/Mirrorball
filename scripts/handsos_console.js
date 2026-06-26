@@ -88,27 +88,52 @@
     }
   }
 
+  // 현재 페이지 번호(<td class="current">N</td>) / 첫 데이터행 시그니처 — 페이지 전환 감지용
+  const curPage = (doc) => {
+    try {
+      const el = [...doc.querySelectorAll('.current,td,span,li,strong,b,em')].find((e) =>
+        /(^|\s)(current|on|active|sel)(\s|$)/.test(' ' + (e.className || '') + ' ') && /^\d+$/.test(norm(e.textContent)));
+      return el ? parseInt(norm(el.textContent), 10) : null;
+    } catch (e) { return null; }
+  };
+  const firstSig = (t) => {
+    try { const r = [...t.querySelectorAll('tr')].find((tr) => !tr.querySelector('th') && norm(tr.innerText)); return r ? norm(r.innerText).slice(0, 50) : ''; } catch (e) { return ''; }
+  };
+  const goNext = (ctx, target) => {
+    const win = ctx.doc.defaultView;
+    if (win && typeof win.gotoP === 'function') { try { win.gotoP(target); return true; } catch (e) {} }
+    const re = new RegExp('gotoP\\(\\s*' + target + '\\b');
+    const el = [...ctx.doc.querySelectorAll('td,a,span,li')].find((e) => {
+      const oc = (e.getAttribute && e.getAttribute('onclick')) || '';
+      return re.test(oc) || norm(e.textContent) === String(target);
+    });
+    if (el) { el.click(); return true; }
+    return false;
+  };
+
   for (let p = 1; p <= maxPage; p++) {
     const ctx = findCtx(); if (!ctx) break;
-    const before = recs.length;
     harvestPage(ctx.t);
     console.log(`${p}p · 누적 ${recs.length}${totalN ? ' / ' + totalN : ''}`);
     if (totalN && recs.length >= totalN) break;
 
-    let moved = false;
-    const win = ctx.doc.defaultView;
-    if (win && typeof win.gotoP === 'function') { try { win.gotoP(p + 1); moved = true; } catch (e) {} }
-    if (!moved) {
-      const re = new RegExp('gotoP\\(\\s*' + (p + 1) + '\\b');
-      const el = [...ctx.doc.querySelectorAll('td,a,span,li')].find((e) => {
-        const oc = (e.getAttribute && e.getAttribute('onclick')) || '';
-        return re.test(oc) || norm(e.textContent) === String(p + 1);
-      });
-      if (el) { el.click(); moved = true; }
+    const target = p + 1;
+    const sigBefore = firstSig(ctx.t);
+    if (!goNext(ctx, target)) { console.log('다음 페이지 컨트롤 없음 — 마지막'); break; }
+
+    // 고정 대기 금지 — 페이지가 '실제로' 바뀔 때까지(최대 ~15초), 중간에 한 번 재시도
+    let changed = false;
+    for (let i = 0; i < 50; i++) {
+      await sleep(300);
+      const c2 = findCtx(); if (!c2) continue;
+      const cp = curPage(c2.doc);
+      if ((cp && cp >= target) || (firstSig(c2.t) && firstSig(c2.t) !== sigBefore)) { changed = true; break; }
+      if (i === 14) goNext(c2, target);     // ~4.5초 지나도 그대로면 한 번 더
     }
-    if (!moved) { console.log('다음 페이지 없음 — 마지막'); break; }
-    await sleep(1000);
-    if (recs.length === before && p > 1) break;
+    if (!changed) {
+      console.log(`중단: ${target}p 로딩 확인 실패 (누적 ${recs.length}). 잠시 후 다시 실행하면 이어서 받을 수 있어요.`);
+      break;
+    }
   }
 
   if (!recs.length) { console.warn('수집된 행 없음'); return; }
