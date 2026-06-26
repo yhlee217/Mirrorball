@@ -46,10 +46,17 @@ def _months_back(today: date, n: int) -> list[str]:
     return list(reversed(out))
 
 
+# 정보 미저장 워크인(불특정 다수) — 식별 불가하므로 고객수·재방문율 집계에서 제외(매출·시술엔 포함)
+ANON_NAMES = {"손님", "고객", "비회원", "무명", "내방", "워크인"}
+
+
 def _cust_key(r: dict) -> str:
-    """고객 식별: 전화 우선(동명이인 구분), 없으면 이름."""
+    """고객 식별: 전화 우선(동명이인 구분), 없으면 이름. 불특정 다수는 빈 키(집계 제외)."""
+    name = (r.get("name") or "").strip()
+    if name in ANON_NAMES:
+        return ""
     ph = "".join(ch for ch in str(r.get("phone") or "") if ch.isdigit())
-    return ph or (r.get("name") or "").strip()
+    return ph or name
 
 
 WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
@@ -60,8 +67,8 @@ def compute(records: list[dict], today: date | None = None) -> dict:
     rows = [r for r in records if _pd(r.get("date"))]
     if not rows:
         return {"total_visits": 0, "period": None, "monthly": [], "top_services": [],
-                "unique_customers": 0, "returning_customers": 0, "revisit_rate": 0,
-                "this_month": 0, "last_month": 0}
+                "unique_customers": 0, "returning_customers": 0, "anon_visits": 0,
+                "revisit_rate": 0, "this_month": 0, "last_month": 0}
 
     dates = sorted(_pd(r["date"]) for r in rows)
     this_ym, prev = _ym(today), _months_back(today, 2)[0]
@@ -89,6 +96,7 @@ def compute(records: list[dict], today: date | None = None) -> dict:
             first_seen[k] = d
     unique = len(visits)
     returning = sum(1 for v in visits.values() if v >= 2)
+    anon_visits = sum(1 for r in rows if (r.get("name") or "").strip() in ANON_NAMES)
     new_this_month = sum(1 for k, d in first_seen.items() if _ym(d) == this_ym)
 
     weekday = Counter(WEEKDAYS[_pd(r["date"]).weekday()] for r in rows)
@@ -108,6 +116,7 @@ def compute(records: list[dict], today: date | None = None) -> dict:
         "monthly": monthly,
         "unique_customers": unique,
         "returning_customers": returning,
+        "anon_visits": anon_visits,        # 정보 미저장 워크인 방문 수(고객수·재방문율 분모에서 제외)
         "new_this_month": new_this_month,
         "revisit_rate": round(returning * 100 / unique) if unique else 0,
         "top_services": top_services,
@@ -143,6 +152,8 @@ def main() -> int:
     print(f"이번 달 {s['this_month']}건 (지난달 {s['last_month']}건)")
     print(f"고객 {s['unique_customers']}명 · 재방문 {s['returning_customers']}명 "
           f"· 재방문율 {s['revisit_rate']}% · 이번 달 신규 {s['new_this_month']}명")
+    if s.get("anon_visits"):
+        print(f"(정보 미저장 워크인 {s['anon_visits']}건은 고객수·재방문율에서 제외)")
     if s["busiest_weekday"]:
         print(f"가장 바쁜 요일/시간: {s['busiest_weekday']} {s['busiest_hour'] or ''}")
     if s["avg_price"]:

@@ -117,6 +117,34 @@ def test_custno_grouping_and_memo_notes(tmp_path):
     assert "임신 중" in notes and "수다 좋아함" in notes   # 메모 → 방문 노트
 
 
+def test_anon_walkins_excluded_from_customers(tmp_path):
+    p = tmp_path / "h.csv"
+    _w(p, [H2,
+           ["2026-06-26", "손님", "", "", "", "남자컷", "하예원", "20000", ""],
+           ["2026-06-20", "손님", "", "", "", "남자컷", "하예원", "20000", ""],
+           ["2026-06-26", "조희진", "010-9", "0002767", "", "모발클리닉", "하예원", "80000", ""]])
+    rows = ih.parse_rows(str(p))
+    assert len(rows) == 3                                   # 장부엔 모두 보존(매출 통계용)
+    custs = ih.build_customers(rows)
+    names = {c["name"] for c in custs}
+    assert "손님" not in names and "조희진" in names         # 워크인은 고객 카드 미생성
+    assert len(custs) == 1
+
+
+def test_stats_excludes_anon_from_customer_metrics():
+    import stats
+    recs = [
+        {"date": "2026-06-01", "name": "손님", "service": "컷", "price": 20000},
+        {"date": "2026-06-02", "name": "손님", "service": "컷", "price": 20000},
+        {"date": "2026-06-03", "name": "김", "phone": "010-1", "service": "컷", "price": 30000},
+        {"date": "2026-06-10", "name": "김", "phone": "010-1", "service": "펌", "price": 90000},
+    ]
+    s = stats.compute(recs, today=__import__("datetime").date(2026, 6, 26))
+    assert s["unique_customers"] == 1 and s["returning_customers"] == 1   # 손님 제외, 김만
+    assert s["anon_visits"] == 2
+    assert s["total_visits"] == 4                                          # 매출/방문 총계엔 포함
+
+
 def test_build_app_redacts_phone_in_notes(tmp_path):
     import build_app
     cdir = tmp_path / "clients" / "demo"

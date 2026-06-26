@@ -43,6 +43,14 @@ def _clean_name(v: str) -> str:
     return re.split(r"[*]|전화\s*번호|고객\s*번호", (v or "").strip(), 1)[0].strip()
 
 
+# 정보 미저장 워크인(불특정 다수) — 한 명으로 합치면 안 됨. 거래 장부엔 남기되 고객 카드는 안 만든다.
+ANON_NAMES = {"손님", "고객", "비회원", "무명", "내방", "워크인"}
+
+
+def is_anon(name: str) -> bool:
+    return (name or "").strip() in ANON_NAMES
+
+
 # 메모에서 네이버 예약 자동문구·메뉴/가격 줄 제거 → 사람 특징 메모만 남김
 _MEMO_BOILER = [
     re.compile(r"네이버\s*예약건"), re.compile(r"잔여금[^!]*현장결제할게요!?"),
@@ -168,6 +176,8 @@ def build_customers(rows: list[dict]) -> list[dict]:
     시술은 날짜별로 합치고, 메모는 그 방문의 notes 로."""
     groups: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
+        if is_anon(r.get("name", "")):       # 불특정 다수: 고객 카드 미생성(장부엔 보존)
+            continue
         cn = (r.get("custno") or "").strip()
         ph = re.sub(r"\D", "", r.get("phone", ""))
         key = ("no:" + cn) if cn else ("np:" + r["name"] + "|" + ph)

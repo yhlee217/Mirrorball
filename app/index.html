@@ -585,6 +585,7 @@
     }).join('');
     box.innerHTML=
       '<div class="sec-h">기간 '+esc(s.period.first)+' ~ '+esc(s.period.last)+' · 총 '+s.total_visits+'건</div>'+
+      (s.anon_visits?('<div style="font-size:11px;color:var(--muted);margin:-4px 2px 8px">정보 미저장 워크인 '+s.anon_visits+'건은 매출엔 포함, 고객수·재방문율에선 제외</div>'):'')+
       '<div class="stat-grid reveal">'+
         '<div class="stat"><div class="n">'+s.unique_customers+'<span class="u">명</span></div><div class="l">전체 고객</div></div>'+
         '<div class="stat"><div class="n">'+s.revisit_rate+'<span class="u">%</span></div><div class="l">재방문율 · 단골 '+s.returning_customers+'명</div></div>'+
