@@ -289,7 +289,9 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
                 "id": c.get("id"), "name": c.get("name"),
                 "kind": a["kind"], "label": a["label"], "why": a["why"],
                 "prefer": c.get("prefer", []),
-                "draft": drafts.draft_for(a["kind"], c, today),  # 추천 문구(초안)
+                "draft": drafts.draft_for(a["kind"], c, today,    # 추천 문구(초안)
+                                          salon=cfg.get("salon", ""),
+                                          designer=cfg.get("display_name", slug)),
             })
     # 생일 → 이탈위험 → 재방문 도래 순
     order = {"bday": 0, "atrisk": 1, "revisit": 2}

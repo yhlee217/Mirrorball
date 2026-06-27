@@ -13,9 +13,44 @@ LLM(copygen.py) 은 선택적 고급 패스 — 이 모듈은 항상 작동하�
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 
 import copydata
+
+
+def _batchim(s: str) -> bool:
+    """한글 마지막 글자에 받침이 있으면 True ('이에요/예요' 선택용)."""
+    s = str(s or "")
+    if not s:
+        return False
+    c = ord(s[-1])
+    if c < 0xAC00 or c > 0xD7A3:
+        return False
+    return (c - 0xAC00) % 28 != 0
+
+
+def greeting(salon: str = "", designer: str = "") -> str:
+    """'안녕하세요 살롱톤 하예원이에요! ' — 살롱·디자이너 데이터로 구성(업종 무관)."""
+    head = "안녕하세요"
+    if salon:
+        head += " " + salon
+    if designer:
+        head += " " + designer + ("이에요" if _batchim(designer) else "예요")
+    return head + "! "
+
+
+_CUT_RE = re.compile(r"[가-힣A-Za-z0-9]*컷")
+
+
+def _msg_svc(s: str | None) -> str:
+    """문구용 시술명 정리: 여자컷·남자컷 등 → '커트', 중복(커트·커트) 제거."""
+    out: list[str] = []
+    for x in str(s or "").split(" · "):
+        x = _CUT_RE.sub("커트", x).strip()
+        if x and x not in out:
+            out.append(x)
+    return " · ".join(out)
 
 
 def _pd(v):
@@ -59,8 +94,8 @@ def _benefit(service: str | None) -> str:
 def draft_bday(cust: dict) -> str:
     name = cust.get("name") or "고객"
     prefer = cust.get("prefer") or []
-    tail = (f"{prefer[0]} 느낌으로 기분 전환도 좋아요. 편하게 연락 주세요!"
-            if prefer else "머리도 기분도 새롭게 하고 싶으시면 편하게 연락 주세요!")
+    tail = (f"{prefer[0]} 느낌으로 기분 전환도 좋아요. 편하게 들러주세요!"
+            if prefer else "머리도 기분도 새롭게 하고 싶으시면 편하게 들러주세요!")
     return f"{name}님 생일 축하드려요 :) {tail}"
 
 
@@ -68,28 +103,30 @@ def draft_revisit(cust: dict, today: date) -> str:
     name = cust.get("name") or "고객"
     service, last = _latest_service(cust)
     m = _months_ago(last, today)
-    lead = (f"{name}님 {service} 하신 지 {m}개월쯤 됐네요. "
+    lead = (f"{name}님 {_msg_svc(service)} 하신 지 {m}개월쯤 됐네요. "
             if service and m else f"{name}님, 오랜만이에요. ")
-    return lead + _benefit(service) + " 시간 되실 때 편하게 봐요!"
+    return lead + _benefit(service) + " 시간 되실 때 편하게 들러주세요!"
 
 
 def draft_atrisk(cust: dict, today: date) -> str:
     name = cust.get("name") or "고객"
     service, last = _latest_service(cust)
     m = _months_ago(last, today)
-    lead = (f"{name}님, {service} 하신 지 {m}개월쯤 됐어요. 그동안 잘 지내셨어요? "
+    lead = (f"{name}님, {_msg_svc(service)} 하신 지 {m}개월쯤 됐어요. 그동안 잘 지내셨어요? "
             if service and m else f"{name}님, 오랜만이에요, 잘 지내셨어요? ")
-    return lead + _benefit(service) + " 편하실 때 한번 들러요!"
+    return lead + _benefit(service) + " 편하실 때 한번 들러주세요!"
 
 
-def draft_for(kind: str, cust: dict, today: date | None = None) -> str:
+def draft_for(kind: str, cust: dict, today: date | None = None,
+              salon: str = "", designer: str = "") -> str:
     today = today or date.today()
+    g = greeting(salon, designer)
     if kind == "bday":
-        return draft_bday(cust)
+        return g + draft_bday(cust)
     if kind == "atrisk":
-        return draft_atrisk(cust, today)
+        return g + draft_atrisk(cust, today)
     if kind == "revisit":
-        return draft_revisit(cust, today)
+        return g + draft_revisit(cust, today)
     # season 등 기타
     name = cust.get("name") or "고객"
-    return f"{name}님, 시즌 바뀌는데 가볍게 정리 어떠세요? 편하게 연락 주세요!"
+    return g + f"{name}님, 시즌 바뀌는데 가볍게 정리 어떠세요? 편하게 들러주세요!"

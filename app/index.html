@@ -769,10 +769,18 @@
     if(ri.state==='overdue') out.push({kind:'atrisk',label:'이탈 위험',why:svc+' · '+ri.gap+'일째 안 오심(평소 '+ri.cycle+'일 주기)'});
     else if(ri.state==='due') out.push({kind:'revisit',label:'재방문',why:svc+' 리터치 시기 · '+ri.gap+'일째(평소 '+ri.cycle+'일)'});
     return out; }
-  function draftFor(kind,c,t){ var nm=c.name||'고객'; if(kind==='bday'){ var pr=(c.prefer||[])[0]; return nm+'님 생일 축하드려요 :) '+(pr?pr+' 느낌으로 기분 전환도 좋아요. 편하게 연락 주세요!':'머리도 기분도 새롭게 하고 싶으시면 편하게 연락 주세요!'); }
-    if(kind==='revisit'){ var l=latest(c), m=monthsAgo(l.date,t); return (l.service&&m? nm+'님 '+l.service+' 하신 지 '+m+'개월쯤 됐네요. ':nm+'님, 오랜만이에요. ')+benefit(l.service)+' 시간 되실 때 편하게 봐요!'; }
-    if(kind==='atrisk'){ var la=latest(c), ma=monthsAgo(la.date,t); return nm+'님, '+(la.service&&ma? la.service+' 하신 지 '+ma+'개월쯤 됐어요. 그동안 잘 지내셨어요? ':'오랜만이에요, 잘 지내셨어요? ')+benefit(la.service)+' 편하실 때 한번 들러요!'; }
-    return nm+'님, 가볍게 정리 어떠세요? 편하게 연락 주세요!'; }
+  // 받침 유무로 '이에요/예요' 선택, 인사말은 살롱·디자이너 데이터로 구성(업종 무관·자동)
+  function _batchim(s){ s=String(s||''); if(!s) return false; var c=s.charCodeAt(s.length-1); if(c<0xAC00||c>0xD7A3) return false; return (c-0xAC00)%28!==0; }
+  function greet(){ var d=META.designer||'', sa=META.salon||'', h='안녕하세요'; if(sa) h+=' '+sa; if(d) h+=' '+d+(_batchim(d)?'이에요':'예요'); return h+'! '; }
+  function msgSvc(s){   // 여자컷·남자컷 → 커트, 중복(커트·커트) 정리
+    var seen={}, out=[];
+    String(s||'').split(' · ').forEach(function(x){ x=x.replace(/[가-힣A-Za-z0-9]*컷/g,'커트').trim(); if(x&&!seen[x]){seen[x]=1;out.push(x);} });
+    return out.join(' · '); }
+  function draftFor(kind,c,t){ var nm=c.name||'고객', g=greet();
+    if(kind==='bday'){ var pr=(c.prefer||[])[0]; return g+nm+'님 생일 축하드려요 :) '+(pr?pr+' 느낌으로 기분 전환도 좋아요. 편하게 들러주세요!':'머리도 기분도 새롭게 하고 싶으시면 편하게 들러주세요!'); }
+    if(kind==='revisit'){ var l=latest(c), m=monthsAgo(l.date,t), sv=msgSvc(l.service); return g+(l.service&&m? nm+'님 '+sv+' 하신 지 '+m+'개월쯤 됐네요. ':nm+'님, 오랜만이에요. ')+benefit(l.service)+' 시간 되실 때 편하게 들러주세요!'; }
+    if(kind==='atrisk'){ var la=latest(c), ma=monthsAgo(la.date,t), sa2=msgSvc(la.service); return g+nm+'님, '+(la.service&&ma? sa2+' 하신 지 '+ma+'개월쯤 됐어요. 그동안 잘 지내셨어요? ':'오랜만이에요, 잘 지내셨어요? ')+benefit(la.service)+' 편하실 때 한번 들러주세요!'; }
+    return g+nm+'님, 가볍게 정리 어떠세요? 편하게 들러주세요!'; }
   function resolveRel(cs){ var byId={},brought={}; cs.forEach(function(c){ if(c.id) byId[c.id]=c; }); cs.forEach(function(c){ if(c.referred_by){ (brought[c.referred_by]=brought[c.referred_by]||[]).push(c.id); } });
     var nm=function(id){ return (byId[id]&&byId[id].name)||id; }; var out={};
     cs.forEach(function(c){ if(!c.id) return; out[c.id]={ relations:(c.relations||[]).filter(function(r){return r.to;}).map(function(r){return {id:r.to,name:nm(r.to),type:r.type||'지인'};}),
