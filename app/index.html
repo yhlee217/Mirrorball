@@ -184,6 +184,14 @@
   .rv-bar .rv-v{background:var(--gold);color:#fff;}
   .rnk{flex:0 0 28px;width:28px;height:28px;border-radius:8px;background:var(--soft);color:var(--accent-d);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;}
   .focus-pill{display:inline-block;margin:0 0 10px;border:none;background:var(--accent-d);color:#fff;font-family:inherit;font-weight:700;font-size:12px;border-radius:20px;padding:6px 13px;cursor:pointer;}
+  .sig{font-weight:800;font-size:11.5px;}
+  .famrow{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+  /* 가족 연결 피커(바텀시트) */
+  .fam-ov{position:fixed;inset:0;background:rgba(30,26,22,.45);z-index:60;display:flex;align-items:flex-end;justify-content:center;}
+  .fam-box{background:var(--paper);width:100%;max-width:440px;border-radius:18px 18px 0 0;padding:16px 15px 22px;max-height:78vh;display:flex;flex-direction:column;}
+  .fam-hd{display:flex;align-items:center;justify-content:space-between;font-weight:800;font-size:15px;margin-bottom:11px;}
+  #famSearch{border:1px solid var(--line);border-radius:11px;padding:11px 13px;font-size:15px;font-family:inherit;background:var(--paper);color:var(--ink);margin-bottom:8px;}
+  #famResults{overflow-y:auto;}
   /* 홈 신호 요약 + 민감도 토글 */
   .hsig{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px;margin:0 0 10px;}
   .hsig button{border:1px solid var(--line);background:var(--paper);border-radius:13px;padding:11px 4px 9px;font-family:inherit;cursor:pointer;text-align:center;}
@@ -264,10 +272,6 @@
       </div>
       <div class="vsw" id="clientViews">
         <button data-view="list" class="on">목록</button>
-        <button data-view="signal">신호</button>
-        <button data-view="revenue">매출</button>
-        <button data-view="trait">특징</button>
-        <button data-view="grouped">그룹</button>
         <button data-view="grid">격자</button>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:11px;">
@@ -308,6 +312,15 @@
 
   <nav class="tabbar" id="tabbar"></nav>
   <div class="toast" id="toast"></div>
+
+  <!-- 가족 연결 피커 -->
+  <div class="fam-ov" id="famPicker" style="display:none">
+    <div class="fam-box">
+      <div class="fam-hd"><span>가족 · 동반 연결</span><button class="del-x" id="famClose" type="button">✕</button></div>
+      <input id="famSearch" type="search" placeholder="연결할 고객 이름 검색" autocomplete="off">
+      <div id="famResults"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -426,10 +439,10 @@
     var due2=n.overdue+n.due;
     box.innerHTML=
       '<div class="hsig">'+
-        '<button class="x" data-focus="overdue" data-view="signal"><div class="hn">'+n.overdue+'</div><div class="hl">이탈위험</div></button>'+
-        '<button class="d" data-focus="due" data-view="signal"><div class="hn">'+n.due+'</div><div class="hl">재방문도래</div></button>'+
-        '<button class="n" data-focus="new" data-view="signal"><div class="hn">'+n['new']+'</div><div class="hl">신규</div></button>'+
-        '<button class="v" data-focus="vip" data-view="revenue"><div class="hn">'+n.vip+'</div><div class="hl">VIP</div></button>'+
+        '<button class="x" data-focus="overdue" data-view="list"><div class="hn">'+n.overdue+'</div><div class="hl">이탈위험</div></button>'+
+        '<button class="d" data-focus="due" data-view="list"><div class="hn">'+n.due+'</div><div class="hl">재방문도래</div></button>'+
+        '<button class="n" data-focus="new" data-view="list"><div class="hn">'+n['new']+'</div><div class="hl">신규</div></button>'+
+        '<button class="v" data-focus="vip" data-view="list"><div class="hn">'+n.vip+'</div><div class="hl">VIP</div></button>'+
       '</div>'+
       '<div class="hsens"><div class="lab">오늘 챙길 '+due2+'명 · 신호 민감도</div>'+
         '<div class="seg" id="homeSens">'+['loose','normal','sharp'].map(function(k){
@@ -456,94 +469,41 @@
 
   // ── render: clients (5뷰 전환) ──
   var clientQuery='', clientSortKey='visits', clientFocus=null;
-  var clientView=(function(){try{return localStorage.getItem('crm_view')||'list';}catch(e){return 'list';}})();
+  var clientView=(function(){try{var v=localStorage.getItem('crm_view')||'list'; return (v==='grid')?'grid':'list';}catch(e){return 'list';}})();  // 제거된 뷰는 목록으로 폴백
   function focusLabel(f){ return {overdue:'이탈 위험',due:'재방문 도래','new':'신규',vip:'VIP'}[f]||f; }
   function cdays(c){ return (c.days_since==null)? null : c.days_since; }   // derive가 기준일(META.today)로 계산한 값 재사용
   function ctier(c){ var v=c.loyalty_visits||0; return v>=4?'단골':(v<=1?'신규':'일반'); }
   function csvc(c){ return (c.history&&c.history[0]&&c.history[0].service)||(c.booking&&c.booking.service)||''; }
   function vipBadge(c){ return c.tier==='vip'?'<span class="tag t-vip">VIP</span>':''; }
+  // 재방문 신호(목록·격자 인라인 표기). 매출(VIP)은 목록에 안 띄움 — 상세 전용.
+  function sigInfo(c){ var s=c.revisit_state;
+    if(s==='overdue') return {label:'이탈 위험', color:'var(--rose)'};
+    if(s==='due') return {label:'재방문 도래', color:'var(--gold)'};
+    if(s==='new') return {label:'신규', color:'var(--sage)'};
+    return null; }
+  function sigRing(c){ var s=c.revisit_state; return s==='overdue'?' r-rose':(s==='new'?' r-sage':''); }
 
   var VIEWS={
-    // 1. 목록 — 정보 위계
+    // 목록 — 시술·경과일·취향 + 재방문 신호 인라인
     list:function(cl){ return '<div class="card">'+cl.map(function(c){
-      var v=c.loyalty_visits||0, rt=v>=4?'★ 단골':(v+'회');
+      var v=c.loyalty_visits||0, dd=cdays(c), st=c.revisit_state, cyc=c.care_cycle_days, sg=sigInfo(c);
       var tags=(c.prefer||[]).slice(0,2).map(function(t){return '<span class="pill" style="font-size:10.5px;padding:2px 8px">'+esc(t)+'</span>';}).join(' ');
-      var dd=cdays(c);
-      return '<div class="li" data-client="'+esc(c.id)+'" style="align-items:flex-start"><div class="av">'+av(c.name)+'</div>'+
-        '<div class="bd"><div class="nm">'+esc(c.name)+' 님 '+vipBadge(c)+'</div><div class="sub">'+esc(csvc(c))+(dd!=null?' · '+dd+'일 전':'')+'</div>'+
+      var right;
+      if(st==='overdue'||st==='due') right='<div class="sig" style="color:'+sg.color+'">'+sg.label+'</div><div class="st-rec">'+dd+'일째 · 평소 '+cyc+'일</div>';
+      else if(st==='new') right='<div class="sig" style="color:'+sg.color+'">신규</div>'+(dd!=null?'<div class="st-rec">'+dd+'일 전</div>':'');
+      else right='<div style="font-weight:800;color:var(--accent-d)">'+v+'회</div>'+(dd!=null?'<div class="st-rec">'+dd+'일 전</div>':'');
+      return '<div class="li" data-client="'+esc(c.id)+'" style="align-items:flex-start"><div class="av'+sigRing(c)+'">'+av(c.name)+'</div>'+
+        '<div class="bd"><div class="nm">'+esc(c.name)+' 님</div><div class="sub">'+esc(csvc(c))+' · '+v+'회</div>'+
         (tags?'<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap">'+tags+'</div>':'')+'</div>'+
-        '<div class="rt"><div style="font-weight:800;color:var(--accent-d)">'+v+'회</div><div style="font-size:10px;color:var(--muted)">'+(v>=4?'★ 단골':(v<=1?'신규':''))+'</div></div></div>';
+        '<div class="rt">'+right+'</div></div>';
     }).join('')+'</div>'; },
 
-    // 2. 신호 — 재방문 주기 기반 이탈위험·도래·신규(위험 먼저)
-    signal:function(cl){
-      var cnt={overdue:0,due:0,'new':0};
-      cl.forEach(function(c){ if(cnt[c.revisit_state]!=null) cnt[c.revisit_state]++; });
-      var bar=clientFocus?'':'<div class="rv-bar"><span class="rv-x">이탈위험 '+cnt.overdue+'</span>'+
-        '<span class="rv-d">재방문 도래 '+cnt.due+'</span><span class="rv-n">신규 '+cnt['new']+'</span></div>';
-      var rank={overdue:0,due:1,soon:2,'new':3,ok:4};
-      var sorted=cl.slice().sort(function(a,b){ return (rank[a.revisit_state]==null?5:rank[a.revisit_state])-(rank[b.revisit_state]==null?5:rank[b.revisit_state]); });
-      return bar+'<div class="card">'+sorted.map(function(c){
-        var st=c.revisit_state, dd=c.days_since, cyc=c.care_cycle_days, v=c.loyalty_visits||0;
-        var ring=st==='overdue'?' r-rose':(v>=4?' r-gold':(st==='new'?' r-sage':''));
-        var badge=vipBadge(c)||(v>=4?'<span class="tag t-season" style="background:var(--gold-bg,#F4ECD8);color:var(--gold)">단골</span>':'');
-        var right;
-        if(st==='overdue') right='<div class="st-due">이탈 위험</div><div class="st-rec">'+dd+'일째 · 평소 '+cyc+'일</div>';
-        else if(st==='due') right='<div class="st-due" style="color:var(--gold)">재방문 도래</div><div class="st-rec">'+dd+'일째 · 평소 '+cyc+'일</div>';
-        else if(st==='soon') right='<div class="st-rec" style="color:var(--accent-d);font-weight:700">곧 도래</div><div class="st-rec">'+dd+'일 · 평소 '+cyc+'일</div>';
-        else if(st==='new') right='<div class="st-new">첫방문 케어</div>'+(dd!=null?'<div class="st-rec">'+dd+'일 전</div>':'');
-        else right= dd!=null? '<div class="st-rec">'+dd+'일 전</div>':'';
-        return '<div class="li" data-client="'+esc(c.id)+'"><div class="av'+ring+'">'+av(c.name)+'</div>'+
-          '<div class="bd"><div class="nm">'+esc(c.name)+' 님 '+badge+'</div><div class="sub">'+esc(csvc(c))+' · '+v+'회</div></div>'+
-          '<div class="rt">'+right+'</div></div>';
-      }).join('')+'</div>'; },
-
-    // 2.5 매출 — 누적결제(LTV) 순위 + 등급 + 교차판매 기회
-    revenue:function(cl){
-      var ranked=cl.slice().sort(function(a,b){return (b.total_won||0)-(a.total_won||0);});
-      var vip=ranked.filter(function(c){return c.tier==='vip';}).length;
-      var sumw=ranked.reduce(function(s,c){return s+(+c.total_won||0);},0);
-      var xs=ranked.filter(function(c){return c.crosssell;}).length;
-      var bar=clientFocus?'':'<div class="rv-bar"><span class="rv-v">VIP '+vip+'</span><span class="rv-d" style="background:var(--soft);color:var(--accent-d)">누적 '+wonShort(sumw)+'원</span><span class="rv-n" style="background:#EAF0E6;color:var(--sage)">교차판매 '+xs+'</span></div>';
-      return bar+'<div class="card">'+ranked.map(function(c,i){
-        var w=+c.total_won||0, tb=c.tier==='vip'?'<span class="tag t-vip">VIP</span>':(c.tier==='regular'?'<span class="tag t-season" style="background:#F2EAD8;color:var(--gold)">단골</span>':'');
-        var xsl=c.crosssell?'<div class="cv-feat" style="margin:6px 0 0;background:#EAF0E6;color:var(--sage)">💡 '+esc(c.crosssell.label)+'</div>':'';
-        return '<div class="li" data-client="'+esc(c.id)+'" style="align-items:flex-start"><div class="rnk">'+(i+1)+'</div>'+
-          '<div class="bd"><div class="nm">'+esc(c.name)+' 님 '+tb+'</div><div class="sub">'+(c.loyalty_visits||0)+'회 · '+esc(csvc(c))+'</div>'+xsl+'</div>'+
-          '<div class="rt"><div style="font-weight:800;color:var(--accent-d)">'+wonShort(w)+'</div><div style="font-size:10px;color:var(--muted)">원</div></div></div>';
-      }).join('')+'</div>'; },
-
-    // 3. 특징 — 분석된 한 줄 강조
-    trait:function(cl){ return cl.map(function(c){
-      var tags=(c.prefer||[]).slice(0,4).map(function(t){return '<span class="pill" style="font-size:10.5px;padding:2px 8px">'+esc(t)+'</span>';}).join(' ');
-      var feat=c.memo?'<div class="cv-feat">'+esc(c.memo)+'</div>':'';
-      return '<div class="card" data-client="'+esc(c.id)+'" style="padding:12px 13px;margin-bottom:10px;cursor:pointer">'+
-        '<div style="display:flex;align-items:center;gap:9px"><div class="av">'+av(c.name)+'</div><div class="nm" style="font-weight:800">'+esc(c.name)+' 님</div>'+
-        '<div style="margin-left:auto;font-size:11px;color:var(--muted)">'+(c.loyalty_visits||0)+'회</div></div>'+
-        feat+(tags?'<div style="display:flex;gap:5px;flex-wrap:wrap">'+tags+'</div>':'')+'</div>';
-    }).join(''); },
-
-    // 4. 그룹 — 단골/일반/신규 섹션
-    grouped:function(cl){
-      var g={단골:[],일반:[],신규:[]}; cl.forEach(function(c){ g[ctier(c)].push(c); });
-      var out='<div class="card" style="overflow:hidden">';
-      ['단골','일반','신규'].forEach(function(k){
-        if(!g[k].length) return;
-        out+='<div class="cv-sec">'+(k==='단골'?'★ ':'')+k+' ('+g[k].length+')</div>';
-        out+=g[k].map(function(c){ var dd=cdays(c);
-          return '<div class="li" data-client="'+esc(c.id)+'"><div class="av" style="width:32px;height:32px;font-size:13px">'+av(c.name)+'</div>'+
-            '<div class="bd"><div class="nm" style="font-size:14px">'+esc(c.name)+'</div><div class="sub">'+esc(csvc(c))+' · '+(c.loyalty_visits||0)+'회</div></div>'+
-            '<div class="rt" style="font-size:11px;color:var(--muted)">'+(dd!=null?dd+'일 전':'')+'</div></div>';
-        }).join('');
-      });
-      return out+'</div>';
-    },
-
-    // 5. 격자 — 2단 밀도
+    // 격자 — 2단 밀도 + 신호 표기
     grid:function(cl){ return '<div class="cv-grid">'+cl.map(function(c){
-      var v=c.loyalty_visits||0, star=v>=4?' <span style="color:var(--gold);font-size:10px">★</span>':'';
-      var tag=(c.prefer&&c.prefer[0])?'<div style="margin-top:6px"><span class="pill" style="font-size:10px;padding:2px 7px">'+esc(c.prefer[0])+'</span></div>':'';
-      return '<div class="cv-g" data-client="'+esc(c.id)+'"><div class="av">'+av(c.name)+'</div><div class="gn">'+esc(c.name)+star+'</div><div class="gs">'+v+'회 · '+esc(csvc(c)||'')+'</div>'+tag+'</div>';
+      var v=c.loyalty_visits||0, sg=sigInfo(c);
+      var foot=sg?'<div style="margin-top:5px;font-size:10px;font-weight:800;color:'+sg.color+'">'+sg.label+'</div>'
+        :((c.prefer&&c.prefer[0])?'<div style="margin-top:6px"><span class="pill" style="font-size:10px;padding:2px 7px">'+esc(c.prefer[0])+'</span></div>':'');
+      return '<div class="cv-g" data-client="'+esc(c.id)+'"><div class="av'+sigRing(c)+'">'+av(c.name)+'</div><div class="gn">'+esc(c.name)+'</div><div class="gs">'+v+'회 · '+esc(csvc(c)||'')+'</div>'+foot+'</div>';
     }).join('')+'</div>'; },
   };
 
@@ -570,19 +530,45 @@
     box.innerHTML=focusBar+(VIEWS[clientView]||VIEWS.list)(cl);
   }
 
-  // 관계(가족·친구·소개) 행 — 칩 탭하면 그 고객 카르테로 이동
+  // 소개 관계 행(가족·동반은 별도 familyCard 가 담당)
   function relHtml(c){
     var parts=[];
-    (c.relations||[]).forEach(function(r){
-      parts.push('<span class="pill" data-client="'+esc(r.id)+'" style="cursor:pointer">'+esc(r.type)+' · '+esc(r.name)+'님</span>');
-    });
     if(c.referred_by){
       parts.push('<span class="pill" data-client="'+esc(c.referred_by.id)+'" style="cursor:pointer">소개해주신 분 · '+esc(c.referred_by.name)+'님</span>');
     }
     if(c.referred&&c.referred.length){
       parts.push('<span class="pill" style="background:var(--sage-bg);color:var(--sage)">소개해준 고객 '+c.referred.length+'명 · '+c.referred.map(function(x){return esc(x.name)+'님';}).join(', ')+'</span>');
     }
-    return parts.length? '<div class="r"><div class="k">관계</div><div class="pills">'+parts.join('')+'</div></div>' : '';
+    return parts.length? '<div class="r"><div class="k">소개</div><div class="pills">'+parts.join('')+'</div></div>' : '';
+  }
+
+  // 상세: 재방문 신호 카드(이탈위험·도래·신규일 때만)
+  function signalCard(c){
+    var st=c.revisit_state; if(st!=='overdue'&&st!=='due'&&st!=='new') return '';
+    var sg=sigInfo(c), t=parseD(META.today)||new Date(), why, kind=null;
+    if(st==='overdue'){ kind='atrisk'; why=(csvc(c)||'시술')+' · '+c.days_since+'일째 안 오심 (평소 '+c.care_cycle_days+'일 주기)'; }
+    else if(st==='due'){ kind='revisit'; why=(csvc(c)||'시술')+' 리터치 시기 · '+c.days_since+'일째 (평소 '+c.care_cycle_days+'일)'; }
+    else { why='최근 첫 방문'+(c.days_since!=null?(' · '+c.days_since+'일 전'):'')+' — 재방문 케어로 단골 전환 기회'; }
+    var draft=kind?draftFor(kind,c,t):'';
+    return '<div class="care reveal" style="border-left:3px solid '+sg.color+'">'+
+      '<div class="hd"><span class="tag" style="background:'+sg.color+';color:#fff">'+sg.label+'</span><span class="nm" style="font-size:12.5px;color:var(--muted)">재방문 신호</span></div>'+
+      '<div class="why">'+esc(why)+'</div>'+
+      (draft?'<div class="draft"><div class="lab">추천 문구 (직접 보내기)</div>'+esc(draft)+'</div><div class="row2" style="margin-top:8px"><button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기">카톡으로 직접</button></div>':'')+
+      '</div>';
+  }
+
+  // 상세: 가족·동반 연결 카드(가족류 태그 또는 연결된 관계가 있을 때)
+  var FAMILY_RE=/가족|동반|모녀|부부|남편|아내|자녀|형제|쌍둥이|아이|반려|부모|딸|아들|언니|누나|오빠/;
+  function familyCard(c){
+    var hasTag=(c.prefer||[]).some(function(t){return FAMILY_RE.test(t);});
+    var rels=c.relations||[];
+    if(!hasTag && !rels.length) return '';
+    var rows=rels.map(function(r){
+      return '<div class="famrow"><span class="pill" data-client="'+esc(r.id)+'" style="cursor:pointer;background:var(--sage-bg);color:var(--sage)">'+esc(r.name)+'님 · '+esc(r.type||'가족')+'</span><button class="del-x" data-famunlink="'+esc(c.id)+'|'+esc(r.id)+'" title="연결 해제">✕</button></div>';
+    }).join('');
+    var body=rels.length? rows : '<div style="font-size:12.5px;color:var(--muted)">함께 오시는 가족이 있으면 연결해 두세요</div>';
+    return '<div class="card reveal" style="padding:13px 15px"><div class="ch" style="padding:0 0 8px">👨‍👩‍👧 가족 · 동반</div>'+body+
+      '<button class="btn ghost" data-famlink="'+esc(c.id)+'" style="margin-top:9px">+ 가족 연결</button></div>';
   }
 
   // ── render: client detail ──
@@ -600,6 +586,7 @@
         '<div style="flex:1"><h2 style="margin:0;font-size:20px">'+esc(c.name)+' 님'+(c.tier==='vip'?' <span class="tag t-vip">VIP</span>':'')+(c.custno?'<span style="font-size:11px;font-weight:600;color:var(--muted);margin-left:7px">#'+esc(c.custno)+'</span>':'')+'</h2><div class="s" style="color:var(--muted);font-size:13px">'+(c.loyalty_visits||0)+'회 방문'+(c.total_won?(' · 누적 '+wonShort(c.total_won)+'원'):'')+(c.first_visit?(' · 첫 방문 '+esc(c.first_visit)):'')+'</div></div>'+
         '<button class="btn ghost" data-edit-client="'+esc(c.id)+'" style="flex:0 0 auto;width:auto;padding:8px 14px;">수정</button>'+
       '</div>'+
+      signalCard(c)+
       (c.booking?'<div class="care reveal"><div class="why" style="margin:0 0 4px">다가오는 예약</div><div style="font-weight:800">'+esc(c.booking.date||'')+' '+esc(c.booking.time||'')+' · '+esc(c.booking.service||'')+'</div></div>':'')+
       (c.crosssell?'<div class="card reveal" style="padding:13px 15px;border:1px solid var(--sage);background:#F3F7F1"><div class="ch" style="padding:0 0 5px;color:var(--sage)">💡 추천 · '+esc(c.crosssell.label)+'</div><div style="font-size:13px;line-height:1.6;color:var(--ink)">'+esc(c.crosssell.copy)+'</div><div class="row2" style="margin-top:9px"><button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기" style="flex:1">카톡으로 직접</button></div></div>':'')+
       (c.memo?'<div class="card reveal" style="padding:12px 15px"><div class="ch" style="padding:0 0 5px">상담 메모</div><div style="font-size:13.5px;line-height:1.6;color:var(--ink);white-space:pre-wrap">'+esc(c.memo)+'</div></div>':'')+
@@ -608,6 +595,7 @@
         (c.last_visit?'<div class="r"><div class="k">마지막 방문</div><div class="v">'+esc(c.last_visit)+'</div></div>':'')+
         relHtml(c)+
       '</div>'+
+      familyCard(c)+
       '<div class="sec-h" style="margin-top:16px">시술 이력</div><div class="card">'+hist+'</div>'+
       ((c.aftercare&&c.aftercare.length)?(
         '<div class="card reveal" style="padding:13px 15px"><div class="ch" style="padding:0 0 6px">시술 후 관리 안내 (보내기 좋아요)</div>'+
@@ -865,6 +853,33 @@
   }
   function delClient(id){ CUSTS=CUSTS.filter(function(c){return c.id!==id;}); lsSave(); refresh(); stack=['s-clients']; show('s-clients','back'); toast('삭제했어요'); }
 
+  // ── 가족·동반 연결 (수동) ──
+  var famTargetId=null;
+  function findCust(id){ for(var i=0;i<CUSTS.length;i++){ if(CUSTS[i].id===id) return CUSTS[i]; } return null; }
+  function openFamPicker(id){ famTargetId=id; var s=document.getElementById('famSearch'); s.value=''; renderFamResults(''); document.getElementById('famPicker').style.display='flex'; setTimeout(function(){s.focus();},50); }
+  function closeFamPicker(){ document.getElementById('famPicker').style.display='none'; famTargetId=null; }
+  function renderFamResults(q){
+    q=(q||'').trim().toLowerCase();
+    var self=findCust(famTargetId)||{};
+    var linked={}; (self.relations||[]).forEach(function(r){linked[r.to]=1;});
+    var list=CUSTS.filter(function(c){ return c.id!==famTargetId && !linked[c.id] && (!q || (c.name||'').toLowerCase().indexOf(q)>=0); })
+      .sort(function(a,b){return (a.name||'').localeCompare(b.name||'','ko');}).slice(0,40);
+    var box=document.getElementById('famResults');
+    if(!list.length){ box.innerHTML='<div style="padding:18px;text-align:center;color:var(--muted);font-size:13px">'+(q?'검색 결과가 없어요':'고객이 없어요')+'</div>'; return; }
+    box.innerHTML=list.map(function(c){
+      return '<div class="li" data-fampick="'+esc(c.id)+'" style="cursor:pointer"><div class="av" style="width:32px;height:32px;font-size:13px">'+av(c.name)+'</div><div class="bd"><div class="nm" style="font-size:14px">'+esc(c.name)+' 님</div><div class="sub">'+(c.loyalty_visits||(c.history||[]).length||0)+'회</div></div><div class="rt" style="color:var(--sage);font-weight:800">+ 연결</div></div>';
+    }).join('');
+  }
+  function linkFamily(aId,bId){
+    var a=findCust(aId), b=findCust(bId); if(!a||!b) return;
+    function add(x,toId,name){ x.relations=x.relations||[]; if(!x.relations.some(function(r){return r.to===toId;})) x.relations.push({to:toId,type:'가족'}); }
+    add(a,bId); add(b,aId); lsSave(); refresh();
+  }
+  function unlinkFamily(aId,bId){
+    [ [aId,bId],[bId,aId] ].forEach(function(p){ var x=findCust(p[0]); if(x&&x.relations) x.relations=x.relations.filter(function(r){return r.to!==p[1];}); });
+    lsSave(); refresh();
+  }
+
   // ── 내보내기 / 가져오기 (백업·기기 이동) ──
   function exportData(){
     var blob=new Blob([JSON.stringify(CUSTS,null,2)],{type:'application/json'});
@@ -885,7 +900,13 @@
     var sv=e.target.closest('#saveClient'); if(sv){ saveClient(sv.getAttribute('data-id')||null); return; }
     var dc=e.target.closest('#delClient'); if(dc){ delClient(dc.getAttribute('data-id')); return; }
     var ed=e.target.closest('[data-edit-client]'); if(ed){ editClient(ed.getAttribute('data-edit-client')); return; }
+    var fl=e.target.closest('[data-famlink]'); if(fl){ openFamPicker(fl.getAttribute('data-famlink')); return; }
+    var fu=e.target.closest('[data-famunlink]'); if(fu){ var pr=fu.getAttribute('data-famunlink').split('|'); unlinkFamily(pr[0],pr[1]); openClient(pr[0]); return; }
+    var fp=e.target.closest('[data-fampick]'); if(fp){ var tgt=famTargetId; linkFamily(tgt, fp.getAttribute('data-fampick')); closeFamPicker(); openClient(tgt); toast('가족으로 연결했어요'); return; }
+    if(e.target.closest('#famClose')){ closeFamPicker(); return; }
+    if(e.target.id==='famPicker'){ closeFamPicker(); return; }   // 바깥 영역 탭 → 닫기
   });
+  document.getElementById('famSearch').addEventListener('input', function(e){ renderFamResults(e.target.value); });
   document.getElementById('importFile').addEventListener('change', function(e){ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
   document.getElementById('clientSearch').addEventListener('input', function(e){ clientQuery=e.target.value; renderClients(); });
   document.getElementById('clientSort').addEventListener('change', function(e){ clientSortKey=e.target.value; renderClients(); });
