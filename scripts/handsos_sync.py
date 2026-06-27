@@ -173,12 +173,25 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                     page.wait_for_timeout(int(step["wait_ms"]))
 
             if debug:
-                input("‹디버그› 창에서 [매출분석 → 매출상세목록]까지 직접 이동하고 표가 보이면 Enter…")
+                input("‹디버그› 표가 보이면 Enter… (자동조회됐으면 그대로 Enter)")
                 for i, pg in enumerate(ctx.pages):           # 열린 창/탭 전체(팝업 포함) + 프레임 URL
                     print(f"  [page {i}] {pg.url}")
                     for fr in pg.frames:
                         if fr.url and "about:blank" not in fr.url:
                             print(f"     frame: {fr.url}")
+                _DIAG = ("()=>{var out=[];[...document.querySelectorAll('table')].forEach((t,i)=>{"
+                         "var x=t.innerText||'';out.push(i+': rows='+t.querySelectorAll('tr').length"
+                         "+' 고객명='+/고객명/.test(x)+' 날짜='+/날짜/.test(x)+' | '+x.slice(0,45).replace(/\\n/g,' '));});"
+                         "var m=document.body.innerText.match(/총\\s*([\\d,]+)\\s*개/);"
+                         "return {tables:out, total:(m?m[1]:'?')};}")
+                for pg in ctx.pages:                          # 표 진단 — 어느 table 에 고객명/날짜 가 있나
+                    try:
+                        d = pg.evaluate(_DIAG)
+                        print(f"  표 진단(총건수={d['total']}):")
+                        for line in d["tables"][:14]:
+                            print("    table#" + line)
+                    except Exception as e:
+                        print("  표 진단 실패:", e)
 
             # 3) 열린 창/탭을 최신순으로 모두 시도 → 표가 가장 많이 잡힌 곳을 채택(매출상세목록 팝업 대응)
             best = {"rows": [], "total": 0, "error": "no-table"}
