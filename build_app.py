@@ -36,7 +36,8 @@ def _load(path: str) -> dict:
 
 
 # 전화번호 PII 안전망 — 메모/노트 등 자유입력에 섞인 번호를 앱 데이터에서 일괄 마스킹.
-_PHONE_RE = re.compile(r"01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}")
+# 국내(010-…)와 국제표기(+82 10-…, 선행 0 생략) 모두 포착. 접두(0 또는 +82)는 필수라 임의 숫자열 오탐 방지.
+_PHONE_RE = re.compile(r"(?:\+?82[-.\s]?0?|0)1[016789][-.\s]?\d{3,4}[-.\s]?\d{4}")
 
 
 def _redact_pii(obj):
@@ -60,11 +61,16 @@ def _parse_date(v) -> date | None:
 
 
 def _md(v) -> tuple[int, int] | None:
-    """'MM-DD' → (month, day)."""
+    """'MM-DD' → (month, day). 대시 없는/형식 불량 입력은 조용히 건너뜀(JS 가드와 일치)."""
     if not v:
         return None
-    m, d = str(v).split("-")[-2:]
-    return int(m), int(d)
+    parts = str(v).split("-")
+    if len(parts) < 2:
+        return None
+    try:
+        return int(parts[-2]), int(parts[-1])
+    except ValueError:
+        return None
 
 
 def last_visit(cust: dict) -> date | None:
@@ -88,20 +94,27 @@ def derive_cycle(cust: dict) -> int:
         return 0
     iv = sorted((ds[i + 1] - ds[i]).days for i in range(len(ds) - 1))
     n = len(iv)
-    med = iv[n // 2] if n % 2 else round((iv[n // 2 - 1] + iv[n // 2]) / 2)
+    # round-half-up (정수 간격) — JS Math.round 와 일치(파이썬 기본 banker's rounding 회피)
+    med = iv[n // 2] if n % 2 else (iv[n // 2 - 1] + iv[n // 2] + 1) // 2
     return max(10, min(120, med))
 
 
 def revisit_state(cust: dict, today: date) -> dict:
-    """재방문 상태: overdue(이탈위험)·due(도래)·soon·new·ok + 주기/경과일."""
+    """재방문 상태: overdue(이탈위험)·due(도래)·soon·new·ok + 주기/경과일.
+
+    배포 JSON 은 기본(보통) 민감도 스냅샷. 앱은 시드에서 사용자 선택 프리셋(느슨/보통/민감)으로
+    런타임 재산출하므로 new 임계(여기선 60일 고정)는 앱에서 45/60/90 으로 달라질 수 있다(의도).
+    """
     lv = last_visit(cust)
     v = cust.get("loyalty_visits") or len(cust.get("history", []) or [])
     cyc = derive_cycle(cust)
     explicit = bool(cust.get("care_cycle_days"))   # 직접 지정한 주기는 방문 1회여도 신뢰
     gap = (today - lv).days if lv else None
     if gap is None or not cyc or (v < 2 and not explicit):
-        state = "new" if (v <= 1 and gap is not None and gap <= 60) else "ok"
-    elif (v >= 3 or explicit) and cyc * 1.6 < gap < 400:
+        state = "new" if (v <= 1 and gap is not None and 0 <= gap <= 60) else "ok"
+    elif gap >= 400:
+        state = "ok"                       # 휴면(장기 미방문) — 주기 신호 대상 아님
+    elif (v >= 3 or explicit) and gap > cyc * 1.6:
         state = "overdue"
     elif gap >= cyc * 0.9:
         state = "due"
@@ -148,11 +161,16 @@ def _latest_service(cust: dict) -> str | None:
     return best_s
 
 
+def _custno_key(v) -> str:
+    """고객번호 정규화(숫자만 + 앞 0 제거). 원장·고객 양쪽이 같은 키를 쓰게 하는 단일 소스."""
+    return re.sub(r"\D", "", str(v or "")).lstrip("0")
+
+
 def spend_by_custno(records: list[dict]) -> dict[str, int]:
     """거래 원장 → 고객번호별 누적결제(원). LTV·VIP 산정의 단일 소스."""
     spend: dict[str, int] = {}
     for r in records or []:
-        cn = re.sub(r"\D", "", str(r.get("custno") or "")).lstrip("0")
+        cn = _custno_key(r.get("custno"))
         p = r.get("price")
         if cn and isinstance(p, (int, float)):
             spend[cn] = spend.get(cn, 0) + int(p)
@@ -192,6 +210,7 @@ def build_customer(cust: dict, today: date | None = None) -> dict:
         "revisit_state": ri["state"],     # overdue·due·soon·new·ok
         "total_won": won,                 # 누적결제(records 합산) — LTV
         "tier": spend_tier(won),          # vip·regular·normal·light
+        # 교차판매(crosssell)는 앱 JS(derive)가 시드 이력에서 런타임 산출 — dist 카드엔 싣지 않음(중복 회피)
         "booking": _clean_booking(cust.get("booking")),
         "history": [
             {"date": str(_parse_date(h.get("date"))), "service": h.get("service"),
@@ -261,7 +280,7 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
     records = _stats.load_records(client_dir)
     spend = spend_by_custno(records)
     for c in customers:
-        c["total_won"] = spend.get(str(c.get("custno") or ""), 0)
+        c["total_won"] = spend.get(_custno_key(c.get("custno")), 0)   # 조회 키도 동일 정규화
 
     care_list = []
     for c in customers:

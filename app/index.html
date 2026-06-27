@@ -458,7 +458,7 @@
   var clientQuery='', clientSortKey='visits', clientFocus=null;
   var clientView=(function(){try{return localStorage.getItem('crm_view')||'list';}catch(e){return 'list';}})();
   function focusLabel(f){ return {overdue:'이탈 위험',due:'재방문 도래','new':'신규',vip:'VIP'}[f]||f; }
-  function cdays(c){ if(!c.last_visit) return null; var d=parseD(c.last_visit); return d?Math.round((new Date()-d)/86400000):null; }
+  function cdays(c){ return (c.days_since==null)? null : c.days_since; }   // derive가 기준일(META.today)로 계산한 값 재사용
   function ctier(c){ var v=c.loyalty_visits||0; return v>=4?'단골':(v<=1?'신규':'일반'); }
   function csvc(c){ return (c.history&&c.history[0]&&c.history[0].service)||(c.booking&&c.booking.service)||''; }
   function vipBadge(c){ return c.tier==='vip'?'<span class="tag t-vip">VIP</span>':''; }
@@ -479,7 +479,7 @@
     signal:function(cl){
       var cnt={overdue:0,due:0,'new':0};
       cl.forEach(function(c){ if(cnt[c.revisit_state]!=null) cnt[c.revisit_state]++; });
-      var bar='<div class="rv-bar"><span class="rv-x">이탈위험 '+cnt.overdue+'</span>'+
+      var bar=clientFocus?'':'<div class="rv-bar"><span class="rv-x">이탈위험 '+cnt.overdue+'</span>'+
         '<span class="rv-d">재방문 도래 '+cnt.due+'</span><span class="rv-n">신규 '+cnt['new']+'</span></div>';
       var rank={overdue:0,due:1,soon:2,'new':3,ok:4};
       var sorted=cl.slice().sort(function(a,b){ return (rank[a.revisit_state]==null?5:rank[a.revisit_state])-(rank[b.revisit_state]==null?5:rank[b.revisit_state]); });
@@ -504,7 +504,7 @@
       var vip=ranked.filter(function(c){return c.tier==='vip';}).length;
       var sumw=ranked.reduce(function(s,c){return s+(+c.total_won||0);},0);
       var xs=ranked.filter(function(c){return c.crosssell;}).length;
-      var bar='<div class="rv-bar"><span class="rv-v">VIP '+vip+'</span><span class="rv-d" style="background:var(--soft);color:var(--accent-d)">누적 '+wonShort(sumw)+'원</span><span class="rv-n" style="background:#EAF0E6;color:var(--sage)">교차판매 '+xs+'</span></div>';
+      var bar=clientFocus?'':'<div class="rv-bar"><span class="rv-v">VIP '+vip+'</span><span class="rv-d" style="background:var(--soft);color:var(--accent-d)">누적 '+wonShort(sumw)+'원</span><span class="rv-n" style="background:#EAF0E6;color:var(--sage)">교차판매 '+xs+'</span></div>';
       return bar+'<div class="card">'+ranked.map(function(c,i){
         var w=+c.total_won||0, tb=c.tier==='vip'?'<span class="tag t-vip">VIP</span>':(c.tier==='regular'?'<span class="tag t-season" style="background:#F2EAD8;color:var(--gold)">단골</span>':'');
         var xsl=c.crosssell?'<div class="cv-feat" style="margin:6px 0 0;background:#EAF0E6;color:var(--sage)">💡 '+esc(c.crosssell.label)+'</div>':'';
@@ -740,8 +740,9 @@
   // 재방문 상태: overdue(이탈위험)·due(도래)·soon(곧)·new(첫방문케어)·ok
   function revisitInfo(c,t){ var lv=latest(c).date, v=c.loyalty_visits||(c.history||[]).length, cyc=cycleOf(c);
     var S=SENS(), explicit=!!(+c.care_cycle_days), gap=lv?Math.round((t-lv)/86400000):null, state='ok';
-    if(gap==null||!cyc||(v<2&&!explicit)) state=(v<=1&&gap!=null&&gap<=S.newDays)?'new':'ok';  // 최근 유입만 첫방문 케어
-    else if((v>=3||explicit) && gap>cyc*S.overdue && gap<400) state='overdue';
+    if(gap==null||!cyc||(v<2&&!explicit)) state=(v<=1&&gap!=null&&gap>=0&&gap<=S.newDays)?'new':'ok';  // 최근 유입만 첫방문 케어
+    else if(gap>=400) state='ok';                          // 휴면(장기 미방문) — 주기 신호 대상 아님
+    else if((v>=3||explicit) && gap>cyc*S.overdue) state='overdue';
     else if(gap>=cyc*S.due) state='due';
     else if(gap>=cyc*0.7) state='soon';
     return {cycle:cyc,gap:gap,state:state}; }
@@ -852,9 +853,13 @@
     var refby=get('f-refby'); if(refby) obj.referred_by=refby;
     return obj;
   }
+  // 폼에 없는 시스템 관리 필드 — 수정 저장 시 보존(없으면 매출·등급·검색이 깨짐)
+  var KEEP_FIELDS=['custno','first_visit','total_won','contact'];
   function saveClient(id){
     var obj=collectForm(); if(!obj.name){ toast('이름을 입력해 주세요'); return; }
-    if(id){ for(var i=0;i<CUSTS.length;i++){ if(CUSTS[i].id===id){ obj.id=id; CUSTS[i]=obj; break; } } }
+    if(id){ for(var i=0;i<CUSTS.length;i++){ if(CUSTS[i].id===id){ var old=CUSTS[i]||{}; obj.id=id;
+      KEEP_FIELDS.forEach(function(k){ if(old[k]!=null && obj[k]==null) obj[k]=old[k]; });   // 폼이 못 건드리는 필드 이월
+      CUSTS[i]=obj; break; } } }
     else { obj.id=uid(); CUSTS.push(obj); }
     lsSave(); refresh(); back(); toast('저장했어요');
   }

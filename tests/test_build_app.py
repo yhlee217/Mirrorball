@@ -67,8 +67,8 @@ def test_revisit_state_overdue_needs_three_visits():
         {"date": "2026-02-01", "service": "컷"},
         {"date": "2026-03-03", "service": "컷"},  # 간격 ~30일
     ]}
-    ri = ba.revisit_state(cust, date(2026, 6, 23))   # 마지막 3/3 → 112일째 ≫ 30*1.6
-    assert ri["state"] == "overdue" and ri["cycle"] == 30
+    ri = ba.revisit_state(cust, date(2026, 6, 23))   # 마지막 3/3 → 112일째 ≫ 주기*1.6
+    assert ri["state"] == "overdue" and ri["cycle"] == 31   # 간격 31·30 → round-half-up 31
 
 
 def test_revisit_state_new_recent_single_visit():
@@ -100,6 +100,40 @@ def test_build_customer_carries_ltv_and_tier():
             "history": [{"date": "2026-06-01", "service": "컷"}]}
     card = ba.build_customer(cust, date(2026, 6, 23))
     assert card["total_won"] == 620000 and card["tier"] == "vip"
+
+
+def test_spend_lookup_normalizes_leading_zero_custno():
+    # 원장 custno '0099' → 키 '99'. 고객 custno 가 '0099'/'99' 어느 쪽이든 매칭돼야 함.
+    recs = [{"custno": "0099", "price": 700000}]
+    spend = ba.spend_by_custno(recs)
+    assert spend.get("99") == 700000
+    for raw in ("0099", "99", "C-099"):
+        assert spend.get(ba._custno_key(raw)) == 700000
+
+
+def test_md_dashless_birthday_does_not_crash():
+    assert ba._md("1104") is None              # 대시 없음 → None(예외 아님)
+    cust = {"name": "박", "birthday": "1104"}    # 빌드 중단 없이 알림만 비움
+    assert ba.alerts_for(cust, date(2026, 11, 4)) == []
+
+
+def test_revisit_dormant_over_400_days_is_ok():
+    cust = {"loyalty_visits": 5, "history": [
+        {"date": "2025-01-01", "service": "컷"}, {"date": "2025-02-01", "service": "컷"},
+        {"date": "2025-03-01", "service": "컷"}]}
+    # 마지막 2025-03-01 → 2026-06-23 기준 ~479일 → 휴면(ok), '재방문 도래' 오노출 금지
+    assert ba.revisit_state(cust, date(2026, 6, 23))["state"] == "ok"
+
+
+def test_revisit_future_date_single_visit_not_new():
+    cust = {"loyalty_visits": 1, "history": [{"date": "2026-07-10", "service": "컷"}]}
+    assert ba.revisit_state(cust, date(2026, 6, 23))["state"] == "ok"   # 음수 gap → new 아님
+
+
+def test_redact_masks_international_phone():
+    assert "[연락처]" in ba._redact_pii("연락 +82 10-1234-5678 로")
+    assert "1234" not in ba._redact_pii("문의 +82-10-1234-5678")
+    assert ba._redact_pii("010-1234-5678") == "[연락처]"   # 국내 형식도 유지
 
 
 def test_build_one_excludes_contact_pii(tmp_path):
