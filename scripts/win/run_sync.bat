@@ -1,15 +1,14 @@
 @echo off
-REM 핸드SOS 동기화 실행기 (Windows). Task Scheduler 가 이걸 호출.
-REM 한글 깨짐 방지 위해 UTF-8 강제.
+REM HandSOS sync runner (Windows). Task Scheduler calls this. UTF-8 forced for Korean output.
 setlocal
 chcp 65001 >nul
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 
-REM 이 배치 위치(scripts\win) 기준으로 저장소 루트로 이동
+REM Move to repo root (this .bat lives in scripts\win)
 cd /d "%~dp0\..\.."
 
-REM 가상환경 있으면 그걸, 없으면 시스템 python
+REM Use venv python if present, else system python
 if exist ".venv\Scripts\python.exe" (
   set "PY=.venv\Scripts\python.exe"
 ) else (
