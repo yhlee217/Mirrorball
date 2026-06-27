@@ -36,13 +36,44 @@ def test_revisit_not_due_far_out():
 
 
 def test_revisit_overdue_flagged():
+    # 주기 30일인데 83일째 → 이탈 위험(atrisk)
     cust = {
         "id": "d", "name": "최", "care_cycle_days": 30,
         "history": [{"date": "2026-04-01", "service": "컬러"}],
     }
     alerts = ba.alerts_for(cust, date(2026, 6, 23))
-    rev = [a for a in alerts if a["kind"] == "revisit"]
-    assert rev and "지남" in rev[0]["why"]
+    risk = [a for a in alerts if a["kind"] == "atrisk"]
+    assert risk and "안 오심" in risk[0]["why"]
+
+
+def test_derive_cycle_from_intervals():
+    # 방문 간격 30·30 → 주기 30일(명시값 없이 이력에서 추정)
+    cust = {"history": [
+        {"date": "2026-04-01", "service": "컷"},
+        {"date": "2026-05-01", "service": "컷"},
+        {"date": "2026-05-31", "service": "컷"},
+    ]}
+    assert ba.derive_cycle(cust) == 30
+
+
+def test_derive_cycle_needs_two_visits():
+    assert ba.derive_cycle({"history": [{"date": "2026-04-01", "service": "컷"}]}) == 0
+
+
+def test_revisit_state_overdue_needs_three_visits():
+    # 3회+ 단골이 평소 주기 1.6배 초과 → overdue
+    cust = {"loyalty_visits": 4, "history": [
+        {"date": "2026-01-01", "service": "컷"},
+        {"date": "2026-02-01", "service": "컷"},
+        {"date": "2026-03-03", "service": "컷"},  # 간격 ~30일
+    ]}
+    ri = ba.revisit_state(cust, date(2026, 6, 23))   # 마지막 3/3 → 112일째 ≫ 30*1.6
+    assert ri["state"] == "overdue" and ri["cycle"] == 30
+
+
+def test_revisit_state_new_recent_single_visit():
+    cust = {"loyalty_visits": 1, "history": [{"date": "2026-06-10", "service": "컷"}]}
+    assert ba.revisit_state(cust, date(2026, 6, 23))["state"] == "new"
 
 
 def test_build_one_excludes_contact_pii(tmp_path):

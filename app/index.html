@@ -170,8 +170,16 @@
   .cv-g .gs{font-size:10.5px;color:var(--muted);margin-top:2px;}
   /* 아바타 등급 링 + 상태색 */
   .av.r-gold{box-shadow:0 0 0 2px var(--gold);} .av.r-sage{box-shadow:0 0 0 2px var(--sage);}
+  .av.r-rose{box-shadow:0 0 0 2px var(--rose);}
   .st-due{color:var(--rose);font-weight:800;font-size:11px;} .st-new{color:var(--sage);font-weight:800;font-size:11px;}
-  .st-rec{color:var(--muted);font-size:11px;}
+  .st-rec{color:var(--muted);font-size:11px;text-align:right;}
+  .t-risk{background:var(--rose);color:#fff;}
+  /* 신호 요약 바 */
+  .rv-bar{display:flex;gap:6px;margin-bottom:10px;}
+  .rv-bar span{flex:1;text-align:center;font-size:11.5px;font-weight:800;border-radius:9px;padding:7px 4px;}
+  .rv-bar .rv-x{background:var(--rose);color:#fff;}
+  .rv-bar .rv-d{background:#F2EAD8;color:var(--gold);}
+  .rv-bar .rv-n{background:var(--sage-bg);color:var(--sage);}
 
   /* tabbar */
   .tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;background:var(--paper);
@@ -389,7 +397,7 @@
     var box=document.getElementById('alertList');
     var care=DATA?(DATA.care||[]):[];
     if(!care.length){ box.innerHTML=empty('🔔','오늘 챙길 고객이 없어요','생일·리터치 시기가 된 단골이 생기면\n여기에서 알려드려요'); return; }
-    var cls={bday:'t-bday',revisit:'t-revisit',season:'t-season'};
+    var cls={bday:'t-bday',atrisk:'t-risk',revisit:'t-revisit',season:'t-season'};
     box.innerHTML=care.map(function(c,i){
       var draft=c.draft? '<div class="draft"><div class="lab">추천 문구 (직접 보내기)</div>'+esc(c.draft)+'</div>'
         : '<div class="draft"><div class="lab">추천 문구</div><span style="color:var(--muted)">내 말투로 곧 채워드려요</span></div>';
@@ -420,20 +428,28 @@
         '<div class="rt"><div style="font-weight:800;color:var(--accent-d)">'+v+'회</div><div style="font-size:10px;color:var(--muted)">'+(v>=4?'★ 단골':(v<=1?'신규':''))+'</div></div></div>';
     }).join('')+'</div>'; },
 
-    // 2. 신호 — 등급 링 + 재방문/최근
-    signal:function(cl){ return '<div class="card">'+cl.map(function(c){
-      var t=ctier(c), ring=t==='단골'?' r-gold':(t==='신규'?' r-sage':'');
-      var badge=t==='단골'?'<span class="tag t-season" style="background:var(--gold-bg,#F4ECD8);color:var(--gold)">단골</span>':(t==='신규'?'<span class="tag t-revisit">신규</span>':'');
-      var dd=cdays(c), cyc=c.care_cycle_days;
-      var right;
-      if(t==='신규') right='<div class="st-new">첫방문 케어</div>';
-      else if(cyc&&dd!=null&&dd>=cyc-7) right='<div class="st-due">재방문 임박</div>';
-      else right='';
-      right+= dd!=null? '<div class="st-rec">'+dd+'일 전</div>':'';
-      return '<div class="li" data-client="'+esc(c.id)+'"><div class="av'+ring+'">'+av(c.name)+'</div>'+
-        '<div class="bd"><div class="nm">'+esc(c.name)+' 님 '+badge+'</div><div class="sub">'+esc(csvc(c))+' · '+(c.loyalty_visits||0)+'회</div></div>'+
-        '<div class="rt">'+right+'</div></div>';
-    }).join('')+'</div>'; },
+    // 2. 신호 — 재방문 주기 기반 이탈위험·도래·신규(위험 먼저)
+    signal:function(cl){
+      var cnt={overdue:0,due:0,'new':0};
+      cl.forEach(function(c){ if(cnt[c.revisit_state]!=null) cnt[c.revisit_state]++; });
+      var bar='<div class="rv-bar"><span class="rv-x">이탈위험 '+cnt.overdue+'</span>'+
+        '<span class="rv-d">재방문 도래 '+cnt.due+'</span><span class="rv-n">신규 '+cnt['new']+'</span></div>';
+      var rank={overdue:0,due:1,soon:2,'new':3,ok:4};
+      var sorted=cl.slice().sort(function(a,b){ return (rank[a.revisit_state]==null?5:rank[a.revisit_state])-(rank[b.revisit_state]==null?5:rank[b.revisit_state]); });
+      return bar+'<div class="card">'+sorted.map(function(c){
+        var st=c.revisit_state, dd=c.days_since, cyc=c.care_cycle_days, v=c.loyalty_visits||0;
+        var ring=st==='overdue'?' r-rose':(v>=4?' r-gold':(st==='new'?' r-sage':''));
+        var badge=v>=4?'<span class="tag t-season" style="background:var(--gold-bg,#F4ECD8);color:var(--gold)">단골</span>':'';
+        var right;
+        if(st==='overdue') right='<div class="st-due">이탈 위험</div><div class="st-rec">'+dd+'일째 · 평소 '+cyc+'일</div>';
+        else if(st==='due') right='<div class="st-due" style="color:var(--gold)">재방문 도래</div><div class="st-rec">'+dd+'일째 · 평소 '+cyc+'일</div>';
+        else if(st==='soon') right='<div class="st-rec" style="color:var(--accent-d);font-weight:700">곧 도래</div><div class="st-rec">'+dd+'일 · 평소 '+cyc+'일</div>';
+        else if(st==='new') right='<div class="st-new">첫방문 케어</div>'+(dd!=null?'<div class="st-rec">'+dd+'일 전</div>':'');
+        else right= dd!=null? '<div class="st-rec">'+dd+'일 전</div>':'';
+        return '<div class="li" data-client="'+esc(c.id)+'"><div class="av'+ring+'">'+av(c.name)+'</div>'+
+          '<div class="bd"><div class="nm">'+esc(c.name)+' 님 '+badge+'</div><div class="sub">'+esc(csvc(c))+' · '+v+'회</div></div>'+
+          '<div class="rt">'+right+'</div></div>';
+      }).join('')+'</div>'; },
 
     // 3. 특징 — 분석된 한 줄 강조
     trait:function(cl){ return cl.map(function(c){
@@ -620,6 +636,22 @@
   function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function latest(c){ var bd=null,bs=null; (c.history||[]).forEach(function(h){var d=parseD(h.date); if(d&&(!bd||d>bd)){bd=d;bs=h.service;}}); return {service:bs,date:bd}; }
   function monthsAgo(d,t){ return d?Math.max(1,Math.round((t-d)/2592000000)):null; }
+  // 방문 간격 중앙값 → 개인별 재방문 주기(일). 명시값(care_cycle_days) 우선, 없으면 이력에서 추정.
+  function cycleOf(c){ if(+c.care_cycle_days) return +c.care_cycle_days;
+    var ds=[]; (c.history||[]).forEach(function(h){var d=parseD(h.date); if(d) ds.push(+d);});
+    ds=ds.filter(function(v,i,a){return a.indexOf(v)===i;}).sort(function(a,b){return a-b;});
+    if(ds.length<2) return 0;
+    var iv=[]; for(var i=1;i<ds.length;i++) iv.push(Math.round((ds[i]-ds[i-1])/86400000));
+    iv.sort(function(a,b){return a-b;}); var n=iv.length, m=n%2? iv[(n-1)/2] : Math.round((iv[n/2-1]+iv[n/2])/2);
+    return Math.max(10,Math.min(120,m)); }
+  // 재방문 상태: overdue(이탈위험)·due(도래)·soon(곧)·new(첫방문케어)·ok
+  function revisitInfo(c,t){ var lv=latest(c).date, v=c.loyalty_visits||(c.history||[]).length, cyc=cycleOf(c);
+    var explicit=!!(+c.care_cycle_days), gap=lv?Math.round((t-lv)/86400000):null, state='ok';
+    if(gap==null||!cyc||(v<2&&!explicit)) state=(v<=1&&gap!=null&&gap<=60)?'new':'ok';  // 최근 유입만 첫방문 케어
+    else if((v>=3||explicit) && gap>cyc*1.6 && gap<400) state='overdue';
+    else if(gap>=cyc*0.9) state='due';
+    else if(gap>=cyc*0.7) state='soon';
+    return {cycle:cyc,gap:gap,state:state}; }
   // 업종별 카피는 빌드(build_app)가 주입한 DATA.config(=kb/copy.yaml) 단일 소스에서.
   // 데이터 없는 단독 실행용 최소 폴백(업종 중립).
   var CONFIG = { benefit:{ default:'시기 맞춰 가볍게 정리하면 더 예쁘게 유지돼요', rules:[] },
@@ -627,9 +659,13 @@
   function benefit(s){ s=s||''; var b=CONFIG.benefit||{}, rs=b.rules||[]; for(var i=0;i<rs.length;i++){ if((rs[i].keywords||[]).some(function(k){return s.indexOf(k)>=0;})) return rs[i].text; } return b.default||''; }
   function tipsFor(s){ s=s||''; var a=CONFIG.aftercare||{}, rs=a.rules||[]; for(var i=0;i<rs.length;i++){ if((rs[i].keywords||[]).some(function(k){return s.indexOf(k)>=0;})) return rs[i].tips||[]; } return a.default||[]; }
   function alertsFor(c,t){ var out=[]; var bd=String(c.birthday||''); if(bd){ var p=bd.split('-'); if(p.length>=2 && +p[p.length-2]===t.getMonth()+1 && +p[p.length-1]===t.getDate()) out.push({kind:'bday',label:'생일',why:'오늘 생일'}); }
-    var lv=latest(c).date, cyc=+c.care_cycle_days||0; if(lv&&cyc){ var due=new Date(lv.getTime()+cyc*86400000); var dl=Math.round((due-t)/86400000); if(dl<=7){ var svc=latest(c).service||'시술'; out.push({kind:'revisit',label:'재방문',why:svc+' 리터치 시기('+(dl<0?'지남':dl+'일 내')+')'}); } } return out; }
+    var ri=revisitInfo(c,t), svc=latest(c).service||'시술';
+    if(ri.state==='overdue') out.push({kind:'atrisk',label:'이탈 위험',why:svc+' · '+ri.gap+'일째 안 오심(평소 '+ri.cycle+'일 주기)'});
+    else if(ri.state==='due') out.push({kind:'revisit',label:'재방문',why:svc+' 리터치 시기 · '+ri.gap+'일째(평소 '+ri.cycle+'일)'});
+    return out; }
   function draftFor(kind,c,t){ var nm=c.name||'고객'; if(kind==='bday'){ var pr=(c.prefer||[])[0]; return nm+'님 생일 축하드려요 :) '+(pr?pr+' 느낌으로 기분 전환도 좋아요. 편하게 연락 주세요!':'머리도 기분도 새롭게 하고 싶으시면 편하게 연락 주세요!'); }
     if(kind==='revisit'){ var l=latest(c), m=monthsAgo(l.date,t); return (l.service&&m? nm+'님 '+l.service+' 하신 지 '+m+'개월쯤 됐네요. ':nm+'님, 오랜만이에요. ')+benefit(l.service)+' 시간 되실 때 편하게 봐요!'; }
+    if(kind==='atrisk'){ var la=latest(c), ma=monthsAgo(la.date,t); return nm+'님, '+(la.service&&ma? la.service+' 하신 지 '+ma+'개월쯤 됐어요. 그동안 잘 지내셨어요? ':'오랜만이에요, 잘 지내셨어요? ')+benefit(la.service)+' 편하실 때 한번 들러요!'; }
     return nm+'님, 가볍게 정리 어떠세요? 편하게 연락 주세요!'; }
   function resolveRel(cs){ var byId={},brought={}; cs.forEach(function(c){ if(c.id) byId[c.id]=c; }); cs.forEach(function(c){ if(c.referred_by){ (brought[c.referred_by]=brought[c.referred_by]||[]).push(c.id); } });
     var nm=function(id){ return (byId[id]&&byId[id].name)||id; }; var out={};
@@ -640,8 +676,8 @@
   function derive(){
     var ts=META.today||todayStr(), t=parseD(ts)||new Date(); var rel=resolveRel(CUSTS);
     var care=[]; CUSTS.forEach(function(c){ alertsFor(c,t).forEach(function(a){ care.push({id:c.id,name:c.name,kind:a.kind,label:a.label,why:a.why,prefer:c.prefer||[],draft:draftFor(a.kind,c,t)}); }); });
-    var ord={bday:0,revisit:1}; care.sort(function(a,b){return (ord[a.kind]==null?9:ord[a.kind])-(ord[b.kind]==null?9:ord[b.kind]);});
-    var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}; return {id:c.id,custno:c.custno||'',name:c.name,memo:c.memo||'',prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]}; });
+    var ord={bday:0,atrisk:1,revisit:2}; care.sort(function(a,b){return (ord[a.kind]==null?9:ord[a.kind])-(ord[b.kind]==null?9:ord[b.kind]);});
+    var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}, ri=revisitInfo(c,t); return {id:c.id,custno:c.custno||'',name:c.name,memo:c.memo||'',prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,care_cycle_days:ri.cycle,days_since:ri.gap,revisit_state:ri.state,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]}; });
     DATA={slug:SLUG,designer:META.designer,salon:META.salon,today:ts,exposure:META.exposure,stats:META.stats,bookings:upcoming(CUSTS,ts),care:care,clients:clients};
   }
   function refresh(){ derive(); renderAll(); }
@@ -769,7 +805,8 @@
   // ── 부팅: 빌드 시드 또는 PREVIEW_DATA → 최초 1회 로컬에 적재, 이후 로컬 우선 ──
   // preview=true(미리보기 파일): 로컬 무시하고 번들 데이터를 항상 보여줌(이전 미리보기 잔여 데이터 방지)
   function boot(base, preview){
-    META.today=todayStr();
+    // 미리보기는 데이터 기준일(snapshot)에 고정 → 주기 신호가 결정적으로 재현됨. 운영은 기기 오늘.
+    META.today=(preview && base && base.today)? base.today : todayStr();
     if(base){ META.designer=base.designer||''; META.salon=base.salon||''; META.exposure=base.exposure||null; META.stats=base.stats||null;
       if(base.config){ CONFIG = base.config; } }     // 업종 카피 단일 소스 주입
     var local=preview?null:lsLoad();

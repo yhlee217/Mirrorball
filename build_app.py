@@ -73,25 +73,60 @@ def last_visit(cust: dict) -> date | None:
     return max(dates) if dates else None
 
 
+def _visit_dates(cust: dict) -> list[date]:
+    ds = {_parse_date(h.get("date")) for h in cust.get("history", []) or []}
+    return sorted(d for d in ds if d)
+
+
+def derive_cycle(cust: dict) -> int:
+    """개인별 재방문 주기(일). 명시값 우선, 없으면 방문 간격 중앙값(10~120 클램프)."""
+    cyc = cust.get("care_cycle_days")
+    if cyc:
+        return int(cyc)
+    ds = _visit_dates(cust)
+    if len(ds) < 2:
+        return 0
+    iv = sorted((ds[i + 1] - ds[i]).days for i in range(len(ds) - 1))
+    n = len(iv)
+    med = iv[n // 2] if n % 2 else round((iv[n // 2 - 1] + iv[n // 2]) / 2)
+    return max(10, min(120, med))
+
+
+def revisit_state(cust: dict, today: date) -> dict:
+    """재방문 상태: overdue(이탈위험)·due(도래)·soon·new·ok + 주기/경과일."""
+    lv = last_visit(cust)
+    v = cust.get("loyalty_visits") or len(cust.get("history", []) or [])
+    cyc = derive_cycle(cust)
+    explicit = bool(cust.get("care_cycle_days"))   # 직접 지정한 주기는 방문 1회여도 신뢰
+    gap = (today - lv).days if lv else None
+    if gap is None or not cyc or (v < 2 and not explicit):
+        state = "new" if (v <= 1 and gap is not None and gap <= 60) else "ok"
+    elif (v >= 3 or explicit) and cyc * 1.6 < gap < 400:
+        state = "overdue"
+    elif gap >= cyc * 0.9:
+        state = "due"
+    elif gap >= cyc * 0.7:
+        state = "soon"
+    else:
+        state = "ok"
+    return {"cycle": cyc, "gap": gap, "state": state}
+
+
 def alerts_for(cust: dict, today: date, window: int = 7) -> list[dict]:
-    """한 고객에 대한 오늘의 알림(0~N개)."""
+    """한 고객에 대한 오늘의 알림(0~N개). 재방문 주기는 이력에서 자동 추정."""
     out: list[dict] = []
     bd = _md(cust.get("birthday"))
     if bd and (today.month, today.day) == bd:
         out.append({"kind": "bday", "label": "생일", "why": "오늘 생일"})
 
-    lv = last_visit(cust)
-    cyc = cust.get("care_cycle_days")
-    if lv and cyc:
-        due = lv + timedelta(days=int(cyc))
-        days_left = (due - today).days
-        if days_left <= window:
-            svc = (cust.get("history") or [{}])[-1].get("service", "시술")
-            overdue = "지남" if days_left < 0 else f"{days_left}일 내"
-            out.append({
-                "kind": "revisit", "label": "재방문",
-                "why": f"{svc} 리터치 시기({overdue})",
-            })
+    ri = revisit_state(cust, today)
+    svc = _latest_service(cust) or "시술"
+    if ri["state"] == "overdue":
+        out.append({"kind": "atrisk", "label": "이탈 위험",
+                    "why": f"{svc} · {ri['gap']}일째 안 오심(평소 {ri['cycle']}일 주기)"})
+    elif ri["state"] == "due":
+        out.append({"kind": "revisit", "label": "재방문",
+                    "why": f"{svc} 리터치 시기 · {ri['gap']}일째(평소 {ri['cycle']}일)"})
     return out
 
 
@@ -113,12 +148,13 @@ def _latest_service(cust: dict) -> str | None:
     return best_s
 
 
-def build_customer(cust: dict) -> dict:
+def build_customer(cust: dict, today: date | None = None) -> dict:
     """앱 화면용 고객 카드(연락처 등 PII 는 출력에서 제외)."""
     import aftercare
 
     lv = last_visit(cust)
     svc = _latest_service(cust)
+    ri = revisit_state(cust, today or date.today())
     return {
         "id": cust.get("id"),
         "custno": cust.get("custno", ""),     # 핸드SOS 고객번호(PK)
@@ -128,6 +164,9 @@ def build_customer(cust: dict) -> dict:
         "loyalty_visits": cust.get("loyalty_visits", len(cust.get("history", []) or [])),
         "first_visit": str(cust["first_visit"]) if cust.get("first_visit") else None,
         "last_visit": str(lv) if lv else None,
+        "care_cycle_days": ri["cycle"],   # 방문 간격에서 자동 추정(없으면 명시값)
+        "days_since": ri["gap"],
+        "revisit_state": ri["state"],     # overdue·due·soon·new·ok
         "booking": _clean_booking(cust.get("booking")),
         "history": [
             {"date": str(_parse_date(h.get("date"))), "service": h.get("service"),
@@ -201,13 +240,13 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
                 "prefer": c.get("prefer", []),
                 "draft": drafts.draft_for(a["kind"], c, today),  # 추천 문구(초안)
             })
-    # 생일 먼저, 그다음 재방문
-    order = {"bday": 0, "revisit": 1}
+    # 생일 → 이탈위험 → 재방문 도래 순
+    order = {"bday": 0, "atrisk": 1, "revisit": 2}
     care_list.sort(key=lambda x: order.get(x["kind"], 9))
 
     bookings = resolve_bookings(client_dir, customers, today)
 
-    clients = [build_customer(c) for c in customers]
+    clients = [build_customer(c, today) for c in customers]
     rel = relations.resolve(customers)            # 가족·친구·소개 관계 해석
     for cd in clients:
         info = rel.get(cd["id"]) or {}

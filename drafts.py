@@ -73,10 +73,21 @@ def draft_revisit(cust: dict, today: date) -> str:
     return lead + _benefit(service) + " 시간 되실 때 편하게 봐요!"
 
 
+def draft_atrisk(cust: dict, today: date) -> str:
+    name = cust.get("name") or "고객"
+    service, last = _latest_service(cust)
+    m = _months_ago(last, today)
+    lead = (f"{name}님, {service} 하신 지 {m}개월쯤 됐어요. 그동안 잘 지내셨어요? "
+            if service and m else f"{name}님, 오랜만이에요, 잘 지내셨어요? ")
+    return lead + _benefit(service) + " 편하실 때 한번 들러요!"
+
+
 def draft_for(kind: str, cust: dict, today: date | None = None) -> str:
     today = today or date.today()
     if kind == "bday":
         return draft_bday(cust)
+    if kind == "atrisk":
+        return draft_atrisk(cust, today)
     if kind == "revisit":
         return draft_revisit(cust, today)
     # season 등 기타
