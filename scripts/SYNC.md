@@ -65,23 +65,24 @@ cp secrets/stores.example.yaml secrets/stores.yaml   # secrets/ 는 git 제외�
 clients/<slug>/
 ```
 
-## 4. 로그인 셀렉터 채우기 (최초 1회 / 매장당)
+## 4. 매출상세목록 위치 잡기 (최초 1회 / 매장당)
 
-핸드SOS 로그인·메뉴 DOM은 매장마다 같지만 저장소엔 모르는 값이라, 한 번 눈으로 확인합니다.
+**로그인 셀렉터는 핸드SOS 공통이라 이미 채워져 있습니다**(`#companyID`/`#userID`/`#userPWD`/`#sendLogin`).
+남은 건 로그인 후 "매출상세목록" 화면의 위치(URL)를 한 번 잡는 것뿐:
 
 ```bash
 python scripts/handsos_sync.py --only <slug> --headed --debug
 ```
-- 창이 뜨면 핸드SOS 로그인 화면에서 **개발자도구(F12)**로 회사코드/아이디/비번 input의
-  `id` 또는 `name` 을 확인 → `stores.yaml` 의 `login.fields.*` 에 CSS 셀렉터로 입력
-  (예: `input[name="userId"]`).
-- `report.url` 에 **매출상세목록 직접 URL**이 있으면 가장 안정적입니다. 없으면
-  `report.nav` 에 메뉴 클릭 시퀀스를 넣습니다.
-- `--debug` 는 표가 보이는 지점에서 멈춰 Enter를 기다립니다(수확 직전 상태 점검).
+- 자동으로 로그인됩니다. 창에서 **매출분석 → 매출상세목록**으로 이동하고, 기간을
+  '전체'로 조회해 표가 보이면 **Enter**.
+- 그러면 콘솔에 **현재 URL 과 frame URL 목록**이 찍힙니다. 그중 매출상세목록이 든
+  주소를 `stores.yaml` 의 `report.url` 에 넣으면 다음부터 자동으로 그 화면을 엽니다.
+- 직접 URL이 프레임 구조라 안 통하면 `report.nav` 에 메뉴 클릭 시퀀스를 넣습니다
+  (창에서 메뉴 우클릭 → 검사 → 셀렉터 확인).
 
-채운 뒤 실제 동기화 테스트:
+잡은 뒤 실제 동기화 테스트:
 ```bash
-python scripts/handsos_sync.py --only <slug> --headed   # 눈으로 확인
+python scripts/handsos_sync.py --only <slug> --headed   # 눈으로 확인(자동 수확)
 python scripts/handsos_sync.py --only <slug>            # 헤드리스
 ```
 

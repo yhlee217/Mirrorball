@@ -135,7 +135,11 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
             page.wait_for_timeout(int(report.get("settle_ms", 1500)))
 
             if debug:
-                input("‹디버그› 매출상세목록이 보이면 Enter… (셀렉터 확인용)")
+                input("‹디버그› 창에서 [매출분석 → 매출상세목록]까지 직접 이동하고 표가 보이면 Enter…")
+                print("  현재 URL:", page.url)
+                for fr in page.frames:                       # 매출상세목록이 든 프레임 URL → report.url 에 넣으면 자동화 가능
+                    if fr.url and "about:blank" not in fr.url:
+                        print("  frame:", fr.url)
 
             # 3) 수확 JS 주입 후 실행
             page.add_script_tag(content=js)
