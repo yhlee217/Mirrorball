@@ -220,21 +220,60 @@ def build_customers(rows: list[dict]) -> list[dict]:
     return customers
 
 
-def write_out(slug: str, rows: list[dict], customers: list[dict]) -> tuple[int, int]:
+def _rec_key(r: dict) -> tuple:
+    """거래 중복 판정 키(여러 번/여러 기간 동기화해도 안 겹치게)."""
+    cn = re.sub(r"\D", "", str(r.get("custno") or "")).lstrip("0")
+    return (r.get("date", ""), cn or (r.get("name") or ""),
+            r.get("service") or "", r.get("price"), r.get("memo") or "")
+
+
+def merge_records(existing: list[dict], new: list[dict]) -> list[dict]:
+    """기존 + 새 거래를 키로 중복 제거해 누적(400일 제한으로 나눠 받아도 합쳐짐)."""
+    seen, out = set(), []
+    for r in (existing or []) + (new or []):
+        k = _rec_key(r)
+        if k not in seen:
+            seen.add(k)
+            out.append(r)
+    out.sort(key=lambda r: (r.get("date") or "", r.get("name") or ""))
+    return out
+
+
+# 사람이/AI가 채운 필드는 재동기화 때 보존(구조 필드만 거래에서 갱신)
+_MANUAL_FIELDS = ("memo", "prefer", "relations", "referred_by", "referred",
+                  "birthday", "care_cycle_days")
+
+
+def _preserve_manual(old: dict, new: dict) -> dict:
+    out = dict(new)
+    for f in _MANUAL_FIELDS:
+        if old.get(f) not in (None, "", [], {}):
+            out[f] = old[f]
+    if old.get("name"):              # 이름 수동 수정 우선
+        out["name"] = old["name"]
+    return out
+
+
+def write_out(slug: str, rows: list[dict], customers: list[dict] | None = None) -> tuple[int, int]:
+    """거래 원장 누적 병합 → 병합 전체에서 고객 재구성(수동 필드 보존)."""
     base = Path("clients") / slug
     (base / "customers").mkdir(parents=True, exist_ok=True)
-    # 거래 원장(통계용)
-    (base / "records.yaml").write_text(
-        yaml.safe_dump(rows, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    # 고객 마스터(기존 보존)
-    n = 0
-    for c in customers:
+
+    rec_path = base / "records.yaml"
+    existing = (yaml.safe_load(rec_path.read_text(encoding="utf-8")) or []) if rec_path.exists() else []
+    merged = merge_records(existing, rows)
+    rec_path.write_text(yaml.safe_dump(merged, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+    n_new = 0
+    for c in build_customers(merged):            # 병합 전체에서 이력 재구성
         p = base / "customers" / f"{c['id']}.yaml"
         if p.exists():
-            continue
+            old = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            c = _preserve_manual(old, c)         # 메모·관계 등 수동 입력 유지
+        else:
+            n_new += 1
         p.write_text(yaml.safe_dump(c, allow_unicode=True, sort_keys=False), encoding="utf-8")
-        n += 1
-    return len(rows), n
+    return len(merged), n_new
 
 
 def main() -> int:

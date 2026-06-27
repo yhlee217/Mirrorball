@@ -202,8 +202,7 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     sys.path.insert(0, str(ROOT))
     import import_handsos as ih
     parsed = ih.parse_rows(str(csv_path), staff=staff)
-    custs = ih.build_customers(parsed)
-    nr, nc = ih.write_out(slug, parsed, custs)
+    nr, nc = ih.write_out(slug, parsed)        # records 누적 병합 + 고객 재구성(수동필드 보존)
 
     # 최초 동기화면 config.yaml 부트스트랩(디자이너 이름·살롱·기준일). 이후 사람이 보강 가능.
     cfg_path = ROOT / "clients" / slug / "config.yaml"

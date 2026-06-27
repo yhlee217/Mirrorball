@@ -64,6 +64,7 @@ globalThis.__handsosHarvest = async function (opts) {
         prev = pick(tt, /이전방문\s*[:：]\s*([0-9.\-]+)/);
       }
       const ownName = cell(HM.고객명) || name;
+      if (ownName === '고객명' || ownName === '성함') continue;   // 페이지마다 반복되는 헤더행 제외
 
       let service = '';
       if (HM.상세메뉴 >= 0 && cells[HM.상세메뉴]) service = cells[HM.상세메뉴].getAttribute('title') || norm(cells[HM.상세메뉴].innerText);

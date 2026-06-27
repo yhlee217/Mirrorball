@@ -145,6 +145,35 @@ def test_stats_excludes_anon_from_customer_metrics():
     assert s["total_visits"] == 4                                          # 매출/방문 총계엔 포함
 
 
+def test_write_out_accumulates_across_runs(tmp_path, monkeypatch):
+    # 400일 제한으로 기간을 나눠 받아도 records 가 누적되고 고객 이력이 합쳐져야 함
+    monkeypatch.chdir(tmp_path)
+    r2025 = [{"date": "2025-08-01", "name": "조희진", "custno": "2767", "service": "뿌리염색", "price": 30000}]
+    r2026 = [{"date": "2026-06-26", "name": "조희진", "custno": "2767", "service": "모발클리닉", "price": 80000}]
+    ih.write_out("hayewoni", r2025)
+    ih.write_out("hayewoni", r2026)                 # 두 번째 실행 — 덮어쓰지 않고 누적
+    import yaml as _y
+    recs = _y.safe_load((tmp_path / "clients" / "hayewoni" / "records.yaml").read_text(encoding="utf-8"))
+    assert len(recs) == 2                            # 2025 + 2026 둘 다
+    cust = _y.safe_load((tmp_path / "clients" / "hayewoni" / "customers" / "c2767.yaml").read_text(encoding="utf-8"))
+    assert cust["loyalty_visits"] == 2               # 이력이 합쳐짐
+    dates = [h["date"] for h in cust["history"]]
+    assert "2025-08-01" in dates and "2026-06-26" in dates
+
+
+def test_write_out_preserves_manual_on_resync(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    ih.write_out("demo", [{"date": "2026-01-02", "name": "김", "custno": "5", "service": "컷", "price": 20000}])
+    p = tmp_path / "clients" / "demo" / "customers" / "c5.yaml"
+    import yaml as _y
+    d = _y.safe_load(p.read_text(encoding="utf-8")); d["memo"] = "손상 신경 씀"; d["prefer"] = ["밝은색"]
+    p.write_text(_y.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    ih.write_out("demo", [{"date": "2026-03-03", "name": "김", "custno": "5", "service": "펌", "price": 90000}])
+    d2 = _y.safe_load(p.read_text(encoding="utf-8"))
+    assert d2["memo"] == "손상 신경 씀" and d2["prefer"] == ["밝은색"]   # 수동필드 보존
+    assert d2["loyalty_visits"] == 2                                    # 이력은 갱신
+
+
 def test_build_app_redacts_phone_in_notes(tmp_path):
     import build_app
     cdir = tmp_path / "clients" / "demo"
