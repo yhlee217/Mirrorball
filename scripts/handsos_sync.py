@@ -88,13 +88,21 @@ def _fill(page, sel: str, value: str) -> None:
         page.fill(sel, str(value))
 
 
+# 핸드SOS 로그인 셀렉터는 모든 매장 공통 → 코드 기본값. 사용자는 설정에서 건드릴 필요 없음.
+DEFAULT_LOGIN = {
+    "url": "https://www.handsos.com/login/login.asp?p=pc",
+    "fields": {"company_code": "#companyID", "username": "#userID", "password": "#userPWD"},
+    "submit": "#sendLogin",
+}
+
+
 def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dict:
     """한 매장 로그인→매출상세목록→수확. 반환 {rows, total, error}."""
     from playwright.sync_api import sync_playwright  # 지연 import (테스트 시 불필요)
 
-    login = store.get("login", {})
-    fields = login.get("fields", {})
-    report = store.get("report", {})
+    login = {**DEFAULT_LOGIN, **(store.get("login") or {})}
+    fields = {**DEFAULT_LOGIN["fields"], **(login.get("fields") or {})}
+    report = store.get("report") or {}
     js = HARVEST_JS.read_text(encoding="utf-8")
 
     with sync_playwright() as pw:
