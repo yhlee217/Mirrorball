@@ -13,14 +13,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#F4F1EC; --paper:#FCFAF6; --ink:#2A2622; --muted:#8C8479;
     --line:#E6DFD4; --accent:#6E5B47; --accent-d:#4E4031; --soft:#EFE9DF;
     --sage:#5C7A57; --sage-bg:#EAF0E6; --gold:#9A7B33; --rose:#B0574A; --rose-bg:#F3E6E2;
-    --serif:'Cormorant Garamond',serif;
     --sans:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;
+    --serif:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif;  /* 숫자·영문 라벨은 Pretendard(또렷) */
+    --myeongjo:'Nanum Myeongjo',serif;                                    /* 한글 이름·신호 포인트(B=700) */
     --safe-top:env(safe-area-inset-top,0px);
     --safe-bot:env(safe-area-inset-bottom,0px);
   }
@@ -222,6 +223,15 @@
   .reveal{animation:rise .5s ease both;}
   @keyframes rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
   @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
+
+  /* ── 타입: 한글 이름·신호·인사는 나눔명조 700(우아), 그 외(본문·숫자·영문)는 Pretendard(또렷) ── */
+  .hello h2{font-family:var(--myeongjo);font-weight:700;}
+  #clientDetail h2{font-family:var(--myeongjo);font-weight:700;}
+  #clientList .li .nm{font-family:var(--myeongjo);font-weight:700;}
+  .cv-g .gn{font-family:var(--myeongjo);font-weight:700;}
+  .care .nm{font-family:var(--myeongjo);font-weight:700;}
+  .sig{font-family:var(--myeongjo);font-weight:700;}
+  .tag{font-family:var(--sans);}   /* VIP·신호 칩 영문은 또렷하게 */
 </style>
 </head>
 <body>
