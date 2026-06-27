@@ -109,6 +109,8 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
         browser = pw.chromium.launch(headless=not headed)
         ctx = browser.new_context()
         page = ctx.new_page()
+        # 핸드SOS 공지/확인 팝업(alert·confirm)을 자동으로 받아넘김 — 기본 자동닫기 레이스로 인한 드라이버 크래시 방지
+        page.on("dialog", lambda d: d.accept())
         page.set_default_timeout(int(store.get("timeout_ms", 30000)))
         try:
             # 1) 로그인
