@@ -135,6 +135,8 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
             if report.get("url"):
                 page.goto(report["url"], wait_until="domcontentloaded")
                 page.wait_for_timeout(int(report.get("settle_ms", 1200)))
+                if debug:
+                    print("  saleList 이동 후 URL:", page.url)   # default.asp 로 튕기면 직접접근 차단된 것
                 days = int(report.get("date_range_days", 0))
                 if days > 0:                                   # 최근 N일로 기간 설정(증분·가벼움)
                     start, end = date_range_value(days)
@@ -146,14 +148,24 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                                            label=report["staff_label"])
                     except Exception:
                         pass
+                # 검색 실행 — 버튼 클릭(네비게이션 추적) 우선, 안 되면 함수 직접 호출
                 try:
-                    page.evaluate(report.get("search_js", "DBProc()"))   # 검색 실행
+                    page.click(report.get("search_sel", "a.icogSearch"), timeout=4000)
                 except Exception:
                     try:
-                        page.click(report.get("search_sel", "a.icogSearch"))
+                        page.evaluate(report.get("search_js", "DBProc()"))
                     except Exception:
                         pass
-                page.wait_for_timeout(int(report.get("settle_ms", 1500)))
+                # 결과 표(고객명·날짜)가 실제로 그려질 때까지 대기 — POST 리로드/AJAX 모두 대응
+                try:
+                    page.wait_for_function(
+                        "()=>{var t=[...document.querySelectorAll('table')]"
+                        ".find(x=>/고객명/.test(x.innerText)&&/날짜/.test(x.innerText));"
+                        "return t&&t.querySelectorAll('tr').length>2;}",
+                        timeout=int(report.get("result_timeout_ms", 15000)))
+                except Exception:
+                    pass
+                page.wait_for_timeout(int(report.get("settle_ms", 1200)))
             for step in report.get("nav", []) or []:           # (대안) 메뉴 클릭 시퀀스
                 if step.get("click"):
                     page.click(step["click"])
