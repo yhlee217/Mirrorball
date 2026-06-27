@@ -146,15 +146,25 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
 
             if debug:
                 input("‹디버그› 창에서 [매출분석 → 매출상세목록]까지 직접 이동하고 표가 보이면 Enter…")
-                print("  현재 URL:", page.url)
-                for fr in page.frames:                       # 매출상세목록이 든 프레임 URL → report.url 에 넣으면 자동화 가능
-                    if fr.url and "about:blank" not in fr.url:
-                        print("  frame:", fr.url)
+                for i, pg in enumerate(ctx.pages):           # 열린 창/탭 전체(팝업 포함) + 프레임 URL
+                    print(f"  [page {i}] {pg.url}")
+                    for fr in pg.frames:
+                        if fr.url and "about:blank" not in fr.url:
+                            print(f"     frame: {fr.url}")
 
-            # 3) 수확 JS 주입 후 실행
-            page.add_script_tag(content=js)
-            result = page.evaluate("__handsosHarvest({})")
-            return result or {"rows": [], "total": 0, "error": "no-result"}
+            # 3) 열린 창/탭을 최신순으로 모두 시도 → 표가 가장 많이 잡힌 곳을 채택(매출상세목록 팝업 대응)
+            best = {"rows": [], "total": 0, "error": "no-table"}
+            for pg in reversed(ctx.pages):
+                try:
+                    pg.add_script_tag(content=js)
+                    r = pg.evaluate("__handsosHarvest({})")
+                except Exception:
+                    continue
+                if r and len(r.get("rows") or []) > len(best.get("rows") or []):
+                    best = r
+                if r and r.get("total") and len(r.get("rows") or []) >= r["total"]:
+                    return r                                 # 전체 페이지 다 받음 → 확정
+            return best
         finally:
             if not debug:
                 ctx.close()
@@ -202,7 +212,7 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
         built = build_app.build_one(str(ROOT / "clients" / slug))
 
     return {"slug": slug, "ok": True, "rows": len(rows), "txns": nr,
-            "new_customers": nc, "csv": str(csv_path),
+            "new_customers": nc, "csv": str(csv_path), "total": res.get("total"),
             "built": built and built.get("out"), "partial": res.get("error")}
 
 
@@ -235,8 +245,9 @@ def main() -> int:
                      headed=args.headed, debug=args.debug, cfg=cfg)
         results.append(r)
         if r["ok"]:
-            extra = f" (부분: {r['partial']})" if r.get("partial") else ""
-            print(f"  ✓ 거래 {r['txns']} · 신규 {r['new_customers']}명{extra}")
+            cov = f" / 핸드SOS 총 {r['total']}" if r.get("total") else ""
+            extra = f" (부분수집: {r['partial']})" if r.get("partial") else ""
+            print(f"  ✓ 거래 {r['txns']}{cov} · 신규 {r['new_customers']}명{extra}")
         else:
             failed.append(r)
             print(f"  ✗ [{r['stage']}] {r['error']}")
