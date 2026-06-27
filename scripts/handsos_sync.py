@@ -131,24 +131,34 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
             else:
                 page.wait_for_load_state("networkidle")
 
-            # 2) 매출상세목록 이동(직접 URL 우선, 없으면 메뉴 클릭 시퀀스)
+            # 2) 매출상세목록(saleList.asp) 직접 이동 → 기간 채우고 → 검색(DBProc) 실행
             if report.get("url"):
                 page.goto(report["url"], wait_until="domcontentloaded")
-            for step in report.get("nav", []) or []:
+                page.wait_for_timeout(int(report.get("settle_ms", 1200)))
+                days = int(report.get("date_range_days", 0))
+                if days > 0:                                   # 최근 N일로 기간 설정(증분·가벼움)
+                    start, end = date_range_value(days)
+                    _fill(page, report.get("date_from_sel", "#strDateS"), start)
+                    _fill(page, report.get("date_to_sel", "#strDateE"), end)
+                if report.get("staff_label"):                 # (선택) 담당자 드롭다운 직접 선택
+                    try:
+                        page.select_option(report.get("staff_sel", "#pkStaff"),
+                                           label=report["staff_label"])
+                    except Exception:
+                        pass
+                try:
+                    page.evaluate(report.get("search_js", "DBProc()"))   # 검색 실행
+                except Exception:
+                    try:
+                        page.click(report.get("search_sel", "a.icogSearch"))
+                    except Exception:
+                        pass
+                page.wait_for_timeout(int(report.get("settle_ms", 1500)))
+            for step in report.get("nav", []) or []:           # (대안) 메뉴 클릭 시퀀스
                 if step.get("click"):
                     page.click(step["click"])
                 if step.get("wait_ms"):
                     page.wait_for_timeout(int(step["wait_ms"]))
-
-            # 기간/검색(셀렉터 있으면)
-            start, end = date_range_value(int(report.get("date_range_days", 0)))
-            _fill(page, report.get("date_from_sel"), start)
-            _fill(page, report.get("date_to_sel"), end)
-            if report.get("search_sel"):
-                page.click(report["search_sel"])
-
-            # 표가 뜰 때까지(텍스트 기준 — iframe 내부면 frame 대기는 harvest 가 처리)
-            page.wait_for_timeout(int(report.get("settle_ms", 1500)))
 
             if debug:
                 input("‹디버그› 창에서 [매출분석 → 매출상세목록]까지 직접 이동하고 표가 보이면 Enter…")
