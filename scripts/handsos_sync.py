@@ -180,16 +180,22 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                         if fr.url and "about:blank" not in fr.url:
                             print(f"     frame: {fr.url}")
                 _DIAG = ("()=>{var out=[];[...document.querySelectorAll('table')].forEach((t,i)=>{"
-                         "var x=t.innerText||'';out.push(i+': rows='+t.querySelectorAll('tr').length"
-                         "+' 고객명='+/고객명/.test(x)+' 날짜='+/날짜/.test(x)+' | '+x.slice(0,45).replace(/\\n/g,' '));});"
+                         "var x=t.innerText||'';"
+                         "if(/고객명|날짜|01[016]\\d/.test(x)){"
+                         "out.push(i+': rows='+t.querySelectorAll('tr').length+' 고객명='+/고객명/.test(x)"
+                         "+' 날짜='+/날짜/.test(x)+' 폰='+/01[016]\\d/.test(x)+' id='+(t.id||t.className||'-')"
+                         "+' | '+x.slice(0,55).replace(/\\s+/g,' '));}});"
+                         "var tv=document.querySelector('#TableView1');"
                          "var m=document.body.innerText.match(/총\\s*([\\d,]+)\\s*개/);"
-                         "return {tables:out, total:(m?m[1]:'?')};}")
-                for pg in ctx.pages:                          # 표 진단 — 어느 table 에 고객명/날짜 가 있나
+                         "return {tables:out, total:(m?m[1]:'?'),"
+                         "tv1:tv?(tv.innerText||'').slice(0,90).replace(/\\s+/g,' '):'(#TableView1 없음)'};}")
+                for pg in ctx.pages:                          # 데이터 후보 표만(고객명·날짜·전화) + TableView1
                     try:
                         d = pg.evaluate(_DIAG)
-                        print(f"  표 진단(총건수={d['total']}):")
-                        for line in d["tables"][:14]:
+                        print(f"  표 진단(총건수={d['total']}): 데이터후보 {len(d['tables'])}개")
+                        for line in d["tables"][:20]:
                             print("    table#" + line)
+                        print("    #TableView1:", d["tv1"])
                     except Exception as e:
                         print("  표 진단 실패:", e)
 
