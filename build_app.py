@@ -148,6 +148,28 @@ def _latest_service(cust: dict) -> str | None:
     return best_s
 
 
+def spend_by_custno(records: list[dict]) -> dict[str, int]:
+    """거래 원장 → 고객번호별 누적결제(원). LTV·VIP 산정의 단일 소스."""
+    spend: dict[str, int] = {}
+    for r in records or []:
+        cn = re.sub(r"\D", "", str(r.get("custno") or "")).lstrip("0")
+        p = r.get("price")
+        if cn and isinstance(p, (int, float)):
+            spend[cn] = spend.get(cn, 0) + int(p)
+    return spend
+
+
+# 누적결제 기준 등급(검증된 경계: VIP 50만, 단골 25만, 일반 10만)
+def spend_tier(won: int) -> str:
+    if won >= 500000:
+        return "vip"
+    if won >= 250000:
+        return "regular"
+    if won >= 100000:
+        return "normal"
+    return "light"
+
+
 def build_customer(cust: dict, today: date | None = None) -> dict:
     """앱 화면용 고객 카드(연락처 등 PII 는 출력에서 제외)."""
     import aftercare
@@ -155,6 +177,7 @@ def build_customer(cust: dict, today: date | None = None) -> dict:
     lv = last_visit(cust)
     svc = _latest_service(cust)
     ri = revisit_state(cust, today or date.today())
+    won = int(cust.get("total_won") or 0)
     return {
         "id": cust.get("id"),
         "custno": cust.get("custno", ""),     # 핸드SOS 고객번호(PK)
@@ -167,6 +190,8 @@ def build_customer(cust: dict, today: date | None = None) -> dict:
         "care_cycle_days": ri["cycle"],   # 방문 간격에서 자동 추정(없으면 명시값)
         "days_since": ri["gap"],
         "revisit_state": ri["state"],     # overdue·due·soon·new·ok
+        "total_won": won,                 # 누적결제(records 합산) — LTV
+        "tier": spend_tier(won),          # vip·regular·normal·light
         "booking": _clean_booking(cust.get("booking")),
         "history": [
             {"date": str(_parse_date(h.get("date"))), "service": h.get("service"),
@@ -231,6 +256,13 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
     cust_paths = sorted(glob.glob(str(Path(client_dir) / "customers" / "*.yaml")))
     customers = [_load(p) for p in cust_paths]
 
+    # 누적결제(LTV) 주입 — 거래 원장에서 고객번호별 합산해 카드·시드 양쪽에 실어준다.
+    import stats as _stats
+    records = _stats.load_records(client_dir)
+    spend = spend_by_custno(records)
+    for c in customers:
+        c["total_won"] = spend.get(str(c.get("custno") or ""), 0)
+
     care_list = []
     for c in customers:
         for a in alerts_for(c, today):
@@ -276,10 +308,8 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
     }
 
     # 누적 장부가 있으면 통계 포함 (관리·분석용). PII(전화)는 stats 가 집계만 함.
-    recs_path = Path(client_dir) / "records.yaml"
-    if recs_path.exists():
-        import stats
-        data["stats"] = stats.compute(stats.load_records(client_dir), today)
+    if records:
+        data["stats"] = _stats.compute(records, today)
 
     # AI 노출 진단 결과(diagnose.py 산출)가 있으면 노출 탭에 주입.
     exp_path = Path(client_dir) / "exposure.yaml"

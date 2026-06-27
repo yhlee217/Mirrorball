@@ -174,12 +174,27 @@
   .st-due{color:var(--rose);font-weight:800;font-size:11px;} .st-new{color:var(--sage);font-weight:800;font-size:11px;}
   .st-rec{color:var(--muted);font-size:11px;text-align:right;}
   .t-risk{background:var(--rose);color:#fff;}
-  /* 신호 요약 바 */
+  .t-vip{background:var(--gold);color:#fff;letter-spacing:.3px;}
+  /* 신호/매출 요약 바 */
   .rv-bar{display:flex;gap:6px;margin-bottom:10px;}
   .rv-bar span{flex:1;text-align:center;font-size:11.5px;font-weight:800;border-radius:9px;padding:7px 4px;}
   .rv-bar .rv-x{background:var(--rose);color:#fff;}
   .rv-bar .rv-d{background:#F2EAD8;color:var(--gold);}
   .rv-bar .rv-n{background:var(--sage-bg);color:var(--sage);}
+  .rv-bar .rv-v{background:var(--gold);color:#fff;}
+  .rnk{flex:0 0 28px;width:28px;height:28px;border-radius:8px;background:var(--soft);color:var(--accent-d);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;}
+  .focus-pill{display:inline-block;margin:0 0 10px;border:none;background:var(--accent-d);color:#fff;font-family:inherit;font-weight:700;font-size:12px;border-radius:20px;padding:6px 13px;cursor:pointer;}
+  /* 홈 신호 요약 + 민감도 토글 */
+  .hsig{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px;margin:0 0 10px;}
+  .hsig button{border:1px solid var(--line);background:var(--paper);border-radius:13px;padding:11px 4px 9px;font-family:inherit;cursor:pointer;text-align:center;}
+  .hsig .hn{font-size:21px;font-weight:800;line-height:1;}
+  .hsig .hl{font-size:10.5px;color:var(--muted);margin-top:4px;font-weight:600;}
+  .hsig .x .hn{color:var(--rose);} .hsig .d .hn{color:var(--gold);} .hsig .n .hn{color:var(--sage);} .hsig .v .hn{color:var(--gold);}
+  .hsens{display:flex;align-items:center;gap:8px;margin:0 2px 14px;}
+  .hsens .lab{font-size:11.5px;color:var(--muted);font-weight:600;flex:1;}
+  .seg{display:flex;background:var(--soft);border-radius:10px;padding:3px;}
+  .seg button{border:none;background:none;font-family:inherit;font-size:12px;font-weight:700;color:var(--muted);padding:5px 11px;border-radius:8px;cursor:pointer;}
+  .seg button.on{background:var(--paper);color:var(--accent-d);box-shadow:0 1px 3px rgba(42,38,34,.1);}
 
   /* tabbar */
   .tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;background:var(--paper);
@@ -222,6 +237,7 @@
         <button class="chip" data-go="s-alerts"><div class="n" id="cCare">0</div><div class="l">챙길 고객</div></button>
         <button class="chip" data-go="s-exposure"><div class="n" id="cExp">–</div><div class="l">AI 노출</div></button>
       </div>
+      <div id="homeSignals" class="reveal"></div>
       <div id="homeToday"></div>
       <div id="homeStats"></div>
       <div class="card reveal">
@@ -249,6 +265,7 @@
       <div class="vsw" id="clientViews">
         <button data-view="list" class="on">목록</button>
         <button data-view="signal">신호</button>
+        <button data-view="revenue">매출</button>
         <button data-view="trait">특징</button>
         <button data-view="grouped">그룹</button>
         <button data-view="grid">격자</button>
@@ -258,6 +275,7 @@
           style="flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:15px;font-family:inherit;background:var(--paper);color:var(--ink);">
         <select id="clientSort" style="border:1px solid var(--line);border-radius:10px;padding:0 8px;font-size:13px;font-family:inherit;background:var(--paper);color:var(--accent-d);">
           <option value="visits">방문 많은순</option>
+          <option value="revenue">매출 많은순</option>
           <option value="recent">최근 방문순</option>
           <option value="name">이름순</option>
         </select>
@@ -346,6 +364,11 @@
 
   document.getElementById('backBtn').addEventListener('click',back);
   document.body.addEventListener('click',function(e){
+    var sx=e.target.closest('[data-sens]'); if(sx){ sensKey=sx.getAttribute('data-sens'); try{localStorage.setItem('crm_sens',sensKey);}catch(_){} refresh(); return; }
+    var fx=e.target.closest('[data-focus]'); if(fx){ clientFocus=fx.getAttribute('data-focus');
+      var vw=fx.getAttribute('data-view'); if(vw){ clientView=vw; try{localStorage.setItem('crm_view',clientView);}catch(_){} }
+      tab('s-clients'); paintClientViews(); renderClients(); return; }
+    var cf=e.target.closest('[data-clearfocus]'); if(cf){ clientFocus=null; renderClients(); return; }
     var g=e.target.closest('[data-go]'); if(g){go(g.getAttribute('data-go'));return;}
     var c=e.target.closest('[data-client]'); if(c){openClient(c.getAttribute('data-client'));return;}
     var t=e.target.closest('[data-toast]'); if(t){toast(t.getAttribute('data-toast'));return;}
@@ -381,6 +404,7 @@
       document.getElementById('homeHi').textContent=(d.designer?d.designer+'님, ':'')+'안녕하세요 👋';
       document.getElementById('homeSub').textContent='다가오는 예약 '+nb+' · 챙길 고객 '+nc;
     }
+    renderHomeSignals();
     var box=document.getElementById('homeToday');
     if(d&&d.bookings&&d.bookings.length){
       box.innerHTML='<div class="card reveal"><div class="ch">다가오는 예약</div>'+d.bookings.map(function(b){
@@ -390,6 +414,27 @@
     } else {
       box.innerHTML='<div class="card"><div class="ch">다가오는 예약</div>'+empty('🗓️','다가오는 예약이 없어요','실시간 예약은 네이버에서 관리 ·\n오늘 챙길 고객은 아침에 동기화돼요')+'</div>';
     }
+  }
+
+  // ── render: 홈 신호 요약(이탈위험·재방문도래·신규·VIP) + 민감도 토글 ──
+  function renderHomeSignals(){
+    var box=document.getElementById('homeSignals'); if(!box) return;
+    var cl=DATA?(DATA.clients||[]):[];
+    if(!cl.length){ box.innerHTML=''; return; }
+    var n={overdue:0,due:0,'new':0,vip:0};
+    cl.forEach(function(c){ if(n[c.revisit_state]!=null)n[c.revisit_state]++; if(c.tier==='vip')n.vip++; });
+    var due2=n.overdue+n.due;
+    box.innerHTML=
+      '<div class="hsig">'+
+        '<button class="x" data-focus="overdue" data-view="signal"><div class="hn">'+n.overdue+'</div><div class="hl">이탈위험</div></button>'+
+        '<button class="d" data-focus="due" data-view="signal"><div class="hn">'+n.due+'</div><div class="hl">재방문도래</div></button>'+
+        '<button class="n" data-focus="new" data-view="signal"><div class="hn">'+n['new']+'</div><div class="hl">신규</div></button>'+
+        '<button class="v" data-focus="vip" data-view="revenue"><div class="hn">'+n.vip+'</div><div class="hl">VIP</div></button>'+
+      '</div>'+
+      '<div class="hsens"><div class="lab">오늘 챙길 '+due2+'명 · 신호 민감도</div>'+
+        '<div class="seg" id="homeSens">'+['loose','normal','sharp'].map(function(k){
+          return '<button data-sens="'+k+'"'+(sensKey===k?' class="on"':'')+'>'+SENS_PRESETS[k].label+'</button>';
+        }).join('')+'</div></div>';
   }
 
   // ── render: alerts ──
@@ -410,11 +455,13 @@
   }
 
   // ── render: clients (5뷰 전환) ──
-  var clientQuery='', clientSortKey='visits';
+  var clientQuery='', clientSortKey='visits', clientFocus=null;
   var clientView=(function(){try{return localStorage.getItem('crm_view')||'list';}catch(e){return 'list';}})();
+  function focusLabel(f){ return {overdue:'이탈 위험',due:'재방문 도래','new':'신규',vip:'VIP'}[f]||f; }
   function cdays(c){ if(!c.last_visit) return null; var d=parseD(c.last_visit); return d?Math.round((new Date()-d)/86400000):null; }
   function ctier(c){ var v=c.loyalty_visits||0; return v>=4?'단골':(v<=1?'신규':'일반'); }
   function csvc(c){ return (c.history&&c.history[0]&&c.history[0].service)||(c.booking&&c.booking.service)||''; }
+  function vipBadge(c){ return c.tier==='vip'?'<span class="tag t-vip">VIP</span>':''; }
 
   var VIEWS={
     // 1. 목록 — 정보 위계
@@ -423,7 +470,7 @@
       var tags=(c.prefer||[]).slice(0,2).map(function(t){return '<span class="pill" style="font-size:10.5px;padding:2px 8px">'+esc(t)+'</span>';}).join(' ');
       var dd=cdays(c);
       return '<div class="li" data-client="'+esc(c.id)+'" style="align-items:flex-start"><div class="av">'+av(c.name)+'</div>'+
-        '<div class="bd"><div class="nm">'+esc(c.name)+' 님</div><div class="sub">'+esc(csvc(c))+(dd!=null?' · '+dd+'일 전':'')+'</div>'+
+        '<div class="bd"><div class="nm">'+esc(c.name)+' 님 '+vipBadge(c)+'</div><div class="sub">'+esc(csvc(c))+(dd!=null?' · '+dd+'일 전':'')+'</div>'+
         (tags?'<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap">'+tags+'</div>':'')+'</div>'+
         '<div class="rt"><div style="font-weight:800;color:var(--accent-d)">'+v+'회</div><div style="font-size:10px;color:var(--muted)">'+(v>=4?'★ 단골':(v<=1?'신규':''))+'</div></div></div>';
     }).join('')+'</div>'; },
@@ -439,7 +486,7 @@
       return bar+'<div class="card">'+sorted.map(function(c){
         var st=c.revisit_state, dd=c.days_since, cyc=c.care_cycle_days, v=c.loyalty_visits||0;
         var ring=st==='overdue'?' r-rose':(v>=4?' r-gold':(st==='new'?' r-sage':''));
-        var badge=v>=4?'<span class="tag t-season" style="background:var(--gold-bg,#F4ECD8);color:var(--gold)">단골</span>':'';
+        var badge=vipBadge(c)||(v>=4?'<span class="tag t-season" style="background:var(--gold-bg,#F4ECD8);color:var(--gold)">단골</span>':'');
         var right;
         if(st==='overdue') right='<div class="st-due">이탈 위험</div><div class="st-rec">'+dd+'일째 · 평소 '+cyc+'일</div>';
         else if(st==='due') right='<div class="st-due" style="color:var(--gold)">재방문 도래</div><div class="st-rec">'+dd+'일째 · 평소 '+cyc+'일</div>';
@@ -449,6 +496,21 @@
         return '<div class="li" data-client="'+esc(c.id)+'"><div class="av'+ring+'">'+av(c.name)+'</div>'+
           '<div class="bd"><div class="nm">'+esc(c.name)+' 님 '+badge+'</div><div class="sub">'+esc(csvc(c))+' · '+v+'회</div></div>'+
           '<div class="rt">'+right+'</div></div>';
+      }).join('')+'</div>'; },
+
+    // 2.5 매출 — 누적결제(LTV) 순위 + 등급 + 교차판매 기회
+    revenue:function(cl){
+      var ranked=cl.slice().sort(function(a,b){return (b.total_won||0)-(a.total_won||0);});
+      var vip=ranked.filter(function(c){return c.tier==='vip';}).length;
+      var sumw=ranked.reduce(function(s,c){return s+(+c.total_won||0);},0);
+      var xs=ranked.filter(function(c){return c.crosssell;}).length;
+      var bar='<div class="rv-bar"><span class="rv-v">VIP '+vip+'</span><span class="rv-d" style="background:var(--soft);color:var(--accent-d)">누적 '+wonShort(sumw)+'원</span><span class="rv-n" style="background:#EAF0E6;color:var(--sage)">교차판매 '+xs+'</span></div>';
+      return bar+'<div class="card">'+ranked.map(function(c,i){
+        var w=+c.total_won||0, tb=c.tier==='vip'?'<span class="tag t-vip">VIP</span>':(c.tier==='regular'?'<span class="tag t-season" style="background:#F2EAD8;color:var(--gold)">단골</span>':'');
+        var xsl=c.crosssell?'<div class="cv-feat" style="margin:6px 0 0;background:#EAF0E6;color:var(--sage)">💡 '+esc(c.crosssell.label)+'</div>':'';
+        return '<div class="li" data-client="'+esc(c.id)+'" style="align-items:flex-start"><div class="rnk">'+(i+1)+'</div>'+
+          '<div class="bd"><div class="nm">'+esc(c.name)+' 님 '+tb+'</div><div class="sub">'+(c.loyalty_visits||0)+'회 · '+esc(csvc(c))+'</div>'+xsl+'</div>'+
+          '<div class="rt"><div style="font-weight:800;color:var(--accent-d)">'+wonShort(w)+'</div><div style="font-size:10px;color:var(--muted)">원</div></div></div>';
       }).join('')+'</div>'; },
 
     // 3. 특징 — 분석된 한 줄 강조
@@ -495,14 +557,17 @@
       return (c.name||'').toLowerCase().indexOf(q)>=0 || String(c.custno||'').indexOf(q)>=0
         || (c.prefer||[]).join(' ').toLowerCase().indexOf(q)>=0 || (c.memo||'').toLowerCase().indexOf(q)>=0;
     }) : all.slice();
+    if(clientFocus){ cl=cl.filter(function(c){ return clientFocus==='vip'? c.tier==='vip' : c.revisit_state===clientFocus; }); }
     cl.sort(function(a,b){
       if(clientSortKey==='name') return (a.name||'').localeCompare(b.name||'','ko');
       if(clientSortKey==='recent') return (b.last_visit||'').localeCompare(a.last_visit||'');
+      if(clientSortKey==='revenue') return (b.total_won||0)-(a.total_won||0);
       return (b.loyalty_visits||0)-(a.loyalty_visits||0);
     });
-    if(cc) cc.textContent=q? (cl.length+'명 검색됨 / 전체 '+all.length) : ('전체 '+all.length+'명');
-    if(!cl.length){ box.innerHTML=empty('🔎','검색 결과가 없어요','다른 이름·태그로 찾아보세요'); return; }
-    box.innerHTML=(VIEWS[clientView]||VIEWS.list)(cl);
+    if(cc) cc.textContent=q? (cl.length+'명 검색됨 / 전체 '+all.length) : (clientFocus? (focusLabel(clientFocus)+' '+cl.length+'명') : ('전체 '+all.length+'명'));
+    var focusBar=clientFocus? '<button class="focus-pill" data-clearfocus="1">'+focusLabel(clientFocus)+' 필터 ✕</button>' : '';
+    if(!cl.length){ box.innerHTML=focusBar+empty('🔎','해당 고객이 없어요','필터를 해제하거나 다른 조건으로 보세요'); return; }
+    box.innerHTML=focusBar+(VIEWS[clientView]||VIEWS.list)(cl);
   }
 
   // 관계(가족·친구·소개) 행 — 칩 탭하면 그 고객 카르테로 이동
@@ -532,10 +597,11 @@
     box.innerHTML=
       '<div class="hello reveal" style="display:flex;align-items:center;gap:13px;margin-bottom:8px">'+
         '<div class="av" style="width:54px;height:54px;font-size:22px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent)">'+av(c.name)+'</div>'+
-        '<div style="flex:1"><h2 style="margin:0;font-size:20px">'+esc(c.name)+' 님'+(c.custno?'<span style="font-size:11px;font-weight:600;color:var(--muted);margin-left:7px">#'+esc(c.custno)+'</span>':'')+'</h2><div class="s" style="color:var(--muted);font-size:13px">'+(c.loyalty_visits||0)+'회 방문'+(c.first_visit?(' · 첫 방문 '+esc(c.first_visit)):'')+'</div></div>'+
+        '<div style="flex:1"><h2 style="margin:0;font-size:20px">'+esc(c.name)+' 님'+(c.tier==='vip'?' <span class="tag t-vip">VIP</span>':'')+(c.custno?'<span style="font-size:11px;font-weight:600;color:var(--muted);margin-left:7px">#'+esc(c.custno)+'</span>':'')+'</h2><div class="s" style="color:var(--muted);font-size:13px">'+(c.loyalty_visits||0)+'회 방문'+(c.total_won?(' · 누적 '+wonShort(c.total_won)+'원'):'')+(c.first_visit?(' · 첫 방문 '+esc(c.first_visit)):'')+'</div></div>'+
         '<button class="btn ghost" data-edit-client="'+esc(c.id)+'" style="flex:0 0 auto;width:auto;padding:8px 14px;">수정</button>'+
       '</div>'+
       (c.booking?'<div class="care reveal"><div class="why" style="margin:0 0 4px">다가오는 예약</div><div style="font-weight:800">'+esc(c.booking.date||'')+' '+esc(c.booking.time||'')+' · '+esc(c.booking.service||'')+'</div></div>':'')+
+      (c.crosssell?'<div class="card reveal" style="padding:13px 15px;border:1px solid var(--sage);background:#F3F7F1"><div class="ch" style="padding:0 0 5px;color:var(--sage)">💡 추천 · '+esc(c.crosssell.label)+'</div><div style="font-size:13px;line-height:1.6;color:var(--ink)">'+esc(c.crosssell.copy)+'</div><div class="row2" style="margin-top:9px"><button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기" style="flex:1">카톡으로 직접</button></div></div>':'')+
       (c.memo?'<div class="card reveal" style="padding:12px 15px"><div class="ch" style="padding:0 0 5px">상담 메모</div><div style="font-size:13.5px;line-height:1.6;color:var(--ink);white-space:pre-wrap">'+esc(c.memo)+'</div></div>':'')+
       '<div class="kv reveal">'+
         (prefer?'<div class="r"><div class="k">취향</div><div class="pills">'+prefer+'</div></div>':'')+
@@ -636,6 +702,33 @@
   function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function latest(c){ var bd=null,bs=null; (c.history||[]).forEach(function(h){var d=parseD(h.date); if(d&&(!bd||d>bd)){bd=d;bs=h.service;}}); return {service:bs,date:bd}; }
   function monthsAgo(d,t){ return d?Math.max(1,Math.round((t-d)/2592000000)):null; }
+  // 재방문 신호 민감도 프리셋(검증됨). soon은 0.7 고정. localStorage에 기억.
+  var SENS_PRESETS={ loose:{overdue:2.0,due:0.9,newDays:45,label:'느슨'},
+                     normal:{overdue:1.6,due:0.9,newDays:60,label:'보통'},
+                     sharp:{overdue:1.3,due:0.8,newDays:90,label:'민감'} };
+  var sensKey=(function(){try{return localStorage.getItem('crm_sens')||'normal';}catch(e){return 'normal';}})();
+  function SENS(){ return SENS_PRESETS[sensKey]||SENS_PRESETS.normal; }
+  // 누적결제 등급(검증된 경계: VIP 50만·단골 25만·일반 10만)
+  function tierOf(c){ var w=+c.total_won||0; return w>=500000?'vip':(w>=250000?'regular':(w>=100000?'normal':'light')); }
+  function wonShort(w){ w=+w||0; if(w>=10000){ var m=w/10000; return (m>=100?Math.round(m):(Math.round(m*10)/10))+'만'; } return w?w.toLocaleString():'0'; }
+  // 시술 카테고리(교차판매·분석용)
+  function catOf(s){ s=s||''; if(s.indexOf('컷')>=0)return '컷';
+    if(/펌|아이롱|셋팅|매직/.test(s))return '펌'; if(/염색|이노아|새치|탈색/.test(s))return '염색';
+    if(/클리닉|트리트|두피/.test(s))return '클리닉'; if(/추가|기장/.test(s))return '옵션'; return '기타'; }
+  // 교차판매: 가장 강한 규칙 1개(우선순위 염색손상 > 컷만 > 펌+클리닉0 > 4회+옵션0)
+  function crosssellFor(c){ var hist=c.history||[]; var v=c.loyalty_visits||hist.length; if(v<2) return null;
+    var cnt={컷:0,펌:0,염색:0,클리닉:0,옵션:0,기타:0}, colorDays={};
+    hist.forEach(function(h){ (String(h.service||'').split(' · ')).forEach(function(s){ var k=catOf(s); if(cnt[k]!=null)cnt[k]++; if(k==='염색')colorDays[h.date]=1; }); });
+    var nm=c.name||'고객';
+    if(Object.keys(colorDays).length>=2 && cnt['클리닉']===0)
+      return {id:'color_care',label:'염색 주기 · 손상케어 제안',copy:nm+'님, 염색 주기 꾸준히 잘 지키고 계세요! 반복 염색은 끝 손상이 쌓이기 쉬워서, 다음 염색 때 트리트먼트 한 번 같이 하면 색 빠짐도 늦춰지고 머릿결도 부드러워져요.'};
+    if(cnt['컷']>=1 && cnt['펌']===0 && cnt['염색']===0 && cnt['클리닉']===0)
+      return {id:'cut_only',label:'컷만 · 염색/펌 제안',copy:nm+'님, 컷 라인은 늘 깔끔하게 잘 유지하세요! 분위기 살짝 바꿔보고 싶으시면 가벼운 염색이나 다운펌도 잘 어울리실 거예요. 부담 없이 상담만 받아보세요!'};
+    if(cnt['펌']>=1 && cnt['클리닉']===0)
+      return {id:'perm_clinic',label:'펌 모발 · 클리닉 제안',copy:nm+'님, 펌 모양 예쁘게 나오고 있죠? 펌한 모발은 속건조가 와서 컬이 늘어지기 쉬워요. 다음에 트리트먼트 한 번 같이 하면 컬 탄력이랑 윤기가 훨씬 오래 가요!'};
+    if(v>=4 && cnt['옵션']===0)
+      return {id:'upsell',label:'단골 · 부가 케어 업셀',copy:nm+'님, 늘 찾아주셔서 감사해요! 다음 방문 때 두피 스케일링이나 끝 케어 한 가지만 곁들이면 스타일 유지력이 확 올라가요. 추천드려볼게요!'};
+    return null; }
   // 방문 간격 중앙값 → 개인별 재방문 주기(일). 명시값(care_cycle_days) 우선, 없으면 이력에서 추정.
   function cycleOf(c){ if(+c.care_cycle_days) return +c.care_cycle_days;
     var ds=[]; (c.history||[]).forEach(function(h){var d=parseD(h.date); if(d) ds.push(+d);});
@@ -646,10 +739,10 @@
     return Math.max(10,Math.min(120,m)); }
   // 재방문 상태: overdue(이탈위험)·due(도래)·soon(곧)·new(첫방문케어)·ok
   function revisitInfo(c,t){ var lv=latest(c).date, v=c.loyalty_visits||(c.history||[]).length, cyc=cycleOf(c);
-    var explicit=!!(+c.care_cycle_days), gap=lv?Math.round((t-lv)/86400000):null, state='ok';
-    if(gap==null||!cyc||(v<2&&!explicit)) state=(v<=1&&gap!=null&&gap<=60)?'new':'ok';  // 최근 유입만 첫방문 케어
-    else if((v>=3||explicit) && gap>cyc*1.6 && gap<400) state='overdue';
-    else if(gap>=cyc*0.9) state='due';
+    var S=SENS(), explicit=!!(+c.care_cycle_days), gap=lv?Math.round((t-lv)/86400000):null, state='ok';
+    if(gap==null||!cyc||(v<2&&!explicit)) state=(v<=1&&gap!=null&&gap<=S.newDays)?'new':'ok';  // 최근 유입만 첫방문 케어
+    else if((v>=3||explicit) && gap>cyc*S.overdue && gap<400) state='overdue';
+    else if(gap>=cyc*S.due) state='due';
     else if(gap>=cyc*0.7) state='soon';
     return {cycle:cyc,gap:gap,state:state}; }
   // 업종별 카피는 빌드(build_app)가 주입한 DATA.config(=kb/copy.yaml) 단일 소스에서.
@@ -677,7 +770,9 @@
     var ts=META.today||todayStr(), t=parseD(ts)||new Date(); var rel=resolveRel(CUSTS);
     var care=[]; CUSTS.forEach(function(c){ alertsFor(c,t).forEach(function(a){ care.push({id:c.id,name:c.name,kind:a.kind,label:a.label,why:a.why,prefer:c.prefer||[],draft:draftFor(a.kind,c,t)}); }); });
     var ord={bday:0,atrisk:1,revisit:2}; care.sort(function(a,b){return (ord[a.kind]==null?9:ord[a.kind])-(ord[b.kind]==null?9:ord[b.kind]);});
-    var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}, ri=revisitInfo(c,t); return {id:c.id,custno:c.custno||'',name:c.name,memo:c.memo||'',prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,care_cycle_days:ri.cycle,days_since:ri.gap,revisit_state:ri.state,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]}; });
+    var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}, ri=revisitInfo(c,t);
+      var card={id:c.id,custno:c.custno||'',name:c.name,memo:c.memo||'',prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,care_cycle_days:ri.cycle,days_since:ri.gap,revisit_state:ri.state,total_won:+c.total_won||0,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]};
+      card.tier=tierOf(card); card.crosssell=crosssellFor(card); return card; });
     DATA={slug:SLUG,designer:META.designer,salon:META.salon,today:ts,exposure:META.exposure,stats:META.stats,bookings:upcoming(CUSTS,ts),care:care,clients:clients};
   }
   function refresh(){ derive(); renderAll(); }
@@ -789,16 +884,17 @@
   document.getElementById('importFile').addEventListener('change', function(e){ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
   document.getElementById('clientSearch').addEventListener('input', function(e){ clientQuery=e.target.value; renderClients(); });
   document.getElementById('clientSort').addEventListener('change', function(e){ clientSortKey=e.target.value; renderClients(); });
+  function paintClientViews(){ var sw=document.getElementById('clientViews'); if(!sw) return;
+    [].forEach.call(sw.querySelectorAll('[data-view]'), function(b){ b.classList.toggle('on', b.getAttribute('data-view')===clientView); }); }
   (function(){
     var sw=document.getElementById('clientViews');
-    function paint(){ [].forEach.call(sw.querySelectorAll('[data-view]'), function(b){
-      b.classList.toggle('on', b.getAttribute('data-view')===clientView); }); }
-    paint();
+    paintClientViews();
     sw.addEventListener('click', function(e){
       var b=e.target.closest('[data-view]'); if(!b) return;
       clientView=b.getAttribute('data-view');
       try{ localStorage.setItem('crm_view', clientView); }catch(err){}
-      paint(); renderClients();
+      clientFocus=null;                 // 뷰 직접 전환 시 홈에서 건 필터 해제
+      paintClientViews(); renderClients();
     });
   })();
 

@@ -76,6 +76,32 @@ def test_revisit_state_new_recent_single_visit():
     assert ba.revisit_state(cust, date(2026, 6, 23))["state"] == "new"
 
 
+def test_spend_by_custno_sums_price():
+    recs = [
+        {"custno": "100", "price": 28000}, {"custno": "100", "price": 60000},
+        {"custno": "0205", "price": 30000},               # 앞 0 제거 → 205
+        {"custno": "", "price": 99999},                   # 고객번호 없음 → 제외
+        {"custno": "100"},                                 # 금액 없음 → 무시
+    ]
+    s = ba.spend_by_custno(recs)
+    assert s["100"] == 88000 and s["205"] == 30000 and "" not in s
+
+
+def test_spend_tier_boundaries():
+    assert ba.spend_tier(500000) == "vip"
+    assert ba.spend_tier(499999) == "regular"
+    assert ba.spend_tier(250000) == "regular"
+    assert ba.spend_tier(100000) == "normal"
+    assert ba.spend_tier(99999) == "light"
+
+
+def test_build_customer_carries_ltv_and_tier():
+    cust = {"id": "c1", "name": "박", "custno": "1", "total_won": 620000,
+            "history": [{"date": "2026-06-01", "service": "컷"}]}
+    card = ba.build_customer(cust, date(2026, 6, 23))
+    assert card["total_won"] == 620000 and card["tier"] == "vip"
+
+
 def test_build_one_excludes_contact_pii(tmp_path):
     cdir = tmp_path / "clients" / "demo"
     (cdir / "customers").mkdir(parents=True)
