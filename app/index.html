@@ -194,6 +194,10 @@
   .fam-hd{display:flex;align-items:center;justify-content:space-between;font-weight:800;font-size:15px;margin-bottom:11px;}
   #famSearch{border:1px solid var(--line);border-radius:11px;padding:11px 13px;font-size:15px;font-family:inherit;background:var(--paper);color:var(--ink);margin-bottom:8px;}
   #famResults{overflow-y:auto;}
+  .fam-types{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+  .fam-types button{border:1px solid var(--line);background:var(--paper);color:var(--muted);font-family:inherit;
+    font-size:13px;font-weight:700;border-radius:20px;padding:6px 13px;cursor:pointer;}
+  .fam-types button.on{background:var(--sage);color:#fff;border-color:var(--sage);}
   /* 홈 신호 요약 + 민감도 토글 */
   .hsig{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px;margin:0 0 10px;}
   .hsig button{border:1px solid var(--line);background:var(--paper);border-radius:13px;padding:11px 4px 9px;font-family:inherit;cursor:pointer;text-align:center;}
@@ -328,6 +332,14 @@
   <div class="fam-ov" id="famPicker" style="display:none">
     <div class="fam-box">
       <div class="fam-hd"><span>가족 · 동반 연결</span><button class="del-x" id="famClose" type="button">✕</button></div>
+      <div class="fam-types" id="famTypes">
+        <button data-famtype="가족" class="on" type="button">가족</button>
+        <button data-famtype="자녀" type="button">자녀</button>
+        <button data-famtype="부모" type="button">부모</button>
+        <button data-famtype="배우자" type="button">배우자</button>
+        <button data-famtype="형제" type="button">형제</button>
+        <button data-famtype="지인" type="button">지인</button>
+      </div>
       <input id="famSearch" type="search" placeholder="연결할 고객 이름 검색" autocomplete="off">
       <div id="famResults"></div>
     </div>
@@ -574,12 +586,10 @@
     var hasTag=(c.prefer||[]).some(function(t){return FAMILY_RE.test(t);});
     var rels=c.relations||[];
     if(!hasTag && !rels.length) return '';
-    var rows=rels.map(function(r){
-      return '<div class="famrow"><span class="pill" data-client="'+esc(r.id)+'" style="cursor:pointer;background:var(--sage-bg);color:var(--sage)">'+esc(r.name)+'님 · '+esc(r.type||'가족')+'</span><button class="del-x" data-famunlink="'+esc(c.id)+'|'+esc(r.id)+'" title="연결 해제">✕</button></div>';
-    }).join('');
-    var body=rels.length? rows : '<div style="font-size:12.5px;color:var(--muted)">함께 오시는 가족이 있으면 연결해 두세요</div>';
-    return '<div class="card reveal" style="padding:13px 15px"><div class="ch" style="padding:0 0 8px">👨‍👩‍👧 가족 · 동반</div>'+body+
-      '<button class="btn ghost" data-famlink="'+esc(c.id)+'" style="margin-top:9px">+ 가족 연결</button></div>';
+    var body=rels.length
+      ? '<div class="pills">'+rels.map(function(r){ return '<span class="pill" data-client="'+esc(r.id)+'" style="cursor:pointer;background:var(--sage-bg);color:var(--sage)">'+esc(r.name)+'님 · '+esc(r.type||'가족')+'</span>'; }).join('')+'</div>'
+      : '<div style="font-size:12.5px;color:var(--muted)">함께 오시는 가족은 \'수정\'에서 연결할 수 있어요</div>';
+    return '<div class="card reveal" style="padding:13px 15px"><div class="ch" style="padding:0 0 8px">👨‍👩‍👧 가족 · 동반</div>'+body+'</div>';
   }
 
   // ── render: client detail ──
@@ -802,13 +812,23 @@
       '<div class="fld2"><div class="fld"><label>재방문 주기 (일)</label><input id="f-cycle" type="number" inputmode="numeric" placeholder="예: 펌 90 / 새치 28" value="'+esc(c.care_cycle_days||'')+'"><div class="hint">넣으면 리터치 시기에 알림</div></div></div>'+
       '<div class="fld"><label>다음 예약</label><div class="fld2"><input id="f-bdate" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" value="'+esc((c.booking||{}).date||'')+'"><input id="f-bsvc" type="text" placeholder="시술(선택)" value="'+esc((c.booking||{}).service||'')+'"></div></div>'+
       '<div class="fld"><label>시술 이력 <button class="del-x" id="addVisit" type="button" style="color:var(--accent);width:auto;padding:0 10px;height:28px;font-size:12px;font-weight:800;">+ 방문 추가</button></label><div id="visits">'+visits+'</div></div>'+
-      '<div class="fld2"><div class="fld"><label>가족·친구</label><select id="f-relto">'+opt(rel0.to)+'</select></div>'+
-      '<div class="fld"><label>관계</label><input id="f-reltype" type="text" placeholder="가족/친구/자매" value="'+esc(rel0.type||'')+'"></div></div>'+
+      (id?'<div class="fld"><label>가족 · 동반</label><div id="editFamList"></div><button class="btn ghost" id="editFamAdd" type="button" style="margin-top:2px">+ 가족 연결</button><div class="hint">함께 오시는 가족·지인을 연결하면 카르테에서 바로 이동돼요</div></div>':'')+
       '<div class="fld"><label>소개해주신 분</label><select id="f-refby">'+opt(c.referred_by)+'</select></div>'+
       '<button class="btn" id="saveClient" data-id="'+esc(id||'')+'" style="margin-top:6px;">저장</button>'+
       (id?'<button class="btn ghost" id="delClient" data-id="'+esc(id)+'" style="margin-top:8px;color:var(--rose);">이 고객 삭제</button>':'');
     go('s-edit');
     attachMic(document.getElementById('f-memo'), document.getElementById('micMemo'), document.getElementById('micHint'));
+    if(id) renderEditFamily(id);
+  }
+
+  // 수정 폼 안의 가족·동반 목록(연결된 관계 + ✕ 해제). 연결은 즉시 양방향 반영.
+  function renderEditFamily(id){
+    var box=document.getElementById('editFamList'); if(!box) return;
+    var rels=(findCust(id)||{}).relations||[];
+    if(!rels.length){ box.innerHTML='<div style="font-size:12px;color:var(--muted);margin:2px 0 6px">아직 연결된 가족이 없어요</div>'; return; }
+    box.innerHTML=rels.map(function(r){ var n=(findCust(r.to)||{}).name||r.to;
+      return '<div class="famrow"><span class="pill" style="background:var(--sage-bg);color:var(--sage)">'+esc(n)+'님 · '+esc(r.type||'가족')+'</span><button class="del-x" data-famunlink="'+esc(id)+'|'+esc(r.to)+'" type="button">✕</button></div>';
+    }).join('');
   }
 
   // ── 음성 입력(브라우저 내장 STT, 비용 0·기기에서) ──
@@ -851,12 +871,12 @@
     var loyal=get('f-loyal'); if(loyal) obj.loyalty_visits=+loyal;
     var cyc=get('f-cycle'); if(cyc) obj.care_cycle_days=+cyc;
     var bdate=get('f-bdate'); if(bdate) obj.booking={date:bdate, service:get('f-bsvc')};
-    var relto=get('f-relto'), reltype=get('f-reltype'); if(relto) obj.relations=[{to:relto, type:reltype||'지인'}];
     var refby=get('f-refby'); if(refby) obj.referred_by=refby;
+    // 가족(relations)은 수정 폼에서 즉시 양방향 반영되므로 여기서 다루지 않음(KEEP_FIELDS로 보존)
     return obj;
   }
   // 폼에 없는 시스템 관리 필드 — 수정 저장 시 보존(없으면 매출·등급·검색이 깨짐)
-  var KEEP_FIELDS=['custno','first_visit','total_won','contact'];
+  var KEEP_FIELDS=['custno','first_visit','total_won','contact','relations'];
   function saveClient(id){
     var obj=collectForm(); if(!obj.name){ toast('이름을 입력해 주세요'); return; }
     if(id){ for(var i=0;i<CUSTS.length;i++){ if(CUSTS[i].id===id){ var old=CUSTS[i]||{}; obj.id=id;
@@ -867,10 +887,15 @@
   }
   function delClient(id){ CUSTS=CUSTS.filter(function(c){return c.id!==id;}); lsSave(); refresh(); stack=['s-clients']; show('s-clients','back'); toast('삭제했어요'); }
 
-  // ── 가족·동반 연결 (수동) ──
-  var famTargetId=null;
+  // ── 가족·동반 연결 (수동, 수정 폼 안에서) ──
+  var famTargetId=null, famReturnTo='edit', famType='가족';
+  var REL_TYPES=['가족','자녀','부모','배우자','형제','지인'];
+  var REL_INVERSE={가족:'가족',자녀:'부모',부모:'자녀',배우자:'배우자',형제:'형제',지인:'지인'};  // 상대 카르테엔 역관계
   function findCust(id){ for(var i=0;i<CUSTS.length;i++){ if(CUSTS[i].id===id) return CUSTS[i]; } return null; }
-  function openFamPicker(id){ famTargetId=id; var s=document.getElementById('famSearch'); s.value=''; renderFamResults(''); document.getElementById('famPicker').style.display='flex'; setTimeout(function(){s.focus();},50); }
+  function paintFamTypes(){ var t=document.getElementById('famTypes'); if(!t) return;
+    [].forEach.call(t.querySelectorAll('[data-famtype]'),function(b){ b.classList.toggle('on', b.getAttribute('data-famtype')===famType); }); }
+  function openFamPicker(id, ctx){ famTargetId=id; famReturnTo=ctx||'edit'; famType='가족'; paintFamTypes();
+    var s=document.getElementById('famSearch'); s.value=''; renderFamResults(''); document.getElementById('famPicker').style.display='flex'; setTimeout(function(){s.focus();},50); }
   function closeFamPicker(){ document.getElementById('famPicker').style.display='none'; famTargetId=null; }
   function renderFamResults(q){
     q=(q||'').trim().toLowerCase();
@@ -884,10 +909,11 @@
       return '<div class="li" data-fampick="'+esc(c.id)+'" style="cursor:pointer"><div class="av" style="width:32px;height:32px;font-size:13px">'+av(c.name)+'</div><div class="bd"><div class="nm" style="font-size:14px">'+esc(c.name)+' 님</div><div class="sub">'+(c.loyalty_visits||(c.history||[]).length||0)+'회</div></div><div class="rt" style="color:var(--sage);font-weight:800">+ 연결</div></div>';
     }).join('');
   }
-  function linkFamily(aId,bId){
+  function linkFamily(aId,bId,type){
     var a=findCust(aId), b=findCust(bId); if(!a||!b) return;
-    function add(x,toId,name){ x.relations=x.relations||[]; if(!x.relations.some(function(r){return r.to===toId;})) x.relations.push({to:toId,type:'가족'}); }
-    add(a,bId); add(b,aId); lsSave(); refresh();
+    type=type||'가족';
+    function add(x,toId,ty){ x.relations=x.relations||[]; var ex=x.relations.filter(function(r){return r.to===toId;})[0]; if(ex){ ex.type=ty; } else { x.relations.push({to:toId,type:ty}); } }
+    add(a,bId,type); add(b,aId,REL_INVERSE[type]||type); lsSave(); refresh();
   }
   function unlinkFamily(aId,bId){
     [ [aId,bId],[bId,aId] ].forEach(function(p){ var x=findCust(p[0]); if(x&&x.relations) x.relations=x.relations.filter(function(r){return r.to!==p[1];}); });
@@ -915,9 +941,10 @@
     var dc=e.target.closest('#delClient'); if(dc){ delClient(dc.getAttribute('data-id')); return; }
     var ed=e.target.closest('[data-edit-client]'); if(ed){ editClient(ed.getAttribute('data-edit-client')); return; }
     var ht=e.target.closest('[data-histtoggle]'); if(ht){ var hc=document.getElementById('histCard'); if(hc){ var col=hc.classList.toggle('hist-collapsed'); ht.textContent= col? ('전체 '+ht.getAttribute('data-histtoggle')+'건 보기 ▾') : '접기 ▴'; } return; }
-    var fl=e.target.closest('[data-famlink]'); if(fl){ openFamPicker(fl.getAttribute('data-famlink')); return; }
-    var fu=e.target.closest('[data-famunlink]'); if(fu){ var pr=fu.getAttribute('data-famunlink').split('|'); unlinkFamily(pr[0],pr[1]); openClient(pr[0]); return; }
-    var fp=e.target.closest('[data-fampick]'); if(fp){ var tgt=famTargetId; linkFamily(tgt, fp.getAttribute('data-fampick')); closeFamPicker(); openClient(tgt); toast('가족으로 연결했어요'); return; }
+    if(e.target.closest('#editFamAdd')){ var eb=e.target.closest('#editFamAdd'); openFamPicker(document.getElementById('saveClient').getAttribute('data-id'), 'edit'); return; }
+    var ft=e.target.closest('[data-famtype]'); if(ft){ famType=ft.getAttribute('data-famtype'); paintFamTypes(); return; }
+    var fu=e.target.closest('[data-famunlink]'); if(fu){ var pr=fu.getAttribute('data-famunlink').split('|'); unlinkFamily(pr[0],pr[1]); renderEditFamily(pr[0]); return; }
+    var fp=e.target.closest('[data-fampick]'); if(fp){ var tgt=famTargetId, ret=famReturnTo; linkFamily(tgt, fp.getAttribute('data-fampick'), famType); closeFamPicker(); if(ret==='edit') renderEditFamily(tgt); else openClient(tgt); toast(famType+'(으)로 연결했어요'); return; }
     if(e.target.closest('#famClose')){ closeFamPicker(); return; }
     if(e.target.id==='famPicker'){ closeFamPicker(); return; }   // 바깥 영역 탭 → 닫기
   });
