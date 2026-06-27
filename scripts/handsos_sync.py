@@ -106,8 +106,14 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
     js = HARVEST_JS.read_text(encoding="utf-8")
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=not headed)
-        ctx = browser.new_context()
+        # 헤드리스 탐지 회피 — 기본 UA('HeadlessChrome')를 일반 크롬으로 위장 + 자동화 플래그 숨김
+        browser = pw.chromium.launch(headless=not headed,
+                                     args=["--disable-blink-features=AutomationControlled"])
+        ctx = browser.new_context(
+            user_agent=store.get("user_agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"),
+            viewport={"width": 1366, "height": 900})
         page = ctx.new_page()
         # 핸드SOS 공지/확인 팝업(alert·confirm) 자동 수락. 페이지가 먼저 닫아버린 경우의
         # 'No dialog is showing' 레이스는 무시(비치명적) — 드라이버 크래시·노이즈 방지.
