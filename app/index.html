@@ -185,6 +185,7 @@
   .rnk{flex:0 0 28px;width:28px;height:28px;border-radius:8px;background:var(--soft);color:var(--accent-d);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;}
   .focus-pill{display:inline-block;margin:0 0 10px;border:none;background:var(--accent-d);color:#fff;font-family:inherit;font-weight:700;font-size:12px;border-radius:20px;padding:6px 13px;cursor:pointer;}
   .sig{font-weight:800;font-size:11.5px;}
+  .hist-collapsed .li:nth-child(n+4){display:none;}   /* 이력 많으면 최근 3건만, 상세보기로 펼침 */
   .famrow{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
   /* 가족 연결 피커(바텀시트) */
   .fam-ov{position:fixed;inset:0;background:rgba(30,26,22,.45);z-index:60;display:flex;align-items:flex-end;justify-content:center;}
@@ -576,6 +577,7 @@
     var c=(DATA&&(DATA.clients||[]).filter(function(x){return String(x.id)===String(id);})[0])||null;
     var box=document.getElementById('clientDetail');
     if(!c){ box.innerHTML=empty('🙂','고객 정보를 찾을 수 없어요',''); go('s-client'); return; }
+    var nHist=(c.history||[]).length;
     var hist=(c.history||[]).map(function(h){
       return '<div class="li" style="cursor:default"><div class="bd"><div class="nm" style="font-weight:600">'+esc(h.service||'')+'</div>'+(h.notes?'<div class="sub">'+esc(h.notes)+'</div>':'')+'</div><div class="rt">'+esc(h.date||'')+'</div></div>';
     }).join('')||('<div style="padding:14px 15px;color:var(--muted);font-size:13px">시술 이력이 아직 없어요</div>');
@@ -596,7 +598,9 @@
         relHtml(c)+
       '</div>'+
       familyCard(c)+
-      '<div class="sec-h" style="margin-top:16px">시술 이력</div><div class="card">'+hist+'</div>'+
+      '<div class="sec-h" style="margin-top:16px">시술 이력'+(nHist?' <span style="color:var(--muted);font-weight:500;font-size:12px">'+nHist+'건</span>':'')+'</div>'+
+      '<div class="card hist'+(nHist>3?' hist-collapsed':'')+'" id="histCard">'+hist+'</div>'+
+      (nHist>3?'<button class="btn ghost" data-histtoggle="'+nHist+'" style="margin-top:8px">전체 '+nHist+'건 보기 ▾</button>':'')+
       ((c.aftercare&&c.aftercare.length)?(
         '<div class="card reveal" style="padding:13px 15px"><div class="ch" style="padding:0 0 6px">시술 후 관리 안내 (보내기 좋아요)</div>'+
         '<ul style="margin:0;padding-left:18px;font-size:13px;color:var(--ink);line-height:1.7">'+
@@ -900,6 +904,7 @@
     var sv=e.target.closest('#saveClient'); if(sv){ saveClient(sv.getAttribute('data-id')||null); return; }
     var dc=e.target.closest('#delClient'); if(dc){ delClient(dc.getAttribute('data-id')); return; }
     var ed=e.target.closest('[data-edit-client]'); if(ed){ editClient(ed.getAttribute('data-edit-client')); return; }
+    var ht=e.target.closest('[data-histtoggle]'); if(ht){ var hc=document.getElementById('histCard'); if(hc){ var col=hc.classList.toggle('hist-collapsed'); ht.textContent= col? ('전체 '+ht.getAttribute('data-histtoggle')+'건 보기 ▾') : '접기 ▴'; } return; }
     var fl=e.target.closest('[data-famlink]'); if(fl){ openFamPicker(fl.getAttribute('data-famlink')); return; }
     var fu=e.target.closest('[data-famunlink]'); if(fu){ var pr=fu.getAttribute('data-famunlink').split('|'); unlinkFamily(pr[0],pr[1]); openClient(pr[0]); return; }
     var fp=e.target.closest('[data-fampick]'); if(fp){ var tgt=famTargetId; linkFamily(tgt, fp.getAttribute('data-fampick')); closeFamPicker(); openClient(tgt); toast('가족으로 연결했어요'); return; }
