@@ -82,7 +82,101 @@ def notify(cfg: dict, text: str) -> None:
         print(f"[notify 실패] {exc} :: {text}", file=sys.stderr)
 
 
+# ── 셀렉터 오버라이드: AI(자가치유)/사람이 secrets/{slug}.selectors.yaml 만 고치면 코드 수정 없이 반영 ──
+def load_overrides(slug: str) -> dict:
+    p = ROOT / "secrets" / f"{slug}.selectors.yaml"
+    if p.exists():
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    return {}
+
+
+def apply_overrides(store: dict) -> dict:
+    ov = load_overrides(store.get("slug", ""))
+    if ov.get("login"):
+        login = {**store.get("login", {}), **{k: v for k, v in ov["login"].items() if k != "fields"}}
+        if ov["login"].get("fields"):
+            login["fields"] = {**(store.get("login", {}).get("fields") or {}), **ov["login"]["fields"]}
+        store["login"] = login
+    if ov.get("report"):
+        store["report"] = {**store.get("report", {}), **ov["report"]}
+    return store
+
+
+# ── 상태/하트비트: 매 실행 기록 → 오래 미성공이면 점검 알림(조용한 고장 방지) ──
+def write_status(slug: str, result: dict) -> dict:
+    p = ROOT / "clients" / slug / "_status.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    prev = {}
+    if p.exists():
+        try:
+            prev = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            prev = {}
+    now = datetime.now().isoformat(timespec="seconds")
+    st = {"slug": slug, "last_run": now, "ok": bool(result.get("ok")),
+          "rows": result.get("rows"), "txns": result.get("txns"), "total": result.get("total"),
+          "error": result.get("error"), "partial": result.get("partial"),
+          "fail_dir": result.get("fail_dir"),
+          "last_success": now if result.get("ok") else prev.get("last_success")}
+    p.write_text(json.dumps(st, ensure_ascii=False, indent=2), encoding="utf-8")
+    return st
+
+
+def healthcheck(cfg: dict, max_hours: int = 48) -> int:
+    """모든 매장의 _status.json 점검 → 오래 미성공이면 알림. cron 으로 따로 돌려도 됨."""
+    stale = []
+    for p in (ROOT / "clients").glob("*/_status.json"):
+        try:
+            st = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        ls = st.get("last_success")
+        if not ls:
+            stale.append(f"{st.get('slug')}(성공 기록 없음)")
+            continue
+        try:
+            age = (datetime.now() - datetime.fromisoformat(ls)).total_seconds() / 3600
+        except Exception:
+            continue
+        if age > max_hours:
+            stale.append(f"{st.get('slug')}({int(age)}시간째 미성공)")
+    if stale:
+        notify(cfg, "핸드SOS 동기화 점검 필요: " + ", ".join(stale))
+        return 1
+    print("점검: 모든 매장 정상")
+    return 0
+
+
 # ───────────────────────── Playwright 수확(브라우저) ─────────────────────────
+def _capture_failure(ctx, slug: str, err) -> str:
+    """실패 시 화면+DOM 저장 — AI(handsos_heal)나 사람이 바로 진단·수리하게."""
+    d = ROOT / "clients" / slug / "_raw" / ("fail_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+    d.mkdir(parents=True, exist_ok=True)
+    try:
+        for i, pg in enumerate(ctx.pages):
+            try:
+                pg.screenshot(path=str(d / f"page{i}.png"))
+            except Exception:
+                pass
+            chunks = []
+            for fr in pg.frames:
+                try:
+                    chunks.append(f"<!-- frame: {fr.url} -->\n" + fr.content())
+                except Exception:
+                    pass
+            try:
+                (d / f"page{i}.html").write_text("\n\n".join(chunks), encoding="utf-8")
+            except Exception:
+                pass
+    except Exception:
+        pass
+    (d / "error.txt").write_text(str(err), encoding="utf-8")
+    return str(d)
+
+
+def _fill(page, sel: str, value: str) -> None:
+    if sel and value is not None:
+        page.fill(sel, str(value))
 def _fill(page, sel: str, value: str) -> None:
     if sel and value is not None:
         page.fill(sel, str(value))
@@ -229,6 +323,8 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                     best = r
                 if r and r.get("total") and len(r.get("rows") or []) >= r["total"]:
                     return r                                 # 전체 페이지 다 받음 → 확정
+            if not (best.get("rows")):                       # 실패면 화면·DOM 저장(자가치유용)
+                best["fail_dir"] = _capture_failure(ctx, store["slug"], best.get("error"))
             return best
         finally:
             if not debug:
@@ -244,6 +340,7 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S") if not debug else "debug"
     raw_dir = ROOT / "clients" / slug / "_raw"
 
+    apply_overrides(store)                      # AI/사람이 고친 셀렉터 오버라이드 반영
     try:
         res = harvest_store(store, headed=headed, debug=debug)
     except Exception as exc:
@@ -252,7 +349,8 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     rows = res.get("rows") or []
     if not rows:
         return {"slug": slug, "ok": False, "stage": "harvest",
-                "error": res.get("error") or "0행", "total": res.get("total")}
+                "error": res.get("error") or "0행", "total": res.get("total"),
+                "fail_dir": res.get("fail_dir")}
 
     csv_path = raw_dir / f"handsos_{stamp}.csv"
     write_csv(rows, csv_path)
@@ -288,6 +386,8 @@ def main() -> int:
     ap.add_argument("--debug", action="store_true", help="표 확인용 일시정지(셀렉터 점검)")
     ap.add_argument("--no-build", action="store_true")
     ap.add_argument("--deploy", action="store_true")
+    ap.add_argument("--healthcheck", action="store_true",
+                    help="동기화 안 하고, 오래 미성공인 매장만 점검·알림")
     args = ap.parse_args()
 
     if not Path(args.stores).exists():
@@ -295,6 +395,8 @@ def main() -> int:
         return 2
 
     cfg = yaml.safe_load(Path(args.stores).read_text(encoding="utf-8")) or {}
+    if args.healthcheck:
+        return healthcheck(cfg)
     stores = load_stores(args.stores)
     if args.only:
         stores = [s for s in stores if s["slug"] == args.only]
@@ -308,16 +410,21 @@ def main() -> int:
         r = sync_one(s, do_build=not args.no_build, do_deploy=args.deploy,
                      headed=args.headed, debug=args.debug, cfg=cfg)
         results.append(r)
+        if not args.debug:
+            write_status(s["slug"], r)             # 하트비트 기록
         if r["ok"]:
             cov = f" / 핸드SOS 총 {r['total']}" if r.get("total") else ""
             extra = f" (부분수집: {r['partial']})" if r.get("partial") else ""
             print(f"  ✓ 거래 {r['txns']}{cov} · 신규 {r['new_customers']}명{extra}")
         else:
             failed.append(r)
-            print(f"  ✗ [{r['stage']}] {r['error']}")
+            heal = f" → 자가치유: python scripts/handsos_heal.py --slug {r['slug']}" if r.get("fail_dir") else ""
+            print(f"  ✗ [{r['stage']}] {r['error']}{heal}")
 
     if failed:
-        notify(cfg, "핸드SOS 동기화 실패: " + ", ".join(f"{f['slug']}({f['error']})" for f in failed))
+        notify(cfg, "핸드SOS 동기화 실패: " + ", ".join(
+            f"{f['slug']}({f['error']})" for f in failed)
+            + " — 자가치유: python scripts/handsos_heal.py --slug <slug>")
     print(f"\n완료: 성공 {len(results)-len(failed)} / 실패 {len(failed)}")
     return 1 if failed else 0
 

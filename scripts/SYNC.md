@@ -112,6 +112,27 @@ powershell -ExecutionPolicy Bypass -File scripts\win\register_task.ps1 -Time 02:
 ```
 머신이 새벽에 꺼져 있으면 안 됩니다(상시 ON 권장).
 
+## 5.5 유지보수 — AI 자가치유 + 하트비트
+
+스크래핑은 핸드SOS UI가 바뀌면 깨질 수 있다. 사람이 F12로 셀렉터를 뒤지는 대신
+**Claude 가 진단·수리**하고, **조용한 고장은 하트비트로 잡는다.**
+
+```
+동기화 실패(no-table/0건/로그인) ─▶ 화면+DOM 자동 저장(clients/{slug}/_raw/fail_*)
+                                  ─▶ python scripts/handsos_heal.py --slug {slug}
+                                        = Claude(CLI)가 그 DOM 을 읽고 바뀐 셀렉터 제안
+                                  ─▶ --apply 로 secrets/{slug}.selectors.yaml 에 적용(코드 수정 0)
+                                  ─▶ 검증: handsos_sync.py --only {slug} --headed
+```
+
+- **셀렉터 오버라이드**: `secrets/{slug}.selectors.yaml`(git 제외)에 값만 있으면 sync 가
+  코드 수정 없이 그걸 우선 사용. AI/사람 어느 쪽이 고쳐도 여기 한 곳만 바뀐다.
+- **자가치유 실행**: 실패하면 콘솔/알림에 `python scripts/handsos_heal.py --slug <slug>` 가 안내됨.
+  Claude CLI(`claude -p`, API키 불필요)가 없으면 프롬프트를 파일로 떨궈 수동 검토 가능.
+- **하트비트**: 매 실행이 `clients/{slug}/_status.json`(마지막 성공시각 등)을 남긴다.
+  점검(다른 cron/Task 로 하루 1회): `python scripts/handsos_sync.py --healthcheck`
+  → 48시간 넘게 성공 못 한 매장이 있으면 알림(PC 꺼짐·무단 고장까지 포착).
+
 ## 6. 모니터링
 
 - `handsos_sync.py` 는 매장별 결과를 출력하고, **실패가 있으면 종료코드 1** + `notify_url`

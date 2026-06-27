@@ -66,3 +66,38 @@ def test_date_range_value():
 def test_notify_falls_back_to_stderr_without_url(capsys):
     hs.notify({}, "테스트 알림")
     assert "테스트 알림" in capsys.readouterr().err
+
+
+def test_apply_overrides_merges(tmp_path, monkeypatch):
+    monkeypatch.setattr(hs, "ROOT", tmp_path)
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets" / "demo.selectors.yaml").write_text(
+        "report:\n  date_from_sel: '#NEW'\nlogin:\n  fields:\n    company_code: '#cc'\n", encoding="utf-8")
+    store = {"slug": "demo", "login": {"fields": {"username": "#u"}},
+             "report": {"url": "x", "date_from_sel": "#OLD"}}
+    hs.apply_overrides(store)
+    assert store["report"]["date_from_sel"] == "#NEW" and store["report"]["url"] == "x"   # 부분 갱신
+    assert store["login"]["fields"]["company_code"] == "#cc" and store["login"]["fields"]["username"] == "#u"
+
+
+def test_status_and_healthcheck(tmp_path, monkeypatch):
+    import json as _j
+    monkeypatch.setattr(hs, "ROOT", tmp_path)
+    hs.write_status("demo", {"ok": True, "rows": 5, "txns": 5})
+    sp = tmp_path / "clients" / "demo" / "_status.json"
+    st = _j.loads(sp.read_text(encoding="utf-8"))
+    assert st["ok"] and st["last_success"]
+    assert hs.healthcheck({}, max_hours=48) == 0           # 방금 성공 → 정상
+    st["last_success"] = "2020-01-01T00:00:00"
+    sp.write_text(_j.dumps(st), encoding="utf-8")
+    assert hs.healthcheck({}, max_hours=48) == 1           # 오래 미성공 → 점검
+
+
+def test_write_status_keeps_last_success_on_failure(tmp_path, monkeypatch):
+    import json as _j
+    monkeypatch.setattr(hs, "ROOT", tmp_path)
+    hs.write_status("demo", {"ok": True, "rows": 3})
+    prev = _j.loads((tmp_path / "clients" / "demo" / "_status.json").read_text(encoding="utf-8"))["last_success"]
+    hs.write_status("demo", {"ok": False, "error": "no-table"})  # 실패해도 직전 성공시각 유지
+    st = _j.loads((tmp_path / "clients" / "demo" / "_status.json").read_text(encoding="utf-8"))
+    assert st["ok"] is False and st["last_success"] == prev
