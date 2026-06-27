@@ -28,14 +28,28 @@
 
 ---
 
-## 2. 설치 (Ubuntu/Debian 기준)
+## 2. 설치
 
+### Windows (지금 쓰는 경로)
+1. **Python 3.11+** 설치 (python.org, 설치 시 "Add python.exe to PATH" 체크)와 **Git** 설치.
+2. PowerShell 에서:
+   ```powershell
+   git clone <이 저장소> mirrorball
+   cd mirrorball
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install playwright pyyaml
+   playwright install chromium
+   ```
+   (`Activate.ps1` 이 막히면 한 번만: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`)
+
+### Ubuntu/Debian (전용 미니PC/파이)
 ```bash
 sudo apt update && sudo apt install -y python3 python3-venv git
 git clone <이 저장소> mirrorball && cd mirrorball
 python3 -m venv .venv && . .venv/bin/activate
 pip install playwright pyyaml
-playwright install --with-deps chromium      # 헤드리스 크로미움 + 의존성
+playwright install --with-deps chromium
 ```
 
 ## 3. 매장 설정
@@ -73,14 +87,23 @@ python scripts/handsos_sync.py --only <slug>            # 헤드리스
 
 ## 5. 스케줄 (매일 새벽 1회)
 
-crontab (`crontab -e`):
+### Windows — 한 줄로 등록
+관리자 PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\win\register_task.ps1          # 매일 03:10
+powershell -ExecutionPolicy Bypass -File scripts\win\register_task.ps1 -Time 02:30
+```
+- 등록되는 작업 이름: **Mirrorball-HandSOS-Sync** (`scripts\win\run_sync.bat` 실행, 로그 `sync.log`).
+- 즉시 테스트: `schtasks /Run /TN Mirrorball-HandSOS-Sync`
+- **전원 설정**: 제어판 → 전원 옵션에서 **절전 안 함**(또는 절전이라도 `-WakeToRun`이 깨움).
+  완전 종료 상태면 안 도니, 상시 켜두거나 절전까지만.
+- 로그인 없이 돌리려면 작업 스케줄러 GUI에서 "사용자 로그온 여부와 관계없이 실행"으로 변경.
+
+### Linux(cron) — 전용 미니PC/파이
 ```cron
-# 매일 03:10 동기화 (로그는 sync.log)
 10 3 * * * cd /home/<user>/mirrorball && /home/<user>/mirrorball/.venv/bin/python scripts/handsos_sync.py >> /home/<user>/mirrorball/sync.log 2>&1
 ```
-머신이 새벽에 꺼져 있으면 안 됩니다(미니PC는 상시 ON 권장). 노트북이면 절전 해제 설정.
-
-Windows(Task Scheduler) / macOS(launchd)도 동일 명령을 등록하면 됩니다.
+머신이 새벽에 꺼져 있으면 안 됩니다(상시 ON 권장).
 
 ## 6. 모니터링
 
