@@ -1,0 +1,105 @@
+# 핸드SOS 자동 동기화 가이드
+
+핸드SOS는 개인용 공개 API가 없습니다. 그래서 "항상 동기화"의 현실적 형태는
+**로그인된 헤드리스 브라우저를 스케줄로 돌리는 배치**입니다(매일 새벽 1회 → 다음날 아침 최신).
+업종 특성(다음날 케어)에는 이걸로 충분합니다.
+
+```
+[항상 켜진 머신] ── cron(새벽) ──▶ handsos_sync.py
+  매장별: 로그인(회사코드+id+pw) → 매출상세목록 → harvest.js 수확
+        → CSV(_raw, 감사용) → import_handsos(카르테·관계 보존) → build_app
+        → 실패(0행·로그인) 시 알림
+```
+
+매 실행마다 **새로 로그인**합니다(세션 유지 X) — 여러 매장을 각자 계정으로 깔끔하게 관리하기 위해서.
+
+---
+
+## 1. 하드웨어 (24시간 켜둘 머신)
+
+| 후보 | 가격(대략) | 전력 | 비고 |
+|---|---|---|---|
+| **Intel N100 미니PC** ⭐ | 15~20만원 | idle 6~10W | x86라 Playwright 호환 안정적·헤드룸 충분. **다중 매장 1순위** |
+| 라즈베리파이 5 (8GB) | 12~15만원(+케이스·전원) | ~5W | 저전력·저가. ARM Chromium 동작. 소수 매장에 적합 |
+| 안 쓰는 노트북 | 0원 | 가변 | 배터리가 UPS 역할. 있으면 테스트용으로 충분 |
+
+권장: **N100 미니PC + Ubuntu/Debian**. 전기료 월 몇백 원, 매장 수십 곳도 무난.
+클라우드 VM은 비권장 — 데이터센터 IP 차단 가능 + 로그인 자격증명/고객 PII가 외부 서버에 상주.
+
+---
+
+## 2. 설치 (Ubuntu/Debian 기준)
+
+```bash
+sudo apt update && sudo apt install -y python3 python3-venv git
+git clone <이 저장소> mirrorball && cd mirrorball
+python3 -m venv .venv && . .venv/bin/activate
+pip install playwright pyyaml
+playwright install --with-deps chromium      # 헤드리스 크로미움 + 의존성
+```
+
+## 3. 매장 설정
+
+```bash
+cp secrets/stores.example.yaml secrets/stores.yaml   # secrets/ 는 git 제외됨
+```
+`stores.yaml` 에 매장별 **회사코드·아이디·비번**과 **로그인 화면 셀렉터**를 채웁니다.
+셀렉터는 한 번만 확인하면 됩니다(아래 4번).
+
+매장 실데이터(`clients/<slug>/`)는 PII이므로 `.gitignore` 에 한 줄 추가:
+```
+clients/<slug>/
+```
+
+## 4. 로그인 셀렉터 채우기 (최초 1회 / 매장당)
+
+핸드SOS 로그인·메뉴 DOM은 매장마다 같지만 저장소엔 모르는 값이라, 한 번 눈으로 확인합니다.
+
+```bash
+python scripts/handsos_sync.py --only <slug> --headed --debug
+```
+- 창이 뜨면 핸드SOS 로그인 화면에서 **개발자도구(F12)**로 회사코드/아이디/비번 input의
+  `id` 또는 `name` 을 확인 → `stores.yaml` 의 `login.fields.*` 에 CSS 셀렉터로 입력
+  (예: `input[name="userId"]`).
+- `report.url` 에 **매출상세목록 직접 URL**이 있으면 가장 안정적입니다. 없으면
+  `report.nav` 에 메뉴 클릭 시퀀스를 넣습니다.
+- `--debug` 는 표가 보이는 지점에서 멈춰 Enter를 기다립니다(수확 직전 상태 점검).
+
+채운 뒤 실제 동기화 테스트:
+```bash
+python scripts/handsos_sync.py --only <slug> --headed   # 눈으로 확인
+python scripts/handsos_sync.py --only <slug>            # 헤드리스
+```
+
+## 5. 스케줄 (매일 새벽 1회)
+
+crontab (`crontab -e`):
+```cron
+# 매일 03:10 동기화 (로그는 sync.log)
+10 3 * * * cd /home/<user>/mirrorball && /home/<user>/mirrorball/.venv/bin/python scripts/handsos_sync.py >> /home/<user>/mirrorball/sync.log 2>&1
+```
+머신이 새벽에 꺼져 있으면 안 됩니다(미니PC는 상시 ON 권장). 노트북이면 절전 해제 설정.
+
+Windows(Task Scheduler) / macOS(launchd)도 동일 명령을 등록하면 됩니다.
+
+## 6. 모니터링
+
+- `handsos_sync.py` 는 매장별 결과를 출력하고, **실패가 있으면 종료코드 1** + `notify_url`
+  (슬랙/디스코드 webhook)로 알림을 보냅니다.
+- 실패 신호: **0행 수확**(로그인 만료 또는 핸드SOS UI 변경), 로그인 단계 예외.
+- UI가 바뀌면 셀렉터/수확이 깨질 수 있으니, 알림이 오면 `--headed --debug`로 점검하세요.
+- 수확 원본은 `clients/<slug>/_raw/handsos_*.csv` 에 타임스탬프로 남습니다(감사·복구용).
+
+## 7. 데이터 안전 & 약관
+
+- 자격증명·고객 PII는 **이 머신 로컬에만** 존재(secrets/, clients/, _raw/ 모두 git 제외).
+- 가져오는 데이터는 **그 매장 자신의 데이터**지만, 자동 스크래핑은 핸드SOS 약관에
+  저촉될 수 있습니다. 미용사 본인의 **자격증명 공유 동의**를 받고 진행하세요.
+  공식 내보내기(스케줄 export)가 생기면 그쪽이 더 안전합니다.
+
+## 8. 증분 동기화(선택)
+
+매 실행 전체를 긁으면 매장 서버에 부담이 됩니다. `report.date_range_days: 30` 처럼
+최근 N일만 가져오고, 주 1회 정도 `0`(전체)로 보정하면 가볍습니다.
+import 는 고객번호+날짜로 **중복 제거**하고 기존 카르테(메모·가족관계)를 **보존**하므로,
+겹쳐 가져와도 안전합니다.

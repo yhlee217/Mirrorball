@@ -6,6 +6,9 @@ mockups/data/
 app/data/
 clients/*/bookings.yaml
 clients/*/records.yaml
+clients/*/_raw/
+secrets/*
+!secrets/stores.example.yaml
 content/
 __pycache__/
 *.pyc
