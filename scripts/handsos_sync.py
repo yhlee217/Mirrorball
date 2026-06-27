@@ -131,46 +131,56 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
             else:
                 page.wait_for_load_state("networkidle")
 
-            # 2) 매출상세목록(saleList.asp) 직접 이동 → 기간 채우고 → 검색(DBProc) 실행
+            # 2) 매출상세목록을 mainFrame(자식 프레임) 안에 로드 = 메뉴 클릭과 동일 구조.
+            #    top-level 로 직접 열면 페이지넘김(gotoP)이 페이지 전체를 리로드해 수확이 끊김 →
+            #    프레임 안에 두면 페이지넘김 때 프레임만 리로드되고 top(수확)은 유지된다.
             if report.get("url"):
-                page.goto(report["url"], wait_until="domcontentloaded")
-                page.wait_for_timeout(int(report.get("settle_ms", 1200)))
+                home = report.get("home_url", "https://www1.handsos.com/work/default.asp")
+                page.goto(home, wait_until="domcontentloaded")
+                page.wait_for_timeout(int(report.get("settle_ms", 1500)))
+                fname = report.get("frame_name", "mainFrame")
+                page.evaluate(
+                    "a=>{var f=document.querySelector('frame[name=\"'+a.n+'\"],iframe[name=\"'+a.n+'\"],#'+a.n);"
+                    "if(f){f.src=a.u;}}", {"n": fname, "u": report["url"]})
+                fr = None                                      # saleList 가 뜬 프레임 잡기
+                for _ in range(24):
+                    page.wait_for_timeout(500)
+                    fr = next((f for f in page.frames if "saleList" in (f.url or "")), None)
+                    if fr:
+                        break
                 if debug:
-                    print("  saleList 이동 후 URL:", page.url)   # default.asp 로 튕기면 직접접근 차단된 것
-                days = int(report.get("date_range_days", 0))
-                if days > 0:                                   # 최근 N일로 기간 설정(증분·가벼움)
-                    start, end = date_range_value(days)
-                    _fill(page, report.get("date_from_sel", "#strDateS"), start)
-                    _fill(page, report.get("date_to_sel", "#strDateE"), end)
-                if report.get("staff_label"):                 # (선택) 담당자 드롭다운 직접 선택
-                    try:
-                        page.select_option(report.get("staff_sel", "#pkStaff"),
-                                           label=report["staff_label"])
+                    print("  saleList 프레임:", fr.url if fr else "(못 찾음)")
+                if fr:
+                    days = int(report.get("date_range_days", 0))
+                    if days > 0:                               # 최근 N일로 기간 설정
+                        start, end = date_range_value(days)
+                        for sel, val in ((report.get("date_from_sel", "#strDateS"), start),
+                                         (report.get("date_to_sel", "#strDateE"), end)):
+                            try:
+                                fr.fill(sel, val)
+                            except Exception:
+                                pass
+                    if report.get("staff_label"):
+                        try:
+                            fr.select_option(report.get("staff_sel", "#pkStaff"), label=report["staff_label"])
+                        except Exception:
+                            pass
+                    try:                                       # 검색 실행(프레임 컨텍스트에서)
+                        fr.click(report.get("search_sel", "a.icogSearch"), timeout=4000)
+                    except Exception:
+                        try:
+                            fr.evaluate(report.get("search_js", "DBProc()"))
+                        except Exception:
+                            pass
+                    try:                                       # 결과 표(#list_tbl) 그려질 때까지
+                        fr.wait_for_function(
+                            "()=>{var t=document.querySelector('#list_tbl')||"
+                            "[...document.querySelectorAll('table')].find(x=>/고객명/.test(x.innerText)&&/날짜/.test(x.innerText));"
+                            "return t&&t.querySelectorAll('tr').length>2;}",
+                            timeout=int(report.get("result_timeout_ms", 15000)))
                     except Exception:
                         pass
-                # 검색 실행 — 버튼 클릭(네비게이션 추적) 우선, 안 되면 함수 직접 호출
-                try:
-                    page.click(report.get("search_sel", "a.icogSearch"), timeout=4000)
-                except Exception:
-                    try:
-                        page.evaluate(report.get("search_js", "DBProc()"))
-                    except Exception:
-                        pass
-                # 결과 표(고객명·날짜)가 실제로 그려질 때까지 대기 — POST 리로드/AJAX 모두 대응
-                try:
-                    page.wait_for_function(
-                        "()=>{var t=[...document.querySelectorAll('table')]"
-                        ".find(x=>/고객명/.test(x.innerText)&&/날짜/.test(x.innerText));"
-                        "return t&&t.querySelectorAll('tr').length>2;}",
-                        timeout=int(report.get("result_timeout_ms", 15000)))
-                except Exception:
-                    pass
                 page.wait_for_timeout(int(report.get("settle_ms", 1200)))
-            for step in report.get("nav", []) or []:           # (대안) 메뉴 클릭 시퀀스
-                if step.get("click"):
-                    page.click(step["click"])
-                if step.get("wait_ms"):
-                    page.wait_for_timeout(int(step["wait_ms"]))
 
             if debug:
                 input("‹디버그› 표가 보이면 Enter… (자동조회됐으면 그대로 Enter)")
@@ -205,7 +215,9 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                 try:
                     pg.add_script_tag(content=js)
                     r = pg.evaluate("__handsosHarvest({})")
-                except Exception:
+                except Exception as exc:
+                    if debug:
+                        print("  harvest 예외:", str(exc).splitlines()[0][:160])
                     continue
                 if r and len(r.get("rows") or []) > len(best.get("rows") or []):
                     best = r
