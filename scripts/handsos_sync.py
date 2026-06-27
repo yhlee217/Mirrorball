@@ -186,6 +186,14 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     parsed = ih.parse_rows(str(csv_path), staff=staff)
     custs = ih.build_customers(parsed)
     nr, nc = ih.write_out(slug, parsed, custs)
+
+    # 최초 동기화면 config.yaml 부트스트랩(디자이너 이름·살롱·기준일). 이후 사람이 보강 가능.
+    cfg_path = ROOT / "clients" / slug / "config.yaml"
+    if not cfg_path.exists():
+        cfg_path.write_text(yaml.safe_dump(
+            {"slug": slug, "display_name": staff or slug, "salon": store.get("salon", ""),
+             "today": str(date.today())}, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
     built = None
     if do_build:
         import build_app

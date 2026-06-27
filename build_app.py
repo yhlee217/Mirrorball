@@ -268,7 +268,8 @@ def resolve_bookings(client_dir: str, customers: list[dict], today: date) -> lis
 
 
 def build_one(client_dir: str, dist: str = "dist_app") -> dict:
-    cfg = _load(str(Path(client_dir) / "config.yaml"))
+    cfg_path = Path(client_dir) / "config.yaml"
+    cfg = _load(str(cfg_path)) if cfg_path.exists() else {}   # 없으면 기본값으로 진행
     slug = cfg.get("slug") or Path(client_dir).name
     today = _parse_date(cfg.get("today")) or date.today()
 
