@@ -280,6 +280,8 @@ def parse_styles(txt: str) -> list[str]:
     for p in re.split(r"\s*인기\s+", seg.strip()):
         p = re.sub(r"[\[\]]", " ", p).strip()
         p = re.split(r"\s{2,}", p)[0].strip()          # 첫 토큰군만
+        # 마지막 스타일 뒤에 붙는 대표시술 칩(커트·염색 등) 제거 — '펌'은 스타일이라 보존
+        p = re.split(r"\s(?:커트|염색|클리닉|드라이|탈색|매직|스타일링|두피)", p)[0].strip()
         if p and len(p) <= 16 and p not in out:
             out.append(p)
     return out[:6]
