@@ -40,12 +40,18 @@ def _place_measured(place: dict) -> bool:
     return bool(place) and place.get("measured") is not False and place.get("reviews") is not None
 
 
+def _naver_items(sig: dict) -> list:
+    """네이버 측정 대상: 깨끗한 발견키워드(naver_queries) 우선, 없으면 질문(naver_found)."""
+    return sig.get("naver_queries") or sig.get("queries") or []
+
+
 def measured_dims(sig: dict) -> dict:
     """어떤 차원을 실제로 측정했나(미측정과 '측정된 0'을 구분 — 정직성)."""
     qs = sig.get("queries") or []
+    nv = _naver_items(sig)
     return {
         "ai": bool(qs),
-        "naver": bool(qs) and any(q.get("naver_found") is not None for q in qs),
+        "naver": bool(nv) and any(x.get("naver_found") is not None for x in nv),
         "place": _place_measured(sig.get("place") or {}),
         "blog": sig.get("blog_mentions") is not None,
     }
@@ -60,8 +66,10 @@ def score(sig: dict):
     if m["ai"]:
         parts.append((W_AI, _rate(sum(1 for q in qs if q.get("ai_mentioned")), n)))
     if m["naver"]:
-        nv_found = _rate(sum(1 for q in qs if q.get("naver_found")), n)
-        ranks = [q["naver_rank"] for q in qs if q.get("naver_found") and q.get("naver_rank")]
+        nv = _naver_items(sig)
+        k = len(nv) or 1
+        nv_found = _rate(sum(1 for x in nv if x.get("naver_found")), k)
+        ranks = [x["naver_rank"] for x in nv if x.get("naver_found") and x.get("naver_rank")]
         rank_q = (sum(max(0, 1 - (r - 1) / 10) for r in ranks) / len(ranks)) if ranks else 0.0
         parts.append((W_NAVER, 0.7 * nv_found + 0.3 * rank_q))
     if m["place"]:
@@ -87,11 +95,13 @@ def prescribe(sig: dict) -> list[dict]:
     out: list[dict] = []
 
     if m["naver"]:
-        nv_found = sum(1 for q in qs if q.get("naver_found"))
-        if nv_found / n < 0.5:
+        nv = _naver_items(sig)
+        k = len(nv) or 1
+        nv_found = sum(1 for x in nv if x.get("naver_found"))
+        if nv_found / k < 0.5:
             out.append({"priority": 1, "area": "naver",
                         "title": "네이버 플레이스 정보 보강(업종·지역·시술 키워드)",
-                        "why": f"핵심 질문 {n}개 중 {nv_found}개에서만 검색에 노출돼요",
+                        "why": f"발견 키워드 {k}개 중 {nv_found}개에서만 노출돼요",
                         "effort": "20분"})
 
     if not m["place"]:                 # 미측정 — 0 으로 단정하지 않고 '측정'을 액션으로
@@ -148,6 +158,7 @@ def build_exposure(sig: dict, prev: dict | None = None, today: date | None = Non
         "measured": measured_dims(sig),     # 측정/미측정 구분(정직성)
         "note": sig.get("measured_by") or sig.get("note"),
         "queries": sig.get("queries", []),
+        "naver_queries": sig.get("naver_queries", []),
         "place": sig.get("place", {}),
         "blog_mentions": sig.get("blog_mentions"),
         "name_baseline": sig.get("name_baseline") or {},
@@ -186,8 +197,9 @@ def main() -> int:
             target["_show"] = True
         sig = measure(target)
         mq = sig.get("queries", [])
+        nq = sig.get("naver_queries", [])
         print(f"  · 측정 결과: AI 언급 {sum(1 for q in mq if q.get('ai_mentioned'))}/{len(mq)}"
-              f" · 네이버 노출 {sum(1 for q in mq if q.get('naver_found'))}/{len(mq)}"
+              f" · 네이버 발견 {sum(1 for x in nq if x.get('naver_found'))}/{len(nq)}"
               f" ({sig.get('measured_by','')})")
     elif prev and prev.get("queries"):
         sig = prev                      # 기존 측정값으로 점수·처방만 재계산

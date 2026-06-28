@@ -45,11 +45,18 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 _COMP_RE = re.compile(r"[가-힣A-Za-z0-9]+(?:헤어|살롱|미용실|뷰티|바버|스튜디오)")
 
 
-def _names(target: dict) -> list[str]:
-    d = target.get("designer", {}) or {}
+def _salon_names(target: dict) -> list[str]:
     s = target.get("salon", {}) or {}
-    names = [d.get("name"), s.get("name")] + (d.get("aliases") or []) + (s.get("aliases") or [])
-    return [n for n in names if n]
+    return [n for n in [s.get("name")] + (s.get("aliases") or []) if n]
+
+
+def _designer_names(target: dict) -> list[str]:
+    d = target.get("designer", {}) or {}
+    return [n for n in [d.get("name")] + (d.get("aliases") or []) if n]
+
+
+def _names(target: dict) -> list[str]:
+    return _salon_names(target) + _designer_names(target)
 
 
 def _mentioned(text: str, names: list[str]) -> bool:
@@ -73,19 +80,19 @@ def _claude(prompt: str, timeout: int = 150) -> str:
 
 
 def measure_ai(target: dict) -> list[dict]:
-    names = _names(target)
+    names, salon_n, des_n = _names(target), _salon_names(target), _designer_names(target)
     qs: list[dict] = []
     for q in target.get("questions", []) or []:
         ans = _claude(q + "\n\n(한국 미용실/헤어 디자이너 추천. 실제로 알려진 곳만, 모르면 모른다고 말해줘.)")
-        ment = _mentioned(ans, names)
+        ms, md = _mentioned(ans, salon_n), _mentioned(ans, des_n)   # 샵·디자이너 분리
         excerpt = ""
-        if ment:
+        if ms or md:
             for sent in re.split(r"(?<=[.!?\n])", ans):
                 if _mentioned(sent, names):
                     excerpt = sent.strip()[:120]
                     break
-        qs.append({"q": q, "ai_mentioned": ment, "ai_said": excerpt,
-                   "ai_competitors": _competitors(ans, names)})
+        qs.append({"q": q, "ai_mentioned": ms or md, "ai_salon": ms, "ai_designer": md,
+                   "ai_said": excerpt, "ai_competitors": _competitors(ans, names)})
     return qs
 
 
@@ -114,34 +121,49 @@ def naver_local_search(query: str, cid: str, csec: str, display: int = 5, timeou
              "road": it.get("roadAddress", "")} for it in data.get("items", [])]
 
 
-# 대화체 질문 → 지역검색용 키워드(불용어 제거). "…잘하는 미용실 추천해줘" → "… 미용실"
-_NAVER_FILLER = re.compile(
-    r"(잘\s*하는|자연스럽게|추천\s*해줘|추천|알려줘|어디야|어디|근처|좀|있어|봐주는|해주는|쪽|까지)")
-
-
+# 대화체 질문 대신, 지역×시술로 '깨끗한' 발견 키워드를 만든다(공정한 측정).
+# 단어 안의 '어디'(헤어디자이너) 같은 오절단 방지 — 토큰 파싱이 아니라 구조화 데이터에서 생성.
 def naver_query(q: str) -> str:
-    s = _NAVER_FILLER.sub(" ", q)
-    s = re.sub(r"[?·,]", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
+    """(폴백) 대화체 → 키워드. 토큰 단위로만 불용어 제거(단어 내부는 안 건드림)."""
+    filler = {"잘하는", "잘", "하는", "자연스럽게", "추천", "추천해줘", "해줘", "알려줘",
+              "어디야", "어디", "근처", "좀", "있어", "봐주는", "해주는", "쪽", "까지",
+              "곳", "찾아줘", "괜찮아", "인기", "인기있는", "그", "더"}
+    toks = [t for t in re.split(r"[\s·,?]+", q) if t and t not in filler]
+    s = " ".join(toks)
     if not re.search(r"미용실|헤어|디자이너|살롱", s):
         s += " 미용실"
-    return s
+    return s.strip()
 
 
-def measure_naver_api(target: dict, cid: str, csec: str, show: bool = False) -> dict:
+def naver_keyword_queries(target: dict) -> list[str]:
+    """지역 × 시술 → 발견 키워드(깨끗). 손님이 실제로 검색할 형태."""
+    region = (target.get("region") or "").strip()
+    specs = [s.strip() for s in (target.get("specialties") or []) if s.strip()]
+    out = [f"{region} {sp}".strip() for sp in specs]
+    out.append(f"{region} 미용실".strip())
+    seen, uniq = set(), []
+    for q in out:
+        if q and q not in seen:
+            seen.add(q)
+            uniq.append(q)
+    return uniq
+
+
+def measure_naver_canonical(target: dict, cid: str, csec: str, show: bool = False) -> list[dict]:
+    """깨끗한 발견 키워드별 우리 순위 + 상위 경쟁사."""
     names = _names(target)
-    res: dict[str, dict] = {}
-    for q in target.get("questions", []) or []:
-        kw = naver_query(q)
+    res = []
+    for kw in naver_keyword_queries(target):
         try:
             items = naver_local_search(kw, cid, csec)
             rank = _rank_in_items(items, names)
-            res[q] = {"naver_found": rank is not None, "naver_rank": rank, "naver_kw": kw}
+            top = [it["name"] for it in items[:3]]
+            res.append({"q": kw, "naver_found": rank is not None, "naver_rank": rank, "top": top})
             if show:
-                top = ", ".join(it["name"] for it in items[:3]) or "(결과 없음)"
-                print(f"      네이버 '{kw}': {('우리 '+str(rank)+'위' if rank else '미노출')} | 상위: {top}")
+                print(f"      네이버 '{kw}': {('우리 '+str(rank)+'위' if rank else '미노출')}"
+                      f" | 상위: {', '.join(top) or '(결과 없음)'}")
         except Exception as e:
-            res[q] = {"naver_found": None, "naver_rank": None, "naver_kw": kw}
+            res.append({"q": kw, "naver_found": None, "naver_rank": None, "top": []})
             if show:
                 print(f"      네이버 '{kw}': 오류 {str(e)[:60]}")
     return res
@@ -219,27 +241,24 @@ def collect(target: dict) -> dict:
                             "키 없음 → 스크랩 폴백(secrets/naver.yaml 또는 환경변수)"))
 
     show = bool(target.get("_show"))
-    qs = measure_ai(target)
+    qs = measure_ai(target)                           # AI: 대화체 질문(손님 말투)
+    base, nq = {}, []
     if cid and csec:
-        nv = measure_naver_api(target, cid, csec, show=show)
+        nq = measure_naver_canonical(target, cid, csec, show=show)   # 네이버: 깨끗한 발견 키워드
         base = naver_name_baseline(target, cid, csec)
         if base.get("name_rank"):
             print(f"  · 이름 검색('{base.get('name_query')}'): {base['name_rank']}위로 존재 ✓")
         elif base.get("name_found") is False:
             print(f"  · 이름 검색('{base.get('name_query')}'): 상위에 안 보임 — 등록·정보 확인 필요")
-    else:
-        nv = measure_naver(target, [q["q"] for q in qs])
-        base = {}
-    for q in qs:
-        q.update(nv.get(q["q"], {}))
 
     place = target.get("place")                      # 사람이 채웠으면 사용, 아니면 미측정
     if not place:
         place = {"measured": False}
     return {
         "queries": qs,
+        "naver_queries": nq,
         "place": place,
         "blog_mentions": target.get("blog_mentions"),   # None = 미측정
         "name_baseline": base,
-        "measured_by": f"AI(Claude CLI) + 네이버({used}) · {len(qs)}개 질문",
+        "measured_by": f"AI(Claude CLI) + 네이버({used}) · 발견키워드 {len(nq)}개",
     }

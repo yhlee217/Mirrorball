@@ -675,14 +675,31 @@
         (a.effort?'<div class="e">⏱ '+esc(a.effort)+'</div>':'')+'</div>';
     }).join(''):'';
 
-    // 질문별 노출(AI 언급 + 네이버 순위)
-    var qHtml='<div class="sec-h" style="margin-top:14px">손님이 이렇게 물으면</div><div class="card">'+qs.map(function(q){
-      var ai=q.ai_mentioned? '<span class="exp-t on">AI 언급</span>':'<span class="exp-t off">AI 미언급</span>';
-      var nv=(q.naver_found)? '<span class="exp-t nv">네이버 '+(q.naver_rank?(q.naver_rank+'위'):'노출')+'</span>':'<span class="exp-t off">네이버 미노출</span>';
+    // 이름 검색 베이스라인(존재 확인)
+    var nb=ex.name_baseline||{};
+    var baseHtml=(nb.name_rank!=null||nb.name_found!=null)? '<div class="exp-act reveal" style="border-left-color:var(--sage)"><div class="t" style="font-size:13px">'+
+      (nb.name_rank? '✓ 이름 검색 시 '+nb.name_rank+'위 — 네이버에 등록돼 있어요':'이름 검색에도 안 보여요 — 플레이스 등록·정보 점검 필요')+'</div>'+
+      '<div class="w">'+(nb.name_rank? '존재는 하는데, 아래 발견 키워드엔 안 떠요 → 키워드·리뷰 최적화가 핵심':'등록/정보부터 확인하세요')+'</div></div>':'';
+
+    // 네이버 발견 키워드(깨끗한 지역×시술) + 우리 순위 + 경쟁사
+    var nqs=ex.naver_queries||[];
+    var nvHtml=nqs.length? '<div class="sec-h" style="margin-top:14px">네이버 발견 키워드</div><div class="card">'+nqs.map(function(x){
+      var tag=(x.naver_found)? '<span class="exp-t nv">우리 '+(x.naver_rank?(x.naver_rank+'위'):'노출')+'</span>':'<span class="exp-t off">미노출</span>';
+      var top=(x.top&&x.top.length&&!x.naver_found)? '<div style="font-size:11px;color:var(--muted);margin-top:4px">상위: '+x.top.slice(0,3).map(esc).join(', ')+'</div>':'';
+      return '<div class="li" style="cursor:default;display:block"><div class="exp-row"><div class="exp-q">'+esc(x.q)+top+'</div><div class="exp-tags">'+tag+'</div></div></div>';
+    }).join('')+'</div>':'';
+
+    // AI 발견(대화체 질문) — 샵·디자이너 분리
+    var aiSalon=qs.filter(function(q){return q.ai_salon;}).length, aiDes=qs.filter(function(q){return q.ai_designer;}).length;
+    var aiSum=qs.length? '<div style="font-size:11.5px;color:var(--muted);margin:0 2px 7px">샵(살롱톤) '+aiSalon+'/'+qs.length+' · 디자이너 '+aiDes+'/'+qs.length+' 언급</div>':'';
+    var qHtml='<div class="sec-h" style="margin-top:14px">손님이 AI에 이렇게 물으면</div>'+aiSum+'<div class="card">'+qs.map(function(q){
+      var shopT=q.ai_salon? '<span class="exp-t on">샵</span>':'<span class="exp-t off">샵 ✕</span>';
+      var desT=q.ai_designer? '<span class="exp-t on">디자이너</span>':'<span class="exp-t off">디자이너 ✕</span>';
       var said=q.ai_said? '<div style="font-size:11.5px;color:var(--sage);margin-top:5px">“'+esc(q.ai_said)+'”</div>':'';
       var comp=(q.ai_competitors&&q.ai_competitors.length&&!q.ai_mentioned)? '<div style="font-size:11px;color:var(--muted);margin-top:4px">대신 등장: '+q.ai_competitors.slice(0,3).map(esc).join(', ')+'</div>':'';
-      return '<div class="li" style="cursor:default;display:block"><div class="exp-row"><div class="exp-q">'+esc(q.q)+said+comp+'</div><div class="exp-tags">'+ai+nv+'</div></div></div>';
+      return '<div class="li" style="cursor:default;display:block"><div class="exp-row"><div class="exp-q">'+esc(q.q)+said+comp+'</div><div class="exp-tags">'+shopT+desT+'</div></div></div>';
     }).join('')+'</div>';
+    qHtml=baseHtml+nvHtml+qHtml;
 
     // 측정 범위(정직성) — 무엇을 쟀고 무엇은 아직인지
     var md=ex.measured||{};
