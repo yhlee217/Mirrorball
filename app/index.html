@@ -684,8 +684,14 @@
       return '<div class="li" style="cursor:default;display:block"><div class="exp-row"><div class="exp-q">'+esc(q.q)+said+comp+'</div><div class="exp-tags">'+ai+nv+'</div></div></div>';
     }).join('')+'</div>';
 
-    box.innerHTML=head+actHtml+qHtml+
-      (ex.generated_at?'<div style="font-size:10.5px;color:var(--muted);text-align:center;margin:12px 0 4px">측정일 '+esc(ex.generated_at)+' · AI(Claude)+네이버 기준</div>':'');
+    // 측정 범위(정직성) — 무엇을 쟀고 무엇은 아직인지
+    var md=ex.measured||{};
+    var mline=function(on,t){return '<span class="exp-t '+(on?'on':'off')+'">'+(on?'✓ ':'— ')+t+'</span>';};
+    var scope='<div style="display:flex;gap:5px;flex-wrap:wrap;margin:9px 2px 2px">'+
+      mline(md.ai,'AI 발견')+mline(md.naver,'웹/네이버 발견')+mline(md.place,'플레이스 리뷰·사진')+mline(md.blog,'블로그 후기')+'</div>';
+
+    box.innerHTML=head+scope+actHtml+qHtml+
+      (ex.note?'<div style="font-size:10.5px;color:var(--muted);text-align:center;margin:12px 0 4px;line-height:1.5">'+esc(ex.note)+'</div>':'');
     setTimeout(function(){box.querySelectorAll('.exp-spark .sb').forEach(function(b){b.style.height=b.getAttribute('data-h')+'px';});},60);
   }
 
