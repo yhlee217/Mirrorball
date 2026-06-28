@@ -24,7 +24,14 @@ expose.build_exposure → clients/{slug}/exposure.yaml → 앱 '노출' 탭
 2. 사용 API: **검색** 선택, 환경: WEB(아무 URL) → 등록
 3. **Client ID / Client Secret** 발급 (무료, 일 25,000회)
 
-키는 **git 에 올라가는 `targets/` 에 넣지 말 것.** 환경변수로 준다:
+키는 **`secrets/naver.yaml`(git 제외)** 에 넣는 게 제일 쉽다:
+
+```powershell
+copy secrets\naver.example.yaml secrets\naver.yaml
+notepad secrets\naver.yaml   # client_id / client_secret 채우기
+```
+
+또는 환경변수로 줘도 된다:
 
 ```powershell
 # Windows (현재 세션)

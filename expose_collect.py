@@ -17,6 +17,23 @@ import shutil
 import subprocess
 import urllib.parse
 import urllib.request
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parent
+
+
+def naver_keys(target: dict) -> tuple[str | None, str | None]:
+    """네이버 키 우선순위: target.naver → secrets/naver.yaml(git 제외) → 환경변수."""
+    nk = target.get("naver") or {}
+    cid, csec = nk.get("client_id"), nk.get("client_secret")
+    if not (cid and csec):
+        p = _ROOT / "secrets" / "naver.yaml"
+        if p.exists():
+            import yaml
+            d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            cid = cid or d.get("client_id")
+            csec = csec or d.get("client_secret")
+    return (cid or os.getenv("NAVER_CLIENT_ID")), (csec or os.getenv("NAVER_CLIENT_SECRET"))
 
 # 네이버 플레이스 결과 아이템 셀렉터(바뀌면 여기만 수정). 여러 후보를 순서대로 시도.
 NAVER_PLACE_SEL = [
@@ -159,14 +176,12 @@ def collect(target: dict) -> dict:
     플레이스 리뷰·사진은 공식 API 가 안 줘서 별도 — 없으면 '미측정'으로 둔다(0 단정 금지).
     """
     claude_ok = shutil.which("claude") is not None
-    nk = target.get("naver", {}) or {}
-    cid = nk.get("client_id") or os.getenv("NAVER_CLIENT_ID")
-    csec = nk.get("client_secret") or os.getenv("NAVER_CLIENT_SECRET")
+    cid, csec = naver_keys(target)
     used = "naver-openapi" if (cid and csec) else "scrape"
     # 측정이 실제로 됐는지 투명하게(점수 0 이 '진짜 0위'인지 '측정 실패'인지 구분)
     print("  · AI: " + ("Claude CLI ✓" if claude_ok else "Claude CLI 없음 → AI 측정 안 됨(설치 필요)"))
     print("  · 네이버: " + ("OpenAPI 키 ✓" if (cid and csec) else
-                            "키 없음 → 스크랩 폴백(setx 후 새 PowerShell 창 필요)"))
+                            "키 없음 → 스크랩 폴백(secrets/naver.yaml 또는 환경변수)"))
 
     qs = measure_ai(target)
     nv = measure_naver_api(target, cid, csec) if (cid and csec) else measure_naver(target, [q["q"] for q in qs])

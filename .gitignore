@@ -9,6 +9,7 @@ clients/*/records.yaml
 clients/*/_raw/
 secrets/*
 !secrets/stores.example.yaml
+!secrets/naver.example.yaml
 content/
 __pycache__/
 *.pyc
