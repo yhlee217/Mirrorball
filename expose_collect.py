@@ -10,9 +10,12 @@ substring 매칭으로 충분(NER 불필요). 측정 후 expose.build_exposure �
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
 import urllib.parse
+import urllib.request
 
 # 네이버 플레이스 결과 아이템 셀렉터(바뀌면 여기만 수정). 여러 후보를 순서대로 시도.
 NAVER_PLACE_SEL = [
@@ -68,6 +71,44 @@ def measure_ai(target: dict) -> list[dict]:
     return qs
 
 
+# ── 네이버 지역검색 OpenAPI (무료 키, JSON) — 스크래핑보다 안정적. 발견·순위 측정의 1순위. ──
+def _strip_tags(s: str) -> str:
+    return re.sub(r"<[^>]+>", "", s or "").strip()
+
+
+def _rank_in_items(items: list[dict], names: list[str]) -> int | None:
+    """지역검색 결과(상위 N) 중 우리 매장이 몇 번째인지(없으면 None)."""
+    for i, it in enumerate(items, 1):
+        nm = it.get("name", "")
+        if any(n and n in nm for n in names):
+            return i
+    return None
+
+
+def naver_local_search(query: str, cid: str, csec: str, display: int = 5, timeout: int = 10) -> list[dict]:
+    url = "https://openapi.naver.com/v1/search/local.json?display=%d&query=%s" % (
+        display, urllib.parse.quote(query))
+    req = urllib.request.Request(url, headers={
+        "X-Naver-Client-Id": cid, "X-Naver-Client-Secret": csec})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    return [{"name": _strip_tags(it.get("title")), "category": it.get("category", ""),
+             "road": it.get("roadAddress", "")} for it in data.get("items", [])]
+
+
+def measure_naver_api(target: dict, cid: str, csec: str) -> dict:
+    names = _names(target)
+    res: dict[str, dict] = {}
+    for q in target.get("questions", []) or []:
+        try:
+            items = naver_local_search(q, cid, csec)
+            rank = _rank_in_items(items, names)
+            res[q] = {"naver_found": rank is not None, "naver_rank": rank}
+        except Exception:
+            res[q] = {"naver_found": None, "naver_rank": None}
+    return res
+
+
 def measure_naver(target: dict, queries: list[str], debug: bool = False) -> dict:
     try:
         from playwright.sync_api import sync_playwright
@@ -111,13 +152,26 @@ def measure_naver(target: dict, queries: list[str], debug: bool = False) -> dict
 
 
 def collect(target: dict) -> dict:
-    """AI + 네이버 측정 → signals(expose.score/prescribe 가 먹는 형식)."""
+    """AI + 네이버 측정 → signals. 네이버는 OpenAPI(키) 우선, 없으면 스크랩 폴백.
+
+    네이버 키: target.naver.client_id/secret 또는 환경변수 NAVER_CLIENT_ID/SECRET.
+    플레이스 리뷰·사진은 공식 API 가 안 줘서 별도 — 없으면 '미측정'으로 둔다(0 단정 금지).
+    """
     qs = measure_ai(target)
-    nv = measure_naver(target, [q["q"] for q in qs])
+    nk = target.get("naver", {}) or {}
+    cid = nk.get("client_id") or os.getenv("NAVER_CLIENT_ID")
+    csec = nk.get("client_secret") or os.getenv("NAVER_CLIENT_SECRET")
+    used = "naver-openapi" if (cid and csec) else "scrape"
+    nv = measure_naver_api(target, cid, csec) if (cid and csec) else measure_naver(target, [q["q"] for q in qs])
     for q in qs:
         q.update(nv.get(q["q"], {}))
+
+    place = target.get("place")                      # 사람이 채웠으면 사용, 아니면 미측정
+    if not place:
+        place = {"measured": False}
     return {
         "queries": qs,
-        "place": target.get("place", {"reviews": 0, "photos": 0, "comp_reviews_median": 0}),
-        "blog_mentions": target.get("blog_mentions", 0),
+        "place": place,
+        "blog_mentions": target.get("blog_mentions"),   # None = 미측정
+        "measured_by": f"AI(Claude CLI) + 네이버({used}) · {len(qs)}개 질문",
     }
