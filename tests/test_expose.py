@@ -102,6 +102,28 @@ def test_designer_card_low_rank_says_position_not_absent():
     assert "8위" in c["ask"] and "안 보여요" not in c["ask"]   # '안 떠요'가 아니라 '8위'로 정직하게
 
 
+def test_franchise_ratio_and_hard_flag():
+    assert expose._franchise_ratio(["차홍룸 여의도점", "준오헤어 IFC", "박승철헤어"]) == 1.0
+    assert expose._franchise_ratio(["에이저헤어", "더엔느헤어", "제오헤어"]) == 0.0
+    sig = {"naver_queries": [
+        {"q": "여의도 레이어드컷", "spec": "레이어드컷", "region": "여의도", "naver_rank": None,
+         "top": ["차홍룸 여의도점", "준오헤어 여의도점", "박승철헤어스투디오"]},
+    ], "place": {"styles": []}}
+    p = expose.keyword_plan(sig)[0]
+    assert p["hard"] is True and "프랜차이즈" in p["advice"]
+
+
+def test_designer_card_deprioritizes_franchise_region():
+    sig = {"naver_queries": [
+        {"q": "여의도 레이어드컷", "spec": "레이어드컷", "region": "여의도", "naver_rank": None,
+         "top": ["차홍룸 여의도점", "준오헤어 여의도점", "박승철헤어스투디오"]},
+        {"q": "영등포시장역 뿌리펌", "spec": "뿌리펌", "region": "영등포시장역", "naver_rank": None,
+         "top": ["제오헤어 영등포시장역점", "소요 영등포점"]},
+    ], "place": {"styles": []}}
+    c = expose.designer_card(sig)
+    assert "뿌리펌" in c["do"] and "여의도" not in c["ask"]   # 승산 있는 동네부터, 여의도는 뒤로
+
+
 def test_designer_card_positive_when_no_gaps():
     sig = {"naver_queries": [{"q": "영등포 펌", "spec": "펌", "naver_rank": 1, "top": []}],
            "place": {"styles": ["펌"], "reviews": 100}}

@@ -149,6 +149,22 @@ def prescribe(sig: dict) -> list[dict]:
     return out[:3]                    # 한 번에 3개까지(부담 줄임)
 
 
+# 대형 헤어 프랜차이즈(다지점·브랜드 파워) — 상위가 이들로 도배된 키워드는 1인샵이 뚫기 어렵다.
+import re as _re
+_FRANCHISE = _re.compile(
+    r"준오|차홍|박승철|이가자|박준|리안헤어|블루클럽|에이바헤어|보브헤어|이철헤어|"
+    r"지오트리|제니하우스|아이디헤어|살롱드마샬|애브뉴준오|그루밍|박철|미장원|"
+    r"준오헤어|차홍룸|헤어플러스|마끄헤어|소쿱|순수히어로|리안")
+
+
+def _franchise_ratio(names: list[str]) -> float:
+    """상위 결과 중 대형 프랜차이즈 비율(0~1). 높을수록 1인샵이 뚫기 어려운 지역."""
+    names = [n for n in names if n]
+    if not names:
+        return 0.0
+    return sum(1 for n in names if _FRANCHISE.search(n)) / len(names)
+
+
 def keyword_plan(sig: dict) -> list[dict]:
     """발견 키워드별 '이렇게 입력하세요' — 우리 인기스타일에 그 시술이 있나 + 상위 경쟁사 근거.
 
@@ -157,6 +173,9 @@ def keyword_plan(sig: dict) -> list[dict]:
 
     순위 구분(정직성): rank 는 실제 지도 순위(--rank) 또는 API top-5. 5위 안=노출중(ok),
     6위 이하=뜨지만 하위(low), 못 찾음=미노출(gap). '안 보임'과 '하위'를 섞지 않는다.
+
+    승산(hard): 상위가 대형 프랜차이즈로 도배(≥과반)됐고 우리가 노출 안 되면 hard=True
+    → 처방·카드에서 뒤로 미룬다(여의도처럼 ROI 낮은 곳에 1인샵 힘 빼지 않게).
     """
     nq = sig.get("naver_queries") or []
     place = sig.get("place") or {}
@@ -184,7 +203,13 @@ def keyword_plan(sig: dict) -> list[dict]:
             status = "gap"
             advice = (f"플레이스 시술메뉴에 '{spec}' 등록 + 방문 후기에 '{spec}' 키워드로 남겨달라 요청"
                       + proofs)
-        plans.append({"keyword": kw, "spec": spec, "rank": rank, "status": status,
+        # 대형 프랜차이즈 과반 + 우리 미노출/하위 → 승산 낮음(뒤로 미룸)
+        fr = _franchise_ratio(top)
+        hard = fr >= 0.5 and (rank is None or rank > 10)
+        if hard:
+            advice += " · ⚠️ 상위가 대형 프랜차이즈 밀집 — 단기 승산 낮아 후순위"
+        plans.append({"keyword": kw, "spec": spec, "region": x.get("region"), "rank": rank,
+                      "status": status, "hard": hard, "franchise_ratio": round(fr, 2),
                       "has_style": has, "advice": advice, "proof": proof, "top": top[:3]})
     return plans
 
@@ -201,7 +226,10 @@ def designer_card(sig: dict) -> dict | None:
     place = sig.get("place") or {}
     nb = sig.get("name_baseline") or {}
     plans = keyword_plan(sig)
-    todo = [p for p in plans if p["status"] == "gap"] + [p for p in plans if p["status"] == "low"]
+    # 우선순위: (승산 있는 미노출) → (승산 있는 하위) → (승산 낮은 것들). 프랜차이즈 밀집은 뒤로.
+    todo = ([p for p in plans if p["status"] == "gap" and not p.get("hard")]
+            + [p for p in plans if p["status"] == "low" and not p.get("hard")]
+            + [p for p in plans if p.get("hard")])
 
     bits = []                                   # 잘 되고 있는 강점 한 줄(잔소리 아닌 칭찬으로 시작)
     wins = sorted((p for p in plans if p["status"] == "ok" and p.get("rank")),
