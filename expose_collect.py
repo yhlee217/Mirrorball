@@ -398,11 +398,14 @@ def scrape_place_assets(page, name: str, region: str = "", debug: bool = False) 
             for k in ("reviews", "visitor_reviews", "blog_reviews", "rating"):
                 if hd.get(k):
                     d[k] = hd[k]
+            if not d.get("styles"):                  # 검색 본문에 없으면 플레이스 홈에서
+                d["styles"] = parse_styles(home)
             d["found"] = True
         d["photos"] = _count_photos(page, pid)       # 사진 탭 썸네일 실측(None=미측정)
     if debug:
         print(f"        [진단] {name}: place_id={pid} · 리뷰={d.get('reviews')}"
-              f" · 별점={d.get('rating')} · 사진(썸네일)={d.get('photos')}")
+              f" · 별점={d.get('rating')} · 사진(썸네일)={d.get('photos')}"
+              f" · 인기스타일={d.get('styles') or '(없음)'}")
     return d
 
 
