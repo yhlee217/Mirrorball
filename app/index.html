@@ -715,6 +715,14 @@
         '<div class="exp-act" style="border-left-color:var(--gold);margin-top:9px"><div class="t">리뷰 '+pl.catch_up_reviews+'건만 더 받으면 주변 중위권 따라잡아요</div><div class="w">우리 '+(pl.reviews||0)+'건 · 경쟁 중위 '+(pl.comp_reviews_median||0)+'건</div></div>'
         : '<div class="exp-act reveal" style="border-left-color:var(--sage);margin-top:9px"><div class="t">✓ 리뷰는 주변 중위권 이상 ('+(pl.reviews||0)+'건'+(pl.rating?(' · ★'+pl.rating):'')+')</div><div class="w">리뷰는 충분해요 — 과제는 <b>발견 노출</b>(키워드)이에요</div></div>';
       placeHtml='<div class="sec-h" style="margin-top:14px">리뷰 비교 (우리 vs 주변)</div><div class="card" style="padding:13px 15px">'+rows+'</div>'+catchH;
+      // 사진(썸네일) 비교 — 측정됐을 때만(네이버는 총계를 안 줘 썸네일 실측)
+      if(pl.photos!=null){
+        var pm=pl.comp_photos_median;
+        var phMsg=(pm!=null && pl.photos<pm)
+          ? '사진 더 올리면 좋아요 — 우리 '+pl.photos+'장 · 주변 중위 '+pm+'장'
+          : '✓ 사진 노출 충분 (우리 '+pl.photos+'장'+(pm!=null?' · 주변 중위 '+pm+'장':'')+')';
+        placeHtml+='<div class="exp-act reveal" style="border-left-color:'+((pm!=null&&pl.photos<pm)?'var(--gold)':'var(--sage)')+';margin-top:7px"><div class="t">'+phMsg+'</div><div class="w">플레이스 사진 탭 기준(썸네일 실측)</div></div>';
+      }
     }
     // 측정 범위(정직성) — 무엇을 쟀고 무엇은 아직인지
     var md=ex.measured||{};

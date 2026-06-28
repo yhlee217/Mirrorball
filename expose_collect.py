@@ -332,6 +332,31 @@ def _around(txt: str, kw: str, span: int = 36) -> str:
     return re.sub(r"\s+", " ", txt[s:i + span]).strip()
 
 
+# 네이버는 사진 '총계'를 텍스트로 안 줌(탭 라벨뿐) → 사진 탭 썸네일을 실측 카운트한다.
+# 콘텐츠 사진은 네이버 이미지 CDN(pstatic/phinf) 에서 옴 — UI 아이콘과 구분된다.
+_PHOTO_IMG_SEL = ["img[src*='pstatic.net']", "img[src*='phinf']",
+                  "div[class*='photo'] img", "a[href*='photo'] img"]
+
+
+def _count_photos(page, place_id: str) -> int | None:
+    """사진 탭 썸네일 수(지연로딩 스크롤로 펼쳐 카운트). 진입 실패 시 None(미측정)."""
+    if not _place_page_text(page, place_id, "photo"):   # 사진 탭으로 이동
+        return None
+    try:
+        for _ in range(6):                              # 지연 로딩 더 펼치기
+            page.mouse.wheel(0, 4000)
+            page.wait_for_timeout(700)
+    except Exception:
+        pass
+    best = 0
+    for sel in _PHOTO_IMG_SEL:
+        try:
+            best = max(best, len(page.query_selector_all(sel)))
+        except Exception:
+            pass
+    return best or None
+
+
 def scrape_place_assets(page, name: str, region: str = "", debug: bool = False) -> dict:
     """한 매장의 리뷰·사진 수. 검색 → 플레이스 페이지 진입(사진은 사진 탭에서 정확히)."""
     q = (name + " " + region).strip()
@@ -342,9 +367,10 @@ def scrape_place_assets(page, name: str, region: str = "", debug: bool = False) 
         txt = page.inner_text("body")
     except Exception:
         return {"name": name, "found": None}
-    d = parse_place_text(txt)                       # 검색결과 본문에서 1차 추정
+    d = parse_place_text(txt)                       # 검색결과 본문에서 리뷰·별점 1차 추정
     d["name"] = name
     d["found"] = (name.split()[0] in txt) if name else False
+    d["photos"] = None                              # 사진은 텍스트로 못 잡음 → 썸네일 실측만 신뢰
 
     pid = _find_place_id(page)                       # 2차: 플레이스 페이지에서 정확히
     if pid:
@@ -356,16 +382,10 @@ def scrape_place_assets(page, name: str, region: str = "", debug: bool = False) 
                 if hd.get(k):
                     d[k] = hd[k]
             d["found"] = True
-        if not d.get("photos"):                      # 사진은 사진 탭 헤더에 총계가 있음
-            photo_txt = _place_page_text(page, pid, "photo")
-            pd = parse_place_text(photo_txt)
-            if pd.get("photos"):
-                d["photos"] = pd["photos"]
-            elif debug and photo_txt:
-                print(f"        [진단] {name} 사진탭 '사진' 주변: {_around(photo_txt, '사진')}")
-    if debug and not d.get("photos"):
-        print(f"        [진단] {name} 검색 '사진' 주변: {_around(txt, '사진')}"
-              f" | '리뷰' 주변: {_around(txt, '리뷰')} | place_id={pid}")
+        d["photos"] = _count_photos(page, pid)       # 사진 탭 썸네일 실측(None=미측정)
+    if debug:
+        print(f"        [진단] {name}: place_id={pid} · 리뷰={d.get('reviews')}"
+              f" · 별점={d.get('rating')} · 사진(썸네일)={d.get('photos')}")
     return d
 
 
@@ -405,17 +425,17 @@ def measure_place_assets(target: dict, cid: str, csec: str, debug: bool = False)
 
     comp_rev = [c.get("reviews", 0) for c in comps if c.get("found")]
     med_rev = _median(comp_rev)
-    our_rev, our_pho = ours.get("reviews", 0), ours.get("photos", 0)
-    # 우리·경쟁사 전부 사진 0 = 스크랩 실패 → 사진은 '미측정'(None)으로(잘못된 처방 방지)
-    all_pho = [our_pho] + [c.get("photos", 0) for c in comps]
-    if all(p == 0 for p in all_pho):
-        our_pho = None
+    our_rev, our_pho = ours.get("reviews", 0), ours.get("photos")   # 사진: int 또는 None(미측정)
+    comp_pho = [c.get("photos") for c in comps if c.get("photos") is not None]
+    med_pho = _median(comp_pho) if comp_pho else None
     return {
         "measured": True if ours.get("found") else False,
         "reviews": our_rev, "photos": our_pho, "rating": ours.get("rating"),
         "comp_reviews_median": med_rev,
+        "comp_photos_median": med_pho,
         "catch_up_reviews": max(0, med_rev - our_rev),
-        "competitors": [{"name": c["name"], "reviews": c.get("reviews", 0)}
+        "competitors": [{"name": c["name"], "reviews": c.get("reviews", 0),
+                         "photos": c.get("photos")}
                         for c in comps if c.get("found")],
     }
 
