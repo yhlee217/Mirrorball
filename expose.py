@@ -150,6 +150,7 @@ def build_exposure(sig: dict, prev: dict | None = None, today: date | None = Non
         "queries": sig.get("queries", []),
         "place": sig.get("place", {}),
         "blog_mentions": sig.get("blog_mentions"),
+        "name_baseline": sig.get("name_baseline") or {},
         "actions": prescribe(sig),
         "history": hist,
     }
@@ -166,6 +167,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="발견 케어(AI·네이버 노출) 엔진")
     ap.add_argument("client_dir", help="clients/{slug} (target.yaml 또는 targets/{slug}.yaml 사용)")
     ap.add_argument("--measure", action="store_true", help="AI/네이버 실제 측정(브라우저·CLI 필요)")
+    ap.add_argument("--show", action="store_true", help="네이버 검색 상위 결과를 함께 출력(검증용)")
     args = ap.parse_args()
 
     cdir = Path(args.client_dir)
@@ -180,6 +182,8 @@ def main() -> int:
     prev = yaml.safe_load(exp_path.read_text(encoding="utf-8")) if exp_path.exists() else None
 
     if args.measure:
+        if args.show:
+            target["_show"] = True
         sig = measure(target)
         mq = sig.get("queries", [])
         print(f"  · 측정 결과: AI 언급 {sum(1 for q in mq if q.get('ai_mentioned'))}/{len(mq)}"

@@ -114,17 +114,52 @@ def naver_local_search(query: str, cid: str, csec: str, display: int = 5, timeou
              "road": it.get("roadAddress", "")} for it in data.get("items", [])]
 
 
-def measure_naver_api(target: dict, cid: str, csec: str) -> dict:
+# 대화체 질문 → 지역검색용 키워드(불용어 제거). "…잘하는 미용실 추천해줘" → "… 미용실"
+_NAVER_FILLER = re.compile(
+    r"(잘\s*하는|자연스럽게|추천\s*해줘|추천|알려줘|어디야|어디|근처|좀|있어|봐주는|해주는|쪽|까지)")
+
+
+def naver_query(q: str) -> str:
+    s = _NAVER_FILLER.sub(" ", q)
+    s = re.sub(r"[?·,]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    if not re.search(r"미용실|헤어|디자이너|살롱", s):
+        s += " 미용실"
+    return s
+
+
+def measure_naver_api(target: dict, cid: str, csec: str, show: bool = False) -> dict:
     names = _names(target)
     res: dict[str, dict] = {}
     for q in target.get("questions", []) or []:
+        kw = naver_query(q)
         try:
-            items = naver_local_search(q, cid, csec)
+            items = naver_local_search(kw, cid, csec)
             rank = _rank_in_items(items, names)
-            res[q] = {"naver_found": rank is not None, "naver_rank": rank}
-        except Exception:
-            res[q] = {"naver_found": None, "naver_rank": None}
+            res[q] = {"naver_found": rank is not None, "naver_rank": rank, "naver_kw": kw}
+            if show:
+                top = ", ".join(it["name"] for it in items[:3]) or "(결과 없음)"
+                print(f"      네이버 '{kw}': {('우리 '+str(rank)+'위' if rank else '미노출')} | 상위: {top}")
+        except Exception as e:
+            res[q] = {"naver_found": None, "naver_rank": None, "naver_kw": kw}
+            if show:
+                print(f"      네이버 '{kw}': 오류 {str(e)[:60]}")
     return res
+
+
+def naver_name_baseline(target: dict, cid: str, csec: str) -> dict:
+    """이름으로 검색했을 때 존재/순위 — '존재하는데 발견검색엔 안 뜸'을 구분."""
+    salon = (target.get("salon", {}) or {}).get("name", "")
+    region = target.get("region", "")
+    q = (salon + " " + region).strip() or salon
+    if not q:
+        return {"name_found": None, "name_rank": None}
+    try:
+        items = naver_local_search(q, cid, csec)
+        rank = _rank_in_items(items, _names(target))
+        return {"name_found": rank is not None, "name_rank": rank, "name_query": q}
+    except Exception:
+        return {"name_found": None, "name_rank": None, "name_query": q}
 
 
 def measure_naver(target: dict, queries: list[str], debug: bool = False) -> dict:
@@ -183,8 +218,18 @@ def collect(target: dict) -> dict:
     print("  · 네이버: " + ("OpenAPI 키 ✓" if (cid and csec) else
                             "키 없음 → 스크랩 폴백(secrets/naver.yaml 또는 환경변수)"))
 
+    show = bool(target.get("_show"))
     qs = measure_ai(target)
-    nv = measure_naver_api(target, cid, csec) if (cid and csec) else measure_naver(target, [q["q"] for q in qs])
+    if cid and csec:
+        nv = measure_naver_api(target, cid, csec, show=show)
+        base = naver_name_baseline(target, cid, csec)
+        if base.get("name_rank"):
+            print(f"  · 이름 검색('{base.get('name_query')}'): {base['name_rank']}위로 존재 ✓")
+        elif base.get("name_found") is False:
+            print(f"  · 이름 검색('{base.get('name_query')}'): 상위에 안 보임 — 등록·정보 확인 필요")
+    else:
+        nv = measure_naver(target, [q["q"] for q in qs])
+        base = {}
     for q in qs:
         q.update(nv.get(q["q"], {}))
 
@@ -195,5 +240,6 @@ def collect(target: dict) -> dict:
         "queries": qs,
         "place": place,
         "blog_mentions": target.get("blog_mentions"),   # None = 미측정
+        "name_baseline": base,
         "measured_by": f"AI(Claude CLI) + 네이버({used}) · {len(qs)}개 질문",
     }

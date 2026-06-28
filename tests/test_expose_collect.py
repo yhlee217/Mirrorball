@@ -33,6 +33,13 @@ def test_names_includes_designer_salon_aliases():
     assert "하예원" in ns and "살롱톤" in ns and "예원쌤" in ns and "살롱톤 영등포" in ns
 
 
+def test_naver_query_keyword_ifies():
+    assert ec.naver_query("영등포 레이어드컷 잘하는 미용실 추천해줘") == "영등포 레이어드컷 미용실"
+    assert ec.naver_query("영등포구청역 근처 뿌리펌 잘하는 디자이너 알려줘") == "영등포구청역 뿌리펌 디자이너"
+    # 업종어 없으면 '미용실' 보충
+    assert "미용실" in ec.naver_query("영등포 단발 잘 자르는 곳 어디야")
+
+
 def test_mentioned_and_competitors():
     txt = "영등포는 박승철헤어스튜디오, 이철헤어커커가 유명하고 살롱톤도 있어요."
     names = ec._names(TARGET)
