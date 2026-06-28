@@ -111,6 +111,14 @@
   .exp-t{font-size:10px;font-weight:800;border-radius:8px;padding:3px 7px;white-space:nowrap;}
   .exp-t.on{background:var(--sage-bg);color:var(--sage);} .exp-t.off{background:var(--soft);color:var(--muted);}
   .exp-t.nv{background:#EAF0F6;color:#3D6A99;}
+  /* 하예원님께 — 디자이너용 '이번 주 딱 하나' 카드 */
+  .dcard{background:linear-gradient(160deg,#FBF6EC,#F6EEDD);border:1px solid #E8D9B8;border-radius:16px;padding:17px 17px 15px;margin-bottom:13px;box-shadow:0 2px 10px rgba(176,141,87,.10);}
+  .dcard .dc-h{font-family:var(--serif);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);}
+  .dcard .dc-g{font-family:var(--serif);font-size:18px;font-weight:800;color:var(--accent-d);margin-top:3px;}
+  .dcard .dc-good{display:inline-block;font-size:11.5px;font-weight:700;color:var(--sage);background:var(--sage-bg);border-radius:8px;padding:3px 9px;margin-top:9px;}
+  .dcard .dc-ask{font-size:13.5px;color:var(--ink);margin-top:11px;line-height:1.55;}
+  .dcard .dc-do{font-size:15px;font-weight:800;color:var(--accent-d);margin-top:7px;line-height:1.5;background:#fff;border-radius:11px;padding:11px 13px;border:1px dashed #E0CB9E;}
+  .dcard .dc-f{font-size:11.5px;color:var(--muted);margin-top:10px;}
   /* 발견 점수 헤더 + 추세 */
   .exp-score{display:flex;align-items:center;gap:16px;}
   .exp-score .big{font-size:46px;font-weight:800;line-height:1;color:var(--accent-d);}
@@ -735,7 +743,18 @@
     var scope='<div style="display:flex;gap:5px;flex-wrap:wrap;margin:9px 2px 2px">'+
       mline(md.ai,'AI 발견')+mline(md.naver,'웹/네이버 발견')+mline(md.place,'플레이스 리뷰·사진')+mline(md.blog,'블로그 후기')+'</div>';
 
-    box.innerHTML=head+scope+actHtml+placeHtml+qHtml+
+    // 하예원님께 — 이번 주 딱 하나(디자이너용 카드, 맨 위)
+    var dc=ex.designer_card;
+    var dcard=dc? '<div class="dcard reveal">'+
+      '<div class="dc-h">하예원님께</div>'+
+      '<div class="dc-g">'+esc(dc.greeting)+'</div>'+
+      (dc.good?'<div class="dc-good">✓ '+esc(dc.good)+'</div>':'')+
+      '<div class="dc-ask">'+esc(dc.ask)+'</div>'+
+      '<div class="dc-do">'+esc(dc.do)+'</div>'+
+      '<div class="dc-f">'+esc(dc.footer)+'</div>'+
+    '</div>' : '';
+
+    box.innerHTML=dcard+head+scope+actHtml+placeHtml+qHtml+
       (ex.note?'<div style="font-size:10.5px;color:var(--muted);text-align:center;margin:12px 0 4px;line-height:1.5">'+esc(ex.note)+'</div>':'');
     setTimeout(function(){box.querySelectorAll('.exp-spark .sb').forEach(function(b){b.style.height=b.getAttribute('data-h')+'px';});},60);
   }

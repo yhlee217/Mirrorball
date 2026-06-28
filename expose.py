@@ -182,6 +182,47 @@ def keyword_plan(sig: dict) -> list[dict]:
     return plans
 
 
+def designer_card(sig: dict) -> dict | None:
+    """디자이너(하예원쌤)가 앱에서 바로 보는 카드 — '이번 주 딱 하나'(친절·비전문).
+
+    컨시어지가 대신 진단하고, 디자이너에겐 오늘 누를 것 1개만 부드럽게 전달.
+    데이터(키워드 갭·이름검색·리뷰)가 없으면 None(카드 숨김).
+    """
+    nq = sig.get("naver_queries") or []
+    if not nq:
+        return None
+    place = sig.get("place") or {}
+    nb = sig.get("name_baseline") or {}
+    gaps = [p for p in keyword_plan(sig) if p["status"] == "gap"]
+
+    bits = []                                   # 잘 되고 있는 강점 한 줄(잔소리 아닌 칭찬으로 시작)
+    if nb.get("name_rank"):
+        bits.append(f"이름 검색 {nb['name_rank']}위")
+    if place.get("reviews"):
+        bits.append(f"리뷰 {place['reviews']:,}")
+    if place.get("rating"):
+        bits.append(f"★{place['rating']}")
+    good = " · ".join(bits) if bits else None
+
+    if gaps:
+        g = gaps[0]                             # 가장 임팩트 큰 키워드 하나만
+        more = len(gaps) - 1
+        return {
+            "greeting": "이번 주 딱 하나만요 🙏",
+            "good": good,
+            "ask": f"손님이 '{g['keyword']}' 검색하면 살롱톤이 아직 안 떠요.",
+            "do": f"스마트플레이스 스타일에 '{g['spec']}'을 등록해 주세요.",
+            "footer": "나머지는 제가 챙길게요" + (f" · 다음에 {more}개 더 안내드릴게요" if more > 0 else ""),
+        }
+    return {
+        "greeting": "이번 주는 잘 되고 있어요 🙌",
+        "good": good,
+        "ask": "특별히 손 댈 곳이 없어요.",
+        "do": "방문 후기에 시술명 한 단어만 계속 부탁드려요 — 그게 제일 큰 힘이에요.",
+        "footer": "제가 계속 지켜볼게요",
+    }
+
+
 def build_exposure(sig: dict, prev: dict | None = None, today: date | None = None) -> dict:
     """signals → exposure.yaml 구조(점수·처방·추세 포함)."""
     today = today or date.today()
@@ -202,6 +243,7 @@ def build_exposure(sig: dict, prev: dict | None = None, today: date | None = Non
         "name_baseline": sig.get("name_baseline") or {},
         "actions": prescribe(sig),
         "keyword_plan": keyword_plan(sig),  # 발견 키워드 구체 입력안
+        "designer_card": designer_card(sig),  # 하예원쌤이 앱에서 보는 '이번 주 딱 하나'
         "history": hist,
     }
 

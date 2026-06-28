@@ -70,6 +70,33 @@ def test_keyword_plan_gap_ok_and_skips_generic():
     assert ok["status"] == "ok" and ok["has_style"] is True
 
 
+def test_designer_card_picks_one_gap_with_praise():
+    sig = {
+        "naver_queries": [
+            {"q": "영등포 레이어드컷", "spec": "레이어드컷", "naver_rank": None, "top": ["위닛블랙"]},
+            {"q": "영등포 뿌리펌", "spec": "뿌리펌", "naver_rank": None, "top": []},
+        ],
+        "place": {"reviews": 1791, "rating": 4.9, "styles": ["애쉬브라운"],
+                  "competitors": [{"name": "위닛블랙", "styles": ["레이어드컷"]}]},
+        "name_baseline": {"name_rank": 1},
+    }
+    c = expose.designer_card(sig)
+    assert "레이어드컷" in c["ask"] and "레이어드컷" in c["do"]   # 첫 갭 하나만
+    assert "1위" in c["good"] and "1,791" in c["good"]            # 칭찬으로 시작
+    assert "1개 더" in c["footer"]                                 # 남은 갭 안내(2개 중 1개 처리)
+
+
+def test_designer_card_positive_when_no_gaps():
+    sig = {"naver_queries": [{"q": "영등포 펌", "spec": "펌", "naver_rank": 1, "top": []}],
+           "place": {"styles": ["펌"], "reviews": 100}}
+    c = expose.designer_card(sig)
+    assert "잘 되고 있어요" in c["greeting"]
+
+
+def test_designer_card_none_without_signals():
+    assert expose.designer_card({"naver_queries": []}) is None
+
+
 def test_build_exposure_includes_keyword_plan():
     sig = _sig(ai=2, nv=2)
     sig["naver_queries"] = [{"q": "영등포 펌", "spec": "펌", "naver_rank": None, "top": []}]
