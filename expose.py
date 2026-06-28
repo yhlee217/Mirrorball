@@ -214,7 +214,68 @@ def keyword_plan(sig: dict) -> list[dict]:
     return plans
 
 
-def designer_card(sig: dict) -> dict | None:
+def rank_changes(sig: dict, prev: dict | None, today: date | None = None) -> list[dict]:
+    """이전 측정 대비 키워드별 순위 변화 — '지난번 N위 → 이번 M위'(신뢰의 핵심 증거).
+
+    history 에 매번 {keyword: rank} 스냅샷을 쌓아, 가장 가까운 '다른 날' 스냅샷과 비교한다.
+    trend: up(순위↑) / down(↓) / in(미노출→노출) / out(노출→미노출) / flat.
+    """
+    today = today or date.today()
+    nq = sig.get("naver_queries") or []
+    hist = (prev or {}).get("history") or []
+    prior = None
+    for h in reversed(hist):                  # 같은 날 재측정은 건너뛰고 '지난번'을 찾음
+        if h.get("date") == str(today):
+            continue
+        if isinstance(h.get("ranks"), dict):
+            prior = h
+            break
+    if not prior:
+        return []
+    pranks = prior["ranks"]
+    try:
+        weeks = max(0, (today - date.fromisoformat(prior["date"])).days) // 7
+    except Exception:
+        weeks = None
+    out = []
+    for x in nq:
+        q, cur = x.get("q"), x.get("naver_rank")
+        if q not in pranks:
+            continue
+        pr = pranks[q]
+        if pr is None and cur is None:
+            trend = "flat"
+        elif pr is None:
+            trend = "in"
+        elif cur is None:
+            trend = "out"
+        elif cur < pr:
+            trend = "up"
+        elif cur > pr:
+            trend = "down"
+        else:
+            trend = "flat"
+        out.append({"keyword": q, "spec": x.get("spec"), "region": x.get("region"),
+                    "prev_rank": pr, "rank": cur, "trend": trend,
+                    "weeks": weeks, "since": prior["date"]})
+    return out
+
+
+def _progress_line(changes: list[dict] | None):
+    """변화 목록 → 가장 인상적인 '실제 개선' 한 줄(없으면 None). 신뢰 증명용."""
+    ups = [c for c in (changes or []) if c["trend"] in ("up", "in")]
+    if not ups:
+        return None
+    ups.sort(key=lambda c: (c["trend"] == "in", (c["prev_rank"] or 99) - (c["rank"] or 99)),
+             reverse=True)
+    c = ups[0]
+    wk = f" ({c['weeks']}주 만에)" if c.get("weeks") else ""
+    if c["trend"] == "in":
+        return f"「{c['spec']}」가 미노출 → {c['rank']}위로 올라왔어요{wk}"
+    return f"「{c['spec']}」 {c['prev_rank']}위 → {c['rank']}위로 올라가고 있어요{wk}"
+
+
+def designer_card(sig: dict, changes: list[dict] | None = None) -> dict | None:
     """디자이너(하예원쌤)가 앱에서 바로 보는 카드 — '이번 주 딱 하나'(친절·비전문).
 
     컨시어지가 대신 진단하고, 디자이너에겐 오늘 누를 것 1개만 부드럽게 전달.
@@ -246,6 +307,7 @@ def designer_card(sig: dict) -> dict | None:
     if place.get("rating"):
         bits.append(f"★{place['rating']}")
     good = " · ".join(bits) if bits else None
+    progress = _progress_line(changes)          # 지난 측정 대비 실제 개선(신뢰 증명) — 있으면
 
     if todo:
         g = todo[0]                             # 가장 임팩트 큰 키워드 하나만(미노출 우선, 그다음 하위)
@@ -269,6 +331,7 @@ def designer_card(sig: dict) -> dict | None:
         return {
             "greeting": "이번 주 딱 하나만요 🙏",
             "good": good,
+            "progress": progress,
             "ask": ask,
             "do": do,
             "effect": effect,
@@ -277,6 +340,7 @@ def designer_card(sig: dict) -> dict | None:
     return {
         "greeting": "이번 주는 잘 되고 있어요 🙌",
         "good": good,
+        "progress": progress,
         "ask": "특별히 손 댈 곳이 없어요.",
         "do": "방문 후기에 시술명 한 단어만 계속 부탁드려요 — 그게 제일 큰 힘이에요.",
         "effect": "지금 흐름이면 발견 순위가 계속 올라가요.",
@@ -324,6 +388,8 @@ def kakao_message(card: dict | None, designer: str = "") -> str:
     lines = [f"{who} 🙂 이번 주 살롱톤 노출 체크 공유드려요!", ""]
     if card.get("good"):
         lines += [f"좋은 소식: {card['good']}", ""]
+    if card.get("progress"):                 # 지난 측정 대비 실제 변화(가장 강력한 신뢰 증거)
+        lines += [f"📈 {card['progress']}", ""]
     lines += [card["greeting"], card["ask"], "→ " + card["do"]]
     if card.get("effect"):
         lines.append(card["effect"])
@@ -336,15 +402,19 @@ def build_exposure(sig: dict, prev: dict | None = None, today: date | None = Non
     today = today or date.today()
     s = score(sig)
     qs = sig.get("queries") or []
+    nq = sig.get("naver_queries") or []
     ai_hits = sum(1 for q in qs if q.get("ai_mentioned"))
+    changes = rank_changes(sig, prev, today)   # 이전 스냅샷과 비교(append 전에 계산)
     hist = list((prev or {}).get("history", []) or [])
     if s is not None and (not hist or hist[-1].get("date") != str(today)):
         entry = {"date": str(today), "score": s}
         if qs:
-            entry["ai"] = ai_hits           # AI 언급 추세도 함께 추적
+            entry["ai"] = ai_hits           # AI 언급 추세
+        if nq:                              # 키워드별 순위 스냅샷(변화 추적의 원천)
+            entry["ranks"] = {x["q"]: x.get("naver_rank") for x in nq if x.get("q")}
         hist.append(entry)
     hist = hist[-12:]                # 최근 12회만
-    card = designer_card(sig)        # 한 번만 계산해 카드·카톡 양쪽에 재사용
+    card = designer_card(sig, changes)   # 한 번만 계산해 카드·카톡 양쪽에 재사용
     return {
         "generated_at": str(today),
         "score": s,
@@ -359,6 +429,7 @@ def build_exposure(sig: dict, prev: dict | None = None, today: date | None = Non
         "actions": prescribe(sig),
         "keyword_plan": keyword_plan(sig),  # 발견 키워드 구체 입력안
         "ai_plan": ai_footprint_plan(sig),  # AI 가 인용하게 만드는 웹 흔적 처방
+        "rank_changes": changes,            # 이전 측정 대비 키워드별 순위 변화(신뢰 증명)
         "designer_card": card,              # 하예원쌤이 앱에서 보는 '이번 주 딱 하나'
         "kakao": kakao_message(card, (sig.get("identity") or {}).get("designer", "")),
         "history": hist,

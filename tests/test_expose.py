@@ -103,6 +103,38 @@ def test_designer_card_low_rank_says_position_not_absent():
     assert "8위" in c["ask"] and "안 보여요" not in c["ask"]   # '안 떠요'가 아니라 '8위'로 정직하게
 
 
+def test_rank_changes_detects_movement_and_weeks():
+    prev = {"history": [{"date": "2026-06-14", "score": 24,
+                         "ranks": {"영등포시장역 레이어드컷": 8, "영등포시장역 뿌리펌": None,
+                                   "영등포시장역 레이어드펌": 4}}]}
+    sig = {"naver_queries": [
+        {"q": "영등포시장역 레이어드컷", "spec": "레이어드컷", "naver_rank": 6},   # 8→6 up
+        {"q": "영등포시장역 뿌리펌", "spec": "뿌리펌", "naver_rank": 12},          # None→12 in
+        {"q": "영등포시장역 레이어드펌", "spec": "레이어드펌", "naver_rank": 4},     # flat
+    ]}
+    ch = {c["spec"]: c for c in expose.rank_changes(sig, prev, today=date(2026, 6, 28))}
+    assert ch["레이어드컷"]["trend"] == "up" and ch["레이어드컷"]["weeks"] == 2
+    assert ch["뿌리펌"]["trend"] == "in"
+    assert ch["레이어드펌"]["trend"] == "flat"
+
+
+def test_progress_line_prefers_entry_then_biggest_gain():
+    changes = [{"spec": "레이어드컷", "prev_rank": 8, "rank": 6, "trend": "up", "weeks": 2},
+               {"spec": "뿌리펌", "prev_rank": None, "rank": 12, "trend": "in", "weeks": 2}]
+    line = expose._progress_line(changes)
+    assert "뿌리펌" in line and "미노출" in line and "2주" in line   # 신규 진입 우선
+    assert expose._progress_line([]) is None
+
+
+def test_build_exposure_snapshots_ranks_and_progress():
+    sig = _sig(ai=1, nv=1)
+    sig["naver_queries"] = [{"q": "영등포 펌", "spec": "펌", "naver_rank": 5}]
+    prev = {"history": [{"date": "2026-06-14", "score": 20, "ranks": {"영등포 펌": None}}]}
+    exp = expose.build_exposure(sig, prev=prev, today=date(2026, 6, 28))
+    assert exp["history"][-1]["ranks"]["영등포 펌"] == 5      # 스냅샷 저장
+    assert exp["designer_card"]["progress"] and "펌" in exp["designer_card"]["progress"]
+
+
 def test_kakao_message_renders_card_for_relay():
     card = {"greeting": "이번 주 딱 하나만요 🙏", "good": "레이어드펌 4위",
             "ask": "손님이 '영등포시장역 뿌리펌' 검색하면 안 보여요.",

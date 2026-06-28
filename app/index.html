@@ -117,6 +117,7 @@
   .dcard .dc-copy{float:right;border:1px solid #E0CB9E;background:#fff;color:var(--gold);font-family:inherit;font-weight:700;font-size:10.5px;border-radius:8px;padding:3px 9px;cursor:pointer;letter-spacing:0;text-transform:none;}
   .dcard .dc-g{font-family:var(--serif);font-size:18px;font-weight:800;color:var(--accent-d);margin-top:3px;}
   .dcard .dc-good{display:inline-block;font-size:11.5px;font-weight:700;color:var(--sage);background:var(--sage-bg);border-radius:8px;padding:3px 9px;margin-top:9px;}
+  .dcard .dc-prog{font-size:12.5px;font-weight:800;color:var(--sage);margin-top:9px;line-height:1.5;}
   .dcard .dc-ask{font-size:13.5px;color:var(--ink);margin-top:11px;line-height:1.55;}
   .dcard .dc-do{font-size:15px;font-weight:800;color:var(--accent-d);margin-top:7px;line-height:1.5;background:#fff;border-radius:11px;padding:11px 13px;border:1px dashed #E0CB9E;}
   .dcard .dc-eff{font-size:12.5px;color:var(--sage);font-weight:700;margin-top:8px;line-height:1.5;}
@@ -758,13 +759,29 @@
       '<div class="dc-h">하예원님께'+(ex.kakao?'<button id="kakaoCopy" class="dc-copy">카톡 복사</button>':'')+'</div>'+
       '<div class="dc-g">'+esc(dc.greeting)+'</div>'+
       (dc.good?'<div class="dc-good">✓ '+esc(dc.good)+'</div>':'')+
+      (dc.progress?'<div class="dc-prog">📈 '+esc(dc.progress)+'</div>':'')+
       '<div class="dc-ask">'+esc(dc.ask)+'</div>'+
       '<div class="dc-do">'+esc(dc.do)+'</div>'+
       (dc.effect?'<div class="dc-eff">→ '+esc(dc.effect)+'</div>':'')+
       '<div class="dc-f">'+esc(dc.footer)+'</div>'+
     '</div>' : '';
 
-    box.innerHTML=dcard+head+scope+actHtml+placeHtml+qHtml+
+    // 지난 측정 대비 키워드 순위 변화(신뢰 증명) — 움직임 있는 것만
+    var rc=(ex.rank_changes||[]).filter(function(c){return c.trend==='up'||c.trend==='in'||c.trend==='down'||c.trend==='out';});
+    var changesHtml='';
+    if(rc.length){
+      var mv=function(c){
+        if(c.trend==='in') return '<span style="color:var(--sage);font-weight:800">미노출 → '+c.rank+'위</span>';
+        if(c.trend==='out') return '<span style="color:var(--rose);font-weight:800">'+c.prev_rank+'위 → 미노출</span>';
+        if(c.trend==='up') return '<span style="color:var(--sage);font-weight:800">'+c.prev_rank+' → '+c.rank+'위 ▲</span>';
+        return '<span style="color:var(--rose);font-weight:800">'+c.prev_rank+' → '+c.rank+'위 ▼</span>';
+      };
+      var wk=rc[0].weeks?(' · '+rc[0].weeks+'주 전 대비'):'';
+      changesHtml='<div class="sec-h" style="margin-top:14px">지난 측정 대비 변화'+wk+'</div><div class="card">'+
+        rc.map(function(c){return '<div class="li" style="cursor:default;display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="exp-q">'+esc(c.keyword)+'</div>'+mv(c)+'</div>';}).join('')+'</div>';
+    }
+
+    box.innerHTML=dcard+head+scope+changesHtml+actHtml+placeHtml+qHtml+
       (ex.note?'<div style="font-size:10.5px;color:var(--muted);text-align:center;margin:12px 0 4px;line-height:1.5">'+esc(ex.note)+'</div>':'');
     setTimeout(function(){box.querySelectorAll('.exp-spark .sb').forEach(function(b){b.style.height=b.getAttribute('data-h')+'px';});},60);
     var cb=box.querySelector('#kakaoCopy');
