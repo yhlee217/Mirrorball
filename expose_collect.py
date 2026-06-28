@@ -171,6 +171,108 @@ def measure_naver_canonical(target: dict, cid: str, csec: str, show: bool = Fals
     return res
 
 
+# ── 실제 지도 순위(콜드) — 지역검색 API 는 top-5 만 줘서 '미노출'을 과장함. 플레이스 리스트 전체를 스크랩해 진짜 순위를 본다. ──
+_RANK_UI = re.compile(r"^(광고|예약|영업\S*|리뷰|블로그|사진|쿠폰|길찾기|전화|저장|더보기|지도|"
+                      r"필터|정렬|거리순|정확도순|관련도순|홈|메뉴|소식|N|예약확정|\d[\d.,]*)$")
+# 업종 판별(미용실만 공정 비교) — 카테고리 텍스트로 1차 분류, 애매하면 Claude.
+_SALON_CAT = re.compile(r"미용실|헤어|살롱|바버|이용원|펌|염색|컷")
+_NONSALON_CAT = re.compile(r"네일|속눈썹|왁싱|피부|메이크업|퍼스널|골격|태닝|문신|마사지|"
+                           r"에스테틱|반영구|타투|화장품|스파|체형|다이어트|두피문신|아이브로우")
+
+
+def _classify_salon(ctx_text: str):
+    """카테고리 텍스트 → 미용실 여부(True/False/None=모름)."""
+    s, n = _SALON_CAT.search(ctx_text or ""), _NONSALON_CAT.search(ctx_text or "")
+    if s:                       # 헤어+메이크업 복합도 미용실로 인정
+        return True
+    if n:
+        return False
+    return None
+
+
+def naver_place_list(page, query: str, depth: int = 40, debug: bool = False) -> list[dict]:
+    """네이버 플레이스 리스트(지도/앱과 같은 랭킹) 전체를 순서대로 — 이름 + 업종판별(베스트에포트)."""
+    q = urllib.parse.quote(query)
+    for url in ("https://m.place.naver.com/place/list?query=%s&entry=pll" % q,
+                "https://pcmap.place.naver.com/place/list?query=%s" % q):
+        try:
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_timeout(1600)
+            for _ in range(8):                       # 끝까지 더 펼치기(깊게 다 스크랩)
+                page.mouse.wheel(0, 3600)
+                page.wait_for_timeout(500)
+        except Exception:
+            continue
+        for sel in ("span.YwYLL", "span.place_bluelink", "li .place_bluelink",
+                    "li a[href*='/place/'] span", "li a[href*='/place/']"):
+            try:
+                els = page.query_selector_all(sel)
+            except Exception:
+                els = []
+            seen, tmp = set(), []
+            for e in els:
+                name = (e.inner_text() or "").strip()
+                if not name or _RANK_UI.match(name) or not (1 < len(name) <= 25) or name in seen:
+                    continue
+                try:                                 # 같은 리스트 항목(li) 전체 텍스트에서 업종 추출
+                    ctx = e.evaluate("el=>{const li=el.closest('li');return li?li.innerText:''}")
+                except Exception:
+                    ctx = name
+                seen.add(name)
+                tmp.append({"name": name, "salon": _classify_salon(ctx)})
+            if len(tmp) >= 3:
+                if debug:
+                    print(f"        [지도순위] '{query}': {' > '.join(t['name'] for t in tmp[:10])}")
+                return tmp[:depth]
+        if debug:
+            print(f"        [지도순위] '{query}': 리스트 못읽음 ({url.split('//')[1][:20]})")
+    return []
+
+
+def _ai_drop_nonsalon(items: list[dict], query: str, debug: bool = False) -> None:
+    """업종 애매(None)한 항목을 Claude 가 판단해 미용실 여부 채움(in-place)."""
+    if not any(it["salon"] is None for it in items) or not shutil.which("claude"):
+        return
+    listing = "\n".join(f"{i}. {it['name']}" for i, it in enumerate(items, 1))
+    ans = _claude("아래는 네이버 '" + query + "' 검색 결과 가게 목록이야.\n" + listing +
+                  "\n\n이 중 '미용실/헤어살롱'이 아닌 곳(네일·속눈썹·왁싱·피부관리·메이크업·"
+                  "퍼스널컬러·골격진단 등)의 번호만 콤마로 답해줘. 다 미용실이면 '없음'.", timeout=60)
+    drop = {int(x) for x in re.findall(r"\d+", ans)}
+    for i, it in enumerate(items, 1):
+        if it["salon"] is None:
+            it["salon"] = (i not in drop)            # 드랍목록에 없으면 미용실로 간주
+    if debug and drop:
+        names = [items[i - 1]["name"] for i in drop if 1 <= i <= len(items)]
+        print(f"        [업종필터] '{query}' 제외(비미용실): {', '.join(names) or '없음'}")
+
+
+def measure_naver_deep(target: dict, kw_items: list[dict], show: bool = False) -> dict:
+    """발견 키워드별 '실제 지도 순위(콜드·익명) — 미용실만'. API top-5 한계 + 업종혼입 보완."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return {}
+    our = _names(target)
+    out: dict[str, dict] = {}
+    with sync_playwright() as pw:
+        b = pw.chromium.launch(headless=not show, args=["--disable-blink-features=AutomationControlled"])
+        ctx = b.new_context(user_agent=_UA, viewport={"width": 390, "height": 850})
+        pg = ctx.new_page()
+        for it in kw_items:
+            items = naver_place_list(pg, it["q"], debug=show)
+            _ai_drop_nonsalon(items, it["q"], debug=show)
+            salons = [x for x in items if x["salon"] is not False]   # 미용실만 남겨 공정 비교
+            rank = next((i for i, x in enumerate(salons, 1)
+                         if any(n and n in x["name"] for n in our)), None)
+            out[it["q"]] = {"rank": rank, "depth": len(salons), "raw_depth": len(items)}
+            if show:
+                print(f"        [지도순위] '{it['q']}': 미용실 {len(salons)}곳 중 "
+                      f"{('우리 '+str(rank)+'위' if rank else '미노출')}")
+        ctx.close()
+        b.close()
+    return out
+
+
 def naver_name_baseline(target: dict, cid: str, csec: str) -> dict:
     """이름으로 검색했을 때 존재/순위 — '존재하는데 발견검색엔 안 뜸'을 구분."""
     salon = (target.get("salon", {}) or {}).get("name", "")
@@ -497,6 +599,20 @@ def collect(target: dict) -> dict:
             print(f"  · 이름 검색('{base.get('name_query')}'): {base['name_rank']}위로 존재 ✓")
         elif base.get("name_found") is False:
             print(f"  · 이름 검색('{base.get('name_query')}'): 상위에 안 보임 — 등록·정보 확인 필요")
+
+    if target.get("_rank") and nq:                   # --rank: API top-5 한계 보완(실제 지도 순위)
+        print("  · 네이버 지도 실제 순위(콜드·익명) 측정 중…")
+        deep = measure_naver_deep(target, nq, show=show)
+        for x in nq:
+            d = deep.get(x["q"])
+            if not d:
+                continue
+            x["naver_rank_api"] = x.get("naver_rank")    # API(top-5) 결과는 따로 보존
+            x["naver_depth"] = d["depth"]
+            if d["rank"]:                                # 실제 리스트에서 찾으면 그 순위로 갱신
+                x["naver_found"], x["naver_rank"] = True, d["rank"]
+            elif d["depth"] >= 10 and not x.get("naver_rank"):
+                x["naver_found"] = False                 # 충분히 깊게 봤는데 없음 = 진짜 미노출
 
     place = target.get("place")                      # 사람이 채웠으면 사용
     if target.get("_place") and cid and csec:        # --place: 플레이스 리뷰·사진 스크랩

@@ -80,6 +80,14 @@ def test_parse_styles_handles_newlines():
     assert "레이어드컷" in s and "뿌리펌" in s
 
 
+def test_classify_salon_by_category():
+    assert ec._classify_salon("위닛블랙 미용실 리뷰 9,332") is True
+    assert ec._classify_salon("살롱톤 헤어살롱 ★4.9") is True
+    assert ec._classify_salon("유어컬러즈 퍼스널컬러 메이크업") is False
+    assert ec._classify_salon("OO네일 네일샵") is False
+    assert ec._classify_salon("이름만 있고 업종 없음") is None
+
+
 def test_naver_keyword_queries_carry_spec():
     t = {"region": "영등포구청역", "specialties": ["레이어드컷", "뿌리펌"]}
     qs = ec.naver_keyword_queries(t)

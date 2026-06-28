@@ -154,6 +154,9 @@ def keyword_plan(sig: dict) -> list[dict]:
 
     핵심 인사이트: 손님이 'OO 레이어드컷'으로 검색하면 네이버는 그 시술을 '인기스타일'로
     가진 매장을 올림. 우리 인기스타일에 그 시술이 없으면 → 등록·후기로 심어야 노출됨.
+
+    순위 구분(정직성): rank 는 실제 지도 순위(--rank) 또는 API top-5. 5위 안=노출중(ok),
+    6위 이하=뜨지만 하위(low), 못 찾음=미노출(gap). '안 보임'과 '하위'를 섞지 않는다.
     """
     nq = sig.get("naver_queries") or []
     place = sig.get("place") or {}
@@ -168,15 +171,19 @@ def keyword_plan(sig: dict) -> list[dict]:
         kw, rank, top = x.get("q", spec), x.get("naver_rank"), (x.get("top") or [])
         has = bool(spec) and spec in my_str
         proof = [n for n in top if spec in comp_styles.get(n, "")]   # 이 시술을 가진 상위 경쟁사
-        if rank and has:
-            status, advice = "ok", f"{rank}위 유지 — 방문 후기에 '{spec}' 언급 계속 유도"
-        elif not has:
+        proofs = f" (상위 {proof[0]} 등이 이 키워드 보유)" if proof else ""
+        if rank and rank <= 5:
+            status = "ok"
+            advice = f"{rank}위 — 상위 노출 중. 방문 후기에 '{spec}' 언급 계속 유도"
+        elif rank:
+            status = "low"
+            advice = (f"지도 {rank}위 — 뜨긴 떠도 상위(5위) 밖이에요. "
+                      + (f"'{spec}' 시술 후기·사진을 늘려 순위 끌어올리기"
+                         if has else f"플레이스 스타일에 '{spec}' 등록 + 후기로 끌어올리기{proofs}"))
+        else:
             status = "gap"
             advice = (f"플레이스 시술메뉴에 '{spec}' 등록 + 방문 후기에 '{spec}' 키워드로 남겨달라 요청"
-                      + (f" (상위 {proof[0]} 등이 이 키워드 보유)" if proof else ""))
-        else:
-            status = "near"
-            advice = f"'{spec}'은 등록됐는데 미노출 — 최근 '{spec}' 시술 후기·사진을 늘려 신선도 ↑"
+                      + proofs)
         plans.append({"keyword": kw, "spec": spec, "rank": rank, "status": status,
                       "has_style": has, "advice": advice, "proof": proof, "top": top[:3]})
     return plans
@@ -193,7 +200,8 @@ def designer_card(sig: dict) -> dict | None:
         return None
     place = sig.get("place") or {}
     nb = sig.get("name_baseline") or {}
-    gaps = [p for p in keyword_plan(sig) if p["status"] == "gap"]
+    plans = keyword_plan(sig)
+    todo = [p for p in plans if p["status"] == "gap"] + [p for p in plans if p["status"] == "low"]
 
     bits = []                                   # 잘 되고 있는 강점 한 줄(잔소리 아닌 칭찬으로 시작)
     if nb.get("name_rank"):
@@ -204,14 +212,21 @@ def designer_card(sig: dict) -> dict | None:
         bits.append(f"★{place['rating']}")
     good = " · ".join(bits) if bits else None
 
-    if gaps:
-        g = gaps[0]                             # 가장 임팩트 큰 키워드 하나만
-        more = len(gaps) - 1
+    if todo:
+        g = todo[0]                             # 가장 임팩트 큰 키워드 하나만(미노출 우선, 그다음 하위)
+        more = len(todo) - 1
+        rank = g.get("rank")
+        if g["status"] == "gap":
+            ask = f"손님이 '{g['keyword']}' 검색하면 살롱톤이 아직 안 보여요."
+        else:                                   # low: 뜨긴 뜨지만 하위
+            ask = f"손님이 '{g['keyword']}' 검색하면 살롱톤이 {rank}위라, 위로 한참 내려야 보여요."
+        do = (f"'{g['spec']}' 시술 후기·사진을 이번 주에 좀 더 쌓아 주세요."
+              if g.get("has_style") else f"스마트플레이스 스타일에 '{g['spec']}'을 등록해 주세요.")
         return {
             "greeting": "이번 주 딱 하나만요 🙏",
             "good": good,
-            "ask": f"손님이 '{g['keyword']}' 검색하면 살롱톤이 아직 안 떠요.",
-            "do": f"스마트플레이스 스타일에 '{g['spec']}'을 등록해 주세요.",
+            "ask": ask,
+            "do": do,
             "footer": "나머지는 제가 챙길게요" + (f" · 다음에 {more}개 더 안내드릴게요" if more > 0 else ""),
         }
     return {
@@ -262,6 +277,8 @@ def main() -> int:
     ap.add_argument("--show", action="store_true", help="네이버 검색 상위 결과를 함께 출력(검증용)")
     ap.add_argument("--place", action="store_true",
                     help="플레이스 리뷰·사진을 우리 vs 경쟁사 스크랩(온머신, 느림)")
+    ap.add_argument("--rank", action="store_true",
+                    help="실제 네이버 지도 순위 스크랩(API top-5 한계 보완, 콜드·익명)")
     args = ap.parse_args()
 
     cdir = Path(args.client_dir)
@@ -280,6 +297,8 @@ def main() -> int:
             target["_show"] = True
         if args.place:
             target["_place"] = True
+        if args.rank:
+            target["_rank"] = True
         sig = measure(target)
         mq = sig.get("queries", [])
         nq = sig.get("naver_queries", [])

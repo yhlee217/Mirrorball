@@ -86,6 +86,22 @@ def test_designer_card_picks_one_gap_with_praise():
     assert "1개 더" in c["footer"]                                 # 남은 갭 안내(2개 중 1개 처리)
 
 
+def test_keyword_plan_low_when_ranked_but_below_top5():
+    sig = {"naver_queries": [{"q": "영등포 레이어드컷", "spec": "레이어드컷",
+                              "naver_rank": 8, "naver_found": True, "top": []}],
+           "place": {"styles": ["레이어드컷"]}}
+    p = expose.keyword_plan(sig)[0]
+    assert p["status"] == "low" and "8위" in p["advice"]
+
+
+def test_designer_card_low_rank_says_position_not_absent():
+    sig = {"naver_queries": [{"q": "영등포 레이어드컷", "spec": "레이어드컷",
+                              "naver_rank": 8, "naver_found": True, "top": []}],
+           "place": {"styles": ["레이어드컷"], "reviews": 1791}, "name_baseline": {"name_rank": 1}}
+    c = expose.designer_card(sig)
+    assert "8위" in c["ask"] and "안 보여요" not in c["ask"]   # '안 떠요'가 아니라 '8위'로 정직하게
+
+
 def test_designer_card_positive_when_no_gaps():
     sig = {"naver_queries": [{"q": "영등포 펌", "spec": "펌", "naver_rank": 1, "top": []}],
            "place": {"styles": ["펌"], "reviews": 100}}

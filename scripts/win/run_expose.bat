@@ -15,8 +15,8 @@ if exist ".venv\Scripts\python.exe" (
 set "SLUG=%~1"
 if "%SLUG%"=="" set "SLUG=hayewoni"
 
-echo === measure exposure (AI + Naver + Place) : %SLUG% ===
-"%PY%" expose.py clients\%SLUG% --measure --place --show
+echo === measure exposure (AI + Naver + Place + Map rank) : %SLUG% ===
+"%PY%" expose.py clients\%SLUG% --measure --place --rank --show
 echo === build app data ===
 "%PY%" build_app.py clients\%SLUG%
 echo === done: clients\%SLUG%\exposure.yaml ===
