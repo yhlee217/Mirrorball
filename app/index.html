@@ -104,12 +104,25 @@
   .pill{font-size:12px;background:var(--soft);color:var(--accent-d);border-radius:20px;padding:3px 11px;}
 
   /* exposure */
-  .exp-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);}
+  .exp-row{display:flex;align-items:flex-start;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);}
   .exp-row:last-child{border-bottom:none;}
-  .exp-q{font-size:13px;flex:1;}
-  .exp-bar{width:84px;height:7px;background:var(--soft);border-radius:6px;overflow:hidden;}
-  .exp-fill{height:100%;background:var(--sage);width:0;transition:width .9s ease;}
-  .exp-n{font-size:12px;font-weight:800;color:var(--sage);width:30px;text-align:right;}
+  .exp-q{font-size:13px;flex:1;line-height:1.4;}
+  .exp-tags{display:flex;gap:5px;flex-shrink:0;margin-top:1px;}
+  .exp-t{font-size:10px;font-weight:800;border-radius:8px;padding:3px 7px;white-space:nowrap;}
+  .exp-t.on{background:var(--sage-bg);color:var(--sage);} .exp-t.off{background:var(--soft);color:var(--muted);}
+  .exp-t.nv{background:#EAF0F6;color:#3D6A99;}
+  /* 발견 점수 헤더 + 추세 */
+  .exp-score{display:flex;align-items:center;gap:16px;}
+  .exp-score .big{font-size:46px;font-weight:800;line-height:1;color:var(--accent-d);}
+  .exp-score .lab{font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;}
+  .exp-spark{display:flex;align-items:flex-end;gap:4px;height:42px;}
+  .exp-spark .sb{width:9px;background:var(--sage);border-radius:3px 3px 0 0;min-height:4px;}
+  .exp-delta{font-size:12px;font-weight:800;}
+  /* 이번 주 할 일 */
+  .exp-act{border:1px solid var(--line);border-radius:13px;padding:12px 13px;margin-bottom:9px;border-left:3px solid var(--gold);}
+  .exp-act .t{font-weight:800;font-size:14px;}
+  .exp-act .w{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.5;}
+  .exp-act .e{display:inline-block;margin-top:7px;font-size:10.5px;font-weight:800;background:#F2EAD8;color:var(--gold);border-radius:8px;padding:2px 8px;}
 
   /* stats */
   .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:13px;}
@@ -635,15 +648,45 @@
   function renderExposure(){
     var box=document.getElementById('exposureBody');
     var ex=DATA&&DATA.exposure;
-    if(!ex||!ex.questions||!ex.questions.length){
-      box.innerHTML=empty('📈','노출 진단이 아직 없어요','손님이 AI·검색에 물어볼 질문으로\n노출을 진단해 여기에 보여드려요');
+    var qs=(ex&&(ex.queries||ex.questions))||[];
+    if(!ex||!qs.length){
+      box.innerHTML=empty('📈','노출 진단이 아직 없어요','손님이 AI·검색에 물어볼 질문으로\n발견 점수를 진단해 여기에 보여드려요');
       return;
     }
-    box.innerHTML='<div class="card reveal"><div class="ch">질문별 노출 (언급 횟수)</div>'+ex.questions.map(function(q){
-      var pct=Math.min(100,(q.count||0)*20);
-      return '<div class="li" style="cursor:default;display:block"><div class="exp-row"><div class="exp-q">'+esc(q.q)+'</div><div class="exp-bar"><div class="exp-fill" data-w="'+pct+'"></div></div><div class="exp-n">'+(q.count||0)+'</div></div></div>';
+    var sc=ex.score!=null?ex.score:0;
+    var hist=(ex.history||[]).slice(-8);
+    var hmax=Math.max.apply(null,hist.map(function(h){return h.score;}).concat([1,sc]));
+    var prev=hist.length>1?hist[hist.length-2].score:null;
+    var delta=prev!=null?(sc-prev):null;
+    var dtxt=delta==null?'':(delta>0?('▲ '+delta):(delta<0?('▼ '+Math.abs(delta)):'–'));
+    var spark=hist.map(function(h){var ph=Math.round((h.score/hmax)*42)+4;return '<div class="sb" data-h="'+ph+'" style="height:4px" title="'+esc(h.date)+' · '+h.score+'"></div>';}).join('');
+
+    // 발견 점수 + 추세
+    var head='<div class="card reveal" style="padding:16px 16px 14px"><div class="exp-score">'+
+      '<div><div class="big">'+sc+'</div><div class="lab">발견 점수 / 100</div>'+
+      (dtxt?('<div class="exp-delta" style="color:'+(delta>=0?'var(--sage)':'var(--rose)')+';margin-top:4px">'+dtxt+' vs 지난 측정</div>'):'')+'</div>'+
+      '<div style="margin-left:auto;text-align:right"><div class="exp-spark">'+spark+'</div><div style="font-size:10px;color:var(--muted);margin-top:4px">개선 추세</div></div>'+
+      '</div></div>';
+
+    // 이번 주 할 일
+    var acts=(ex.actions||[]);
+    var actHtml=acts.length? '<div class="sec-h" style="margin-top:14px">이번 주 할 일</div>'+acts.map(function(a){
+      return '<div class="exp-act reveal"><div class="t">'+esc(a.title)+'</div>'+(a.why?'<div class="w">'+esc(a.why)+'</div>':'')+
+        (a.effort?'<div class="e">⏱ '+esc(a.effort)+'</div>':'')+'</div>';
+    }).join(''):'';
+
+    // 질문별 노출(AI 언급 + 네이버 순위)
+    var qHtml='<div class="sec-h" style="margin-top:14px">손님이 이렇게 물으면</div><div class="card">'+qs.map(function(q){
+      var ai=q.ai_mentioned? '<span class="exp-t on">AI 언급</span>':'<span class="exp-t off">AI 미언급</span>';
+      var nv=(q.naver_found)? '<span class="exp-t nv">네이버 '+(q.naver_rank?(q.naver_rank+'위'):'노출')+'</span>':'<span class="exp-t off">네이버 미노출</span>';
+      var said=q.ai_said? '<div style="font-size:11.5px;color:var(--sage);margin-top:5px">“'+esc(q.ai_said)+'”</div>':'';
+      var comp=(q.ai_competitors&&q.ai_competitors.length&&!q.ai_mentioned)? '<div style="font-size:11px;color:var(--muted);margin-top:4px">대신 등장: '+q.ai_competitors.slice(0,3).map(esc).join(', ')+'</div>':'';
+      return '<div class="li" style="cursor:default;display:block"><div class="exp-row"><div class="exp-q">'+esc(q.q)+said+comp+'</div><div class="exp-tags">'+ai+nv+'</div></div></div>';
     }).join('')+'</div>';
-    setTimeout(function(){box.querySelectorAll('.exp-fill').forEach(function(f){f.style.width=f.getAttribute('data-w')+'%';});},60);
+
+    box.innerHTML=head+actHtml+qHtml+
+      (ex.generated_at?'<div style="font-size:10.5px;color:var(--muted);text-align:center;margin:12px 0 4px">측정일 '+esc(ex.generated_at)+' · AI(Claude)+네이버 기준</div>':'');
+    setTimeout(function(){box.querySelectorAll('.exp-spark .sb').forEach(function(b){b.style.height=b.getAttribute('data-h')+'px';});},60);
   }
 
   // ── render: home 통계 요약 카드 ──
