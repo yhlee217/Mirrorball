@@ -147,6 +147,24 @@ def test_franchise_ratio_and_hard_flag():
     assert p["hard"] is True and "프랜차이즈" in p["advice"]
 
 
+def test_designer_card_weekly_focus_primary_region_only():
+    # 주간 '딱 하나'와 'N개 더'는 실제 위치(primary) 동네만 — 멀거나 승산 낮은 옆 동네는 제외
+    def kw(q, spec, region, rank):
+        return {"q": q, "spec": spec, "region": region, "naver_rank": rank,
+                "naver_found": rank is not None, "top": []}
+    sig = {"queries": [{"q": "q", "ai_mentioned": False}],
+           "identity": {"designer": "하예원", "region": "영등포시장역"},
+           "naver_queries": [
+               kw("영등포시장역 뿌리펌", "뿌리펌", "영등포시장역", None),
+               kw("영등포시장역 레이어드컷", "레이어드컷", "영등포시장역", 6),
+               kw("영등포구청역 뿌리펌", "뿌리펌", "영등포구청역", None),   # 옆 동네 — 제외
+               kw("신길역 뿌리펌", "뿌리펌", "신길역", None),               # 옆 동네 — 제외
+           ], "place": {"styles": []}}
+    c = expose.designer_card(sig)
+    assert "영등포시장역 뿌리펌" in c["ask"]
+    assert "1개 더" in c["footer"]    # primary 동네 todo 2개(뿌리펌·레이어드컷) → 남은 1개
+
+
 def test_designer_card_deprioritizes_franchise_region():
     sig = {"naver_queries": [
         {"q": "여의도 레이어드컷", "spec": "레이어드컷", "region": "여의도", "naver_rank": None,

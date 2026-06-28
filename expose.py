@@ -225,11 +225,14 @@ def designer_card(sig: dict) -> dict | None:
         return None
     place = sig.get("place") or {}
     nb = sig.get("name_baseline") or {}
+    ident = sig.get("identity") or {}
+    primary = ident.get("region")
     plans = keyword_plan(sig)
-    # 우선순위: (승산 있는 미노출) → (승산 있는 하위) → (승산 낮은 것들). 프랜차이즈 밀집은 뒤로.
-    todo = ([p for p in plans if p["status"] == "gap" and not p.get("hard")]
-            + [p for p in plans if p["status"] == "low" and not p.get("hard")]
-            + [p for p in plans if p.get("hard")])
+    # 주간 '딱 하나'는 실제 위치(primary) 동네에만 집중 — 멀거나 승산 낮은 옆 동네는 빼고 본다.
+    pool = [p for p in plans if (not primary or p.get("region") == primary)] or plans
+    # 우선순위: (승산 있는 미노출) → (승산 있는 하위). 프랜차이즈 밀집은 주간 카드에서 제외.
+    todo = ([p for p in pool if p["status"] == "gap" and not p.get("hard")]
+            + [p for p in pool if p["status"] == "low" and not p.get("hard")])
 
     bits = []                                   # 잘 되고 있는 강점 한 줄(잔소리 아닌 칭찬으로 시작)
     wins = sorted((p for p in plans if p["status"] == "ok" and p.get("rank")),
