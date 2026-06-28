@@ -1,5 +1,5 @@
 @echo off
-REM Discoverability(노출) 측정 실행기 (Windows). AI + 네이버 발견/순위 + 플레이스 리뷰·사진.
+REM Discoverability(exposure) runner: AI + Naver discovery/rank + Place reviews/photos.
 setlocal
 chcp 65001 >nul
 set PYTHONUTF8=1
@@ -15,8 +15,8 @@ if exist ".venv\Scripts\python.exe" (
 set "SLUG=%~1"
 if "%SLUG%"=="" set "SLUG=hayewoni"
 
-echo === %SLUG% 노출 측정 (AI + 네이버 + 플레이스) ===
+echo === measure exposure (AI + Naver + Place) : %SLUG% ===
 "%PY%" expose.py clients\%SLUG% --measure --place --show
-echo === 앱 데이터 빌드 ===
+echo === build app data ===
 "%PY%" build_app.py clients\%SLUG%
-echo === 완료: clients\%SLUG%\exposure.yaml ===
+echo === done: clients\%SLUG%\exposure.yaml ===
