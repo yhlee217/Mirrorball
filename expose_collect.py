@@ -261,15 +261,25 @@ def _ratingf(txt: str):
     return float(m.group(1)) if m else None
 
 
+_STYLE_STOP = re.compile(r"휠체어|저장|영업|길찾기|예약|전화|주차|리뷰|블로그|쿠폰|메뉴|소식|지도|"
+                         r"공유|네이버|더보기|home|photo")
+
+
 def parse_styles(txt: str) -> list[str]:
-    """네이버 '인기스타일' 태그 추출 — 플레이스가 어떤 시술로 인식되는지(키워드 처방의 핵심)."""
-    m = re.search(r"인기스타일\s+(.+?)(?:휠체어|저장|영업|길찾기|예약|전화|영업시간|주차|$)", txt or "")
+    """네이버 '인기스타일' 태그 추출 — 플레이스가 어떤 시술로 인식되는지(키워드 처방의 핵심).
+
+    inner_text 는 줄바꿈이 섞여 옴 → 먼저 공백/줄바꿈을 한 줄로 정규화한 뒤 파싱한다.
+    형식: '인기스타일 <s1> 인기 <s2> 인기 <s3> …' (각 스타일 앞에 '인기').
+    """
+    t = re.sub(r"\s+", " ", txt or "")
+    m = re.search(r"인기스타일\s+(.{1,120})", t)
     if not m:
         return []
+    seg = _STYLE_STOP.split(m.group(1))[0]              # 첫 구조어 전까지만(잡텍스트 컷)
     out = []
-    for p in re.split(r"\s*인기\s+", m.group(1).strip()):
+    for p in re.split(r"\s*인기\s+", seg.strip()):
         p = re.sub(r"[\[\]]", " ", p).strip()
-        p = re.split(r"\s{2,}", p)[0].strip()          # 첫 토큰군만(뒤 잡텍스트 제거)
+        p = re.split(r"\s{2,}", p)[0].strip()          # 첫 토큰군만
         if p and len(p) <= 16 and p not in out:
             out.append(p)
     return out[:6]

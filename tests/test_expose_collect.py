@@ -73,6 +73,13 @@ def test_parse_styles_extracts_popular_tags():
     assert ec.parse_styles("리뷰 100 사진 9") == []
 
 
+def test_parse_styles_handles_newlines():
+    # inner_text 는 줄바꿈이 섞여 옴 — 정규화 후에도 잡혀야 함(회귀 방지)
+    txt = "휠체어 출입 가능\n인기스타일\n레이어드컷\n인기 뿌리펌\n영업시간 10:00"
+    s = ec.parse_styles(txt)
+    assert "레이어드컷" in s and "뿌리펌" in s
+
+
 def test_naver_keyword_queries_carry_spec():
     t = {"region": "영등포구청역", "specialties": ["레이어드컷", "뿌리펌"]}
     qs = ec.naver_keyword_queries(t)
