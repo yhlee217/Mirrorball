@@ -94,6 +94,23 @@ def test_naver_keyword_queries_carry_spec():
     specs = [q["spec"] for q in qs]
     assert "레이어드컷" in specs and "뿌리펌" in specs and "미용실" in specs
     assert all("영등포구청역" in q["q"] for q in qs)
+    assert all(q.get("region") == "영등포구청역" for q in qs)
+
+
+def test_naver_keyword_queries_multi_region():
+    t = {"regions": ["영등포시장역", "여의도"], "specialties": ["레이어드컷"]}
+    qs = ec.naver_keyword_queries(t)
+    regions = {q["region"] for q in qs}
+    assert regions == {"영등포시장역", "여의도"}
+    assert "영등포시장역 레이어드컷" in [q["q"] for q in qs]
+    assert "여의도 미용실" in [q["q"] for q in qs]
+    # primary(첫 역)가 앞에 오는지 — 지도순위는 primary 만 깊게 보므로 순서 중요
+    assert qs[0]["region"] == "영등포시장역"
+
+
+def test_regions_backcompat_single():
+    assert ec._regions({"region": "신길역"}) == ["신길역"]
+    assert ec._regions({"regions": ["여의도", "여의도", "신길역"]}) == ["여의도", "신길역"]
 
 
 def test_median():

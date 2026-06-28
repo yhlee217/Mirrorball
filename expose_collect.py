@@ -135,12 +135,26 @@ def naver_query(q: str) -> str:
     return s.strip()
 
 
+def _regions(target: dict) -> list[str]:
+    """측정 대상 지역(역) 목록 — regions(복수) 우선, 없으면 region(단일). 첫 번째가 실제 위치(primary)."""
+    rs = target.get("regions") or ([target.get("region")] if target.get("region") else [])
+    out, seen = [], set()
+    for r in rs:
+        r = (r or "").strip()
+        if r and r not in seen:
+            seen.add(r)
+            out.append(r)
+    return out
+
+
 def naver_keyword_queries(target: dict) -> list[dict]:
-    """지역 × 시술 → 발견 키워드(깨끗). 각 항목에 시술 토큰(spec)을 남긴다(키워드 처방용)."""
-    region = (target.get("region") or "").strip()
+    """지역(역) × 시술 → 발견 키워드(깨끗). 각 항목에 시술(spec)·지역(region) 태그를 남긴다."""
     specs = [s.strip() for s in (target.get("specialties") or []) if s.strip()]
-    out = [{"q": f"{region} {sp}".strip(), "spec": sp} for sp in specs]
-    out.append({"q": f"{region} 미용실".strip(), "spec": "미용실"})
+    out = []
+    for region in _regions(target):
+        for sp in specs:
+            out.append({"q": f"{region} {sp}".strip(), "spec": sp, "region": region})
+        out.append({"q": f"{region} 미용실".strip(), "spec": "미용실", "region": region})
     seen, uniq = set(), []
     for it in out:
         if it["q"] and it["q"] not in seen:
@@ -190,40 +204,58 @@ def _classify_salon(ctx_text: str):
     return None
 
 
+def _extract_place_items(page, depth: int) -> list[dict]:
+    """현재 페이지에서 플레이스 리스트 항목(이름+업종판별)을 순서대로."""
+    for sel in ("span.YwYLL", "span.place_bluelink", "li .place_bluelink",
+                "li a[href*='/place/'] span", "li a[href*='/place/']"):
+        try:
+            els = page.query_selector_all(sel)
+        except Exception:
+            els = []
+        seen, tmp = set(), []
+        for e in els:
+            name = (e.inner_text() or "").strip()
+            if not name or _RANK_UI.match(name) or not (1 < len(name) <= 25) or name in seen:
+                continue
+            try:                                     # 같은 리스트 항목(li) 전체 텍스트에서 업종 추출
+                ctx = e.evaluate("el=>{const li=el.closest('li');return li?li.innerText:''}")
+            except Exception:
+                ctx = name
+            seen.add(name)
+            tmp.append({"name": name, "salon": _classify_salon(ctx)})
+        if len(tmp) >= 3:
+            return tmp[:depth]
+    return []
+
+
 def naver_place_list(page, query: str, depth: int = 40, debug: bool = False) -> list[dict]:
-    """네이버 플레이스 리스트(지도/앱과 같은 랭킹) 전체를 순서대로 — 이름 + 업종판별(베스트에포트)."""
+    """네이버 플레이스 리스트(지도/앱과 같은 랭킹) 전체를 순서대로 — 이름 + 업종판별.
+
+    네이버가 연속 요청을 일부 막아(스로틀링) 빈 리스트가 나올 수 있어 URL별로 재시도한다.
+    """
     q = urllib.parse.quote(query)
     for url in ("https://m.place.naver.com/place/list?query=%s&entry=pll" % q,
                 "https://pcmap.place.naver.com/place/list?query=%s" % q):
-        try:
-            page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_timeout(1600)
-            for _ in range(8):                       # 끝까지 더 펼치기(깊게 다 스크랩)
-                page.mouse.wheel(0, 3600)
-                page.wait_for_timeout(500)
-        except Exception:
-            continue
-        for sel in ("span.YwYLL", "span.place_bluelink", "li .place_bluelink",
-                    "li a[href*='/place/'] span", "li a[href*='/place/']"):
+        for attempt in (1, 2):                       # 스로틀링 대비 재시도
             try:
-                els = page.query_selector_all(sel)
-            except Exception:
-                els = []
-            seen, tmp = set(), []
-            for e in els:
-                name = (e.inner_text() or "").strip()
-                if not name or _RANK_UI.match(name) or not (1 < len(name) <= 25) or name in seen:
+                page.goto(url, wait_until="domcontentloaded")
+                page.wait_for_timeout(2400 if attempt == 1 else 4000)
+                body = (page.inner_text("body") or "")[:400]
+                if "자동입력 방지" in body or "보안문자" in body or "비정상적인" in body:
+                    if debug:
+                        print(f"        [지도순위] '{query}': 차단(보안문자) — 잠시 후 재시도")
+                    page.wait_for_timeout(3000)
                     continue
-                try:                                 # 같은 리스트 항목(li) 전체 텍스트에서 업종 추출
-                    ctx = e.evaluate("el=>{const li=el.closest('li');return li?li.innerText:''}")
-                except Exception:
-                    ctx = name
-                seen.add(name)
-                tmp.append({"name": name, "salon": _classify_salon(ctx)})
-            if len(tmp) >= 3:
+                for _ in range(8):                   # 끝까지 더 펼치기(깊게 다 스크랩)
+                    page.mouse.wheel(0, 3600)
+                    page.wait_for_timeout(500)
+            except Exception:
+                continue
+            items = _extract_place_items(page, depth)
+            if items:
                 if debug:
-                    print(f"        [지도순위] '{query}': {' > '.join(t['name'] for t in tmp[:10])}")
-                return tmp[:depth]
+                    print(f"        [지도순위] '{query}': {' > '.join(t['name'] for t in items[:10])}")
+                return items
         if debug:
             print(f"        [지도순위] '{query}': 리스트 못읽음 ({url.split('//')[1][:20]})")
     return []
@@ -276,7 +308,7 @@ def measure_naver_deep(target: dict, kw_items: list[dict], show: bool = False) -
 def naver_name_baseline(target: dict, cid: str, csec: str) -> dict:
     """이름으로 검색했을 때 존재/순위 — '존재하는데 발견검색엔 안 뜸'을 구분."""
     salon = (target.get("salon", {}) or {}).get("name", "")
-    region = target.get("region", "")
+    region = (_regions(target) or [""])[0]           # 실제 위치(primary)로 이름 검색
     q = (salon + " " + region).strip() or salon
     if not q:
         return {"name_found": None, "name_rank": None}
@@ -535,7 +567,7 @@ def measure_place_assets(target: dict, cid: str, csec: str, debug: bool = False)
     except Exception:
         return {"measured": False}
     salon = (_salon_names(target) or [""])[0]
-    region = target.get("region", "")
+    region = (_regions(target) or [""])[0]           # 실제 위치(primary)의 이웃 경쟁사
     names = _names(target)
     key = (region + " 미용실").strip()
     try:
@@ -601,8 +633,10 @@ def collect(target: dict) -> dict:
             print(f"  · 이름 검색('{base.get('name_query')}'): 상위에 안 보임 — 등록·정보 확인 필요")
 
     if target.get("_rank") and nq:                   # --rank: API top-5 한계 보완(실제 지도 순위)
-        print("  · 네이버 지도 실제 순위(콜드·익명) 측정 중…")
-        deep = measure_naver_deep(target, nq, show=show)
+        primary = (_regions(target) or [None])[0]     # 실제 위치(primary) 키워드만 깊게(부하·차단 관리)
+        deep_items = [x for x in nq if x.get("region") == primary] or nq
+        print(f"  · 네이버 지도 실제 순위(콜드·익명) 측정 중… [{primary} 기준 {len(deep_items)}개]")
+        deep = measure_naver_deep(target, deep_items, show=show)
         for x in nq:
             d = deep.get(x["q"])
             if not d:
