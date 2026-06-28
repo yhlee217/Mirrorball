@@ -84,7 +84,7 @@ def test_designer_card_picks_one_gap_with_praise():
     c = expose.designer_card(sig)
     assert "레이어드컷" in c["ask"] and "레이어드컷" in c["do"]   # 첫 갭 하나만
     assert "1위" in c["good"] and "1,791" in c["good"]            # 칭찬으로 시작
-    assert "1개 더" in c["footer"]                                 # 남은 갭 안내(2개 중 1개 처리)
+    assert "남은 1개" in c["footer"] and c["effect"]                # 남은 갭 안내 + 효과 한 줄
 
 
 def test_keyword_plan_low_when_ranked_but_below_top5():
@@ -162,7 +162,7 @@ def test_designer_card_weekly_focus_primary_region_only():
            ], "place": {"styles": []}}
     c = expose.designer_card(sig)
     assert "영등포시장역 뿌리펌" in c["ask"]
-    assert "1개 더" in c["footer"]    # primary 동네 todo 2개(뿌리펌·레이어드컷) → 남은 1개
+    assert "남은 1개" in c["footer"]   # primary 동네 todo 2개(뿌리펌·레이어드컷) → 남은 1개
 
 
 def test_designer_card_deprioritizes_franchise_region():

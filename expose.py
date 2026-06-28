@@ -250,25 +250,36 @@ def designer_card(sig: dict) -> dict | None:
     if todo:
         g = todo[0]                             # 가장 임팩트 큰 키워드 하나만(미노출 우선, 그다음 하위)
         more = len(todo) - 1
-        rank = g.get("rank")
+        rank, spec = g.get("rank"), g["spec"]
+        win = wins[0] if wins else None         # 같은 방식으로 이미 성공한 시술(효과의 증거)
+        do = (f"'{spec}' 시술 후기·사진을 이번 주에 좀 더 쌓아 주세요."
+              if g.get("has_style") else f"스마트플레이스 스타일에 '{spec}'을 등록해 주세요.")
         if g["status"] == "gap":
             ask = f"손님이 '{g['keyword']}' 검색하면 살롱톤이 아직 안 보여요."
+            effect = f"이거 하나면 '{spec}' 검색에도 살롱톤이 뜨기 시작해요."
+            if win:                             # 본인 매장 실적으로 효과를 증명(추상적 약속 X)
+                effect += f" — {win['spec']}이 딱 이렇게 해서 지금 {win['rank']}위예요."
         else:                                   # low: 뜨긴 뜨지만 하위
-            ask = f"손님이 '{g['keyword']}' 검색하면 살롱톤이 {rank}위라, 위로 한참 내려야 보여요."
-        do = (f"'{g['spec']}' 시술 후기·사진을 이번 주에 좀 더 쌓아 주세요."
-              if g.get("has_style") else f"스마트플레이스 스타일에 '{g['spec']}'을 등록해 주세요.")
+            ask = f"손님이 '{g['keyword']}' 검색하면 살롱톤이 {rank}위 — 첫 화면(5위) 바로 밑이에요."
+            effect = f"후기·사진 조금만 더 쌓으면 {rank}위 → 첫 화면(5위 안)으로 올라가요."
+        # '제가 하는 일'을 구체적으로(무엇을 챙기는지 + 부담 적다는 신호)
+        footer = "순위·후기는 제가 매주 추적해서, 그때그때 할 것 하나만 골라 드릴게요"
+        if more > 0:
+            footer += f" (남은 {more}개도 하나씩)"
         return {
             "greeting": "이번 주 딱 하나만요 🙏",
             "good": good,
             "ask": ask,
             "do": do,
-            "footer": "나머지는 제가 챙길게요" + (f" · 다음에 {more}개 더 안내드릴게요" if more > 0 else ""),
+            "effect": effect,
+            "footer": footer,
         }
     return {
         "greeting": "이번 주는 잘 되고 있어요 🙌",
         "good": good,
         "ask": "특별히 손 댈 곳이 없어요.",
         "do": "방문 후기에 시술명 한 단어만 계속 부탁드려요 — 그게 제일 큰 힘이에요.",
+        "effect": "지금 흐름이면 발견 순위가 계속 올라가요.",
         "footer": "제가 계속 지켜볼게요",
     }
 
@@ -313,7 +324,10 @@ def kakao_message(card: dict | None, designer: str = "") -> str:
     lines = [f"{who} 🙂 이번 주 살롱톤 노출 체크 공유드려요!", ""]
     if card.get("good"):
         lines += [f"좋은 소식: {card['good']}", ""]
-    lines += [card["greeting"], card["ask"], "→ " + card["do"], "", card["footer"]]
+    lines += [card["greeting"], card["ask"], "→ " + card["do"]]
+    if card.get("effect"):
+        lines.append(card["effect"])
+    lines += ["", card["footer"]]
     return "\n".join(lines)
 
 
