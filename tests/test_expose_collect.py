@@ -66,6 +66,21 @@ def test_around_finds_window():
     assert ec._around("리뷰만 있음", "사진") == "'사진' 없음"
 
 
+def test_parse_styles_extracts_popular_tags():
+    txt = "별점 4.98리뷰 1,791 휠체어 출입 가능 인기스타일 애쉬브라운 인기 숏단 영업"
+    s = ec.parse_styles(txt)
+    assert "애쉬브라운" in s and "숏단" in s
+    assert ec.parse_styles("리뷰 100 사진 9") == []
+
+
+def test_naver_keyword_queries_carry_spec():
+    t = {"region": "영등포구청역", "specialties": ["레이어드컷", "뿌리펌"]}
+    qs = ec.naver_keyword_queries(t)
+    specs = [q["spec"] for q in qs]
+    assert "레이어드컷" in specs and "뿌리펌" in specs and "미용실" in specs
+    assert all("영등포구청역" in q["q"] for q in qs)
+
+
 def test_median():
     assert ec._median([10, 30, 20, 40, 5]) == 20
     assert ec._median([]) == 0

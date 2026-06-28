@@ -135,17 +135,17 @@ def naver_query(q: str) -> str:
     return s.strip()
 
 
-def naver_keyword_queries(target: dict) -> list[str]:
-    """지역 × 시술 → 발견 키워드(깨끗). 손님이 실제로 검색할 형태."""
+def naver_keyword_queries(target: dict) -> list[dict]:
+    """지역 × 시술 → 발견 키워드(깨끗). 각 항목에 시술 토큰(spec)을 남긴다(키워드 처방용)."""
     region = (target.get("region") or "").strip()
     specs = [s.strip() for s in (target.get("specialties") or []) if s.strip()]
-    out = [f"{region} {sp}".strip() for sp in specs]
-    out.append(f"{region} 미용실".strip())
+    out = [{"q": f"{region} {sp}".strip(), "spec": sp} for sp in specs]
+    out.append({"q": f"{region} 미용실".strip(), "spec": "미용실"})
     seen, uniq = set(), []
-    for q in out:
-        if q and q not in seen:
-            seen.add(q)
-            uniq.append(q)
+    for it in out:
+        if it["q"] and it["q"] not in seen:
+            seen.add(it["q"])
+            uniq.append(it)
     return uniq
 
 
@@ -153,17 +153,19 @@ def measure_naver_canonical(target: dict, cid: str, csec: str, show: bool = Fals
     """깨끗한 발견 키워드별 우리 순위 + 상위 경쟁사."""
     names = _names(target)
     res = []
-    for kw in naver_keyword_queries(target):
+    for kwd in naver_keyword_queries(target):
+        kw, spec = kwd["q"], kwd["spec"]
         try:
             items = naver_local_search(kw, cid, csec)
             rank = _rank_in_items(items, names)
             top = [it["name"] for it in items[:3]]
-            res.append({"q": kw, "naver_found": rank is not None, "naver_rank": rank, "top": top})
+            res.append({"q": kw, "spec": spec, "naver_found": rank is not None,
+                        "naver_rank": rank, "top": top})
             if show:
                 print(f"      네이버 '{kw}': {('우리 '+str(rank)+'위' if rank else '미노출')}"
                       f" | 상위: {', '.join(top) or '(결과 없음)'}")
         except Exception as e:
-            res.append({"q": kw, "naver_found": None, "naver_rank": None, "top": []})
+            res.append({"q": kw, "spec": spec, "naver_found": None, "naver_rank": None, "top": []})
             if show:
                 print(f"      네이버 '{kw}': 오류 {str(e)[:60]}")
     return res
@@ -257,6 +259,20 @@ def _num(m) -> int:
 def _ratingf(txt: str):
     m = re.search(r"(?:별점|평점|★)\s*([0-5](?:\.\d)?)", txt or "")
     return float(m.group(1)) if m else None
+
+
+def parse_styles(txt: str) -> list[str]:
+    """네이버 '인기스타일' 태그 추출 — 플레이스가 어떤 시술로 인식되는지(키워드 처방의 핵심)."""
+    m = re.search(r"인기스타일\s+(.+?)(?:휠체어|저장|영업|길찾기|예약|전화|영업시간|주차|$)", txt or "")
+    if not m:
+        return []
+    out = []
+    for p in re.split(r"\s*인기\s+", m.group(1).strip()):
+        p = re.sub(r"[\[\]]", " ", p).strip()
+        p = re.split(r"\s{2,}", p)[0].strip()          # 첫 토큰군만(뒤 잡텍스트 제거)
+        if p and len(p) <= 16 and p not in out:
+            out.append(p)
+    return out[:6]
 
 
 def parse_place_text(txt: str) -> dict:
@@ -370,6 +386,7 @@ def scrape_place_assets(page, name: str, region: str = "", debug: bool = False) 
     d = parse_place_text(txt)                       # 검색결과 본문에서 리뷰·별점 1차 추정
     d["name"] = name
     d["found"] = (name.split()[0] in txt) if name else False
+    d["styles"] = parse_styles(txt)                 # 인기스타일 태그(키워드 처방용)
     d["photos"] = None                              # 사진은 텍스트로 못 잡음 → 썸네일 실측만 신뢰
 
     pid = _find_place_id(page)                       # 2차: 플레이스 페이지에서 정확히
@@ -431,11 +448,12 @@ def measure_place_assets(target: dict, cid: str, csec: str, debug: bool = False)
     return {
         "measured": True if ours.get("found") else False,
         "reviews": our_rev, "photos": our_pho, "rating": ours.get("rating"),
+        "styles": ours.get("styles") or [],          # 우리 인기스타일(키워드 처방용)
         "comp_reviews_median": med_rev,
         "comp_photos_median": med_pho,
         "catch_up_reviews": max(0, med_rev - our_rev),
         "competitors": [{"name": c["name"], "reviews": c.get("reviews", 0),
-                         "photos": c.get("photos")}
+                         "photos": c.get("photos"), "styles": c.get("styles") or []}
                         for c in comps if c.get("found")],
     }
 

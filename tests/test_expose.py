@@ -49,3 +49,30 @@ def test_build_exposure_no_dup_same_day():
     prev = {"history": [{"date": "2026-06-28", "score": 40}]}
     exp = expose.build_exposure(_sig(ai=3, nv=3), prev=prev, today=date(2026, 6, 28))
     assert len(exp["history"]) == 1   # 같은 날 재실행 → 중복 안 쌓임
+
+
+def test_keyword_plan_gap_ok_and_skips_generic():
+    sig = {
+        "naver_queries": [
+            {"q": "영등포 레이어드컷", "spec": "레이어드컷", "naver_rank": None,
+             "top": ["위닛블랙", "바운스플로"]},
+            {"q": "영등포 뿌리펌", "spec": "뿌리펌", "naver_rank": 2, "top": ["살롱톤"]},
+            {"q": "영등포 미용실", "spec": "미용실", "naver_rank": None, "top": []},
+        ],
+        "place": {"styles": ["애쉬브라운", "뿌리펌"],
+                  "competitors": [{"name": "위닛블랙", "styles": ["레이어드컷"]}]},
+    }
+    plans = expose.keyword_plan(sig)
+    assert len(plans) == 2                       # '미용실'(범용)은 제외
+    gap = next(p for p in plans if p["spec"] == "레이어드컷")
+    assert gap["status"] == "gap" and gap["has_style"] is False and "위닛블랙" in gap["proof"]
+    ok = next(p for p in plans if p["spec"] == "뿌리펌")
+    assert ok["status"] == "ok" and ok["has_style"] is True
+
+
+def test_build_exposure_includes_keyword_plan():
+    sig = _sig(ai=2, nv=2)
+    sig["naver_queries"] = [{"q": "영등포 펌", "spec": "펌", "naver_rank": None, "top": []}]
+    sig["place"]["styles"] = []
+    exp = expose.build_exposure(sig, today=date(2026, 6, 28))
+    assert exp["keyword_plan"] and exp["keyword_plan"][0]["spec"] == "펌"

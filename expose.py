@@ -149,6 +149,39 @@ def prescribe(sig: dict) -> list[dict]:
     return out[:3]                    # 한 번에 3개까지(부담 줄임)
 
 
+def keyword_plan(sig: dict) -> list[dict]:
+    """발견 키워드별 '이렇게 입력하세요' — 우리 인기스타일에 그 시술이 있나 + 상위 경쟁사 근거.
+
+    핵심 인사이트: 손님이 'OO 레이어드컷'으로 검색하면 네이버는 그 시술을 '인기스타일'로
+    가진 매장을 올림. 우리 인기스타일에 그 시술이 없으면 → 등록·후기로 심어야 노출됨.
+    """
+    nq = sig.get("naver_queries") or []
+    place = sig.get("place") or {}
+    my_str = " ".join(place.get("styles") or [])
+    comp_styles = {c.get("name"): " ".join(c.get("styles") or [])
+                   for c in (place.get("competitors") or [])}
+    plans: list[dict] = []
+    for x in nq:
+        spec = x.get("spec")
+        if not spec or spec == "미용실":
+            continue
+        kw, rank, top = x.get("q", spec), x.get("naver_rank"), (x.get("top") or [])
+        has = bool(spec) and spec in my_str
+        proof = [n for n in top if spec in comp_styles.get(n, "")]   # 이 시술을 가진 상위 경쟁사
+        if rank and has:
+            status, advice = "ok", f"{rank}위 유지 — 방문 후기에 '{spec}' 언급 계속 유도"
+        elif not has:
+            status = "gap"
+            advice = (f"플레이스 시술메뉴에 '{spec}' 등록 + 방문 후기에 '{spec}' 키워드로 남겨달라 요청"
+                      + (f" (상위 {proof[0]} 등이 이 키워드 보유)" if proof else ""))
+        else:
+            status = "near"
+            advice = f"'{spec}'은 등록됐는데 미노출 — 최근 '{spec}' 시술 후기·사진을 늘려 신선도 ↑"
+        plans.append({"keyword": kw, "spec": spec, "rank": rank, "status": status,
+                      "has_style": has, "advice": advice, "proof": proof, "top": top[:3]})
+    return plans
+
+
 def build_exposure(sig: dict, prev: dict | None = None, today: date | None = None) -> dict:
     """signals → exposure.yaml 구조(점수·처방·추세 포함)."""
     today = today or date.today()
@@ -168,6 +201,7 @@ def build_exposure(sig: dict, prev: dict | None = None, today: date | None = Non
         "blog_mentions": sig.get("blog_mentions"),
         "name_baseline": sig.get("name_baseline") or {},
         "actions": prescribe(sig),
+        "keyword_plan": keyword_plan(sig),  # 발견 키워드 구체 입력안
         "history": hist,
     }
 
