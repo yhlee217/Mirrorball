@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import urllib.parse
 import urllib.request
@@ -157,11 +158,17 @@ def collect(target: dict) -> dict:
     네이버 키: target.naver.client_id/secret 또는 환경변수 NAVER_CLIENT_ID/SECRET.
     플레이스 리뷰·사진은 공식 API 가 안 줘서 별도 — 없으면 '미측정'으로 둔다(0 단정 금지).
     """
-    qs = measure_ai(target)
+    claude_ok = shutil.which("claude") is not None
     nk = target.get("naver", {}) or {}
     cid = nk.get("client_id") or os.getenv("NAVER_CLIENT_ID")
     csec = nk.get("client_secret") or os.getenv("NAVER_CLIENT_SECRET")
     used = "naver-openapi" if (cid and csec) else "scrape"
+    # 측정이 실제로 됐는지 투명하게(점수 0 이 '진짜 0위'인지 '측정 실패'인지 구분)
+    print("  · AI: " + ("Claude CLI ✓" if claude_ok else "Claude CLI 없음 → AI 측정 안 됨(설치 필요)"))
+    print("  · 네이버: " + ("OpenAPI 키 ✓" if (cid and csec) else
+                            "키 없음 → 스크랩 폴백(setx 후 새 PowerShell 창 필요)"))
+
+    qs = measure_ai(target)
     nv = measure_naver_api(target, cid, csec) if (cid and csec) else measure_naver(target, [q["q"] for q in qs])
     for q in qs:
         q.update(nv.get(q["q"], {}))

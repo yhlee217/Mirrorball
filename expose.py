@@ -181,6 +181,10 @@ def main() -> int:
 
     if args.measure:
         sig = measure(target)
+        mq = sig.get("queries", [])
+        print(f"  · 측정 결과: AI 언급 {sum(1 for q in mq if q.get('ai_mentioned'))}/{len(mq)}"
+              f" · 네이버 노출 {sum(1 for q in mq if q.get('naver_found'))}/{len(mq)}"
+              f" ({sig.get('measured_by','')})")
     elif prev and prev.get("queries"):
         sig = prev                      # 기존 측정값으로 점수·처방만 재계산
     else:
