@@ -179,6 +179,8 @@ def main() -> int:
     ap.add_argument("client_dir", help="clients/{slug} (target.yaml 또는 targets/{slug}.yaml 사용)")
     ap.add_argument("--measure", action="store_true", help="AI/네이버 실제 측정(브라우저·CLI 필요)")
     ap.add_argument("--show", action="store_true", help="네이버 검색 상위 결과를 함께 출력(검증용)")
+    ap.add_argument("--place", action="store_true",
+                    help="플레이스 리뷰·사진을 우리 vs 경쟁사 스크랩(온머신, 느림)")
     args = ap.parse_args()
 
     cdir = Path(args.client_dir)
@@ -195,6 +197,8 @@ def main() -> int:
     if args.measure:
         if args.show:
             target["_show"] = True
+        if args.place:
+            target["_place"] = True
         sig = measure(target)
         mq = sig.get("queries", [])
         nq = sig.get("naver_queries", [])

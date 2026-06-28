@@ -33,6 +33,23 @@ def test_names_includes_designer_salon_aliases():
     assert "하예원" in ns and "살롱톤" in ns and "예원쌤" in ns and "살롱톤 영등포" in ns
 
 
+def test_parse_place_text_reviews_photos():
+    txt = "살롱톤 영등포 ★ 4.7 방문자 리뷰 128 블로그 리뷰 34 사진 56 예약"
+    d = ec.parse_place_text(txt)
+    assert d["reviews"] == 162 and d["photos"] == 56 and d["rating"] == 4.7
+    assert d["visitor_reviews"] == 128 and d["blog_reviews"] == 34
+
+
+def test_parse_place_text_single_review_fallback():
+    d = ec.parse_place_text("어떤샵 리뷰 1,234 사진 9")
+    assert d["reviews"] == 1234 and d["photos"] == 9
+
+
+def test_median():
+    assert ec._median([10, 30, 20, 40, 5]) == 20
+    assert ec._median([]) == 0
+
+
 def test_naver_query_keyword_ifies():
     assert ec.naver_query("영등포 레이어드컷 잘하는 미용실 추천해줘") == "영등포 레이어드컷 미용실"
     assert ec.naver_query("영등포구청역 근처 뿌리펌 잘하는 디자이너 알려줘") == "영등포구청역 뿌리펌 디자이너"

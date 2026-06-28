@@ -226,6 +226,92 @@ def measure_naver(target: dict, queries: list[str], debug: bool = False) -> dict
     return res
 
 
+# ── 플레이스 자산(리뷰·사진) — 공식 API 가 안 줘서 스크랩. CSS 대신 '텍스트 패턴'으로(덜 깨짐). ──
+def _num(m) -> int:
+    return int(m.group(1).replace(",", "")) if m else 0
+
+
+def _ratingf(txt: str):
+    m = re.search(r"(?:별점|평점|★)\s*([0-5](?:\.\d)?)", txt or "")
+    return float(m.group(1)) if m else None
+
+
+def parse_place_text(txt: str) -> dict:
+    """네이버 검색/플레이스 텍스트 → 리뷰·사진 수(방문자+블로그 리뷰 합)."""
+    visit = _num(re.search(r"방문자\s*리뷰\s*([\d,]+)", txt or ""))
+    blog = _num(re.search(r"블로그\s*리뷰\s*([\d,]+)", txt or ""))
+    reviews = visit + blog
+    if not reviews:                                # '리뷰 1,234' 단일 표기 폴백
+        reviews = _num(re.search(r"리뷰\s*([\d,]+)", txt or ""))
+    photos = _num(re.search(r"사진\s*([\d,]+)", txt or ""))
+    return {"reviews": reviews, "visitor_reviews": visit, "blog_reviews": blog,
+            "photos": photos, "rating": _ratingf(txt)}
+
+
+def scrape_place_assets(page, name: str, region: str = "") -> dict:
+    """네이버 검색 결과에서 한 매장의 리뷰·사진 수(베스트에포트)."""
+    q = (name + " " + region).strip()
+    try:
+        page.goto("https://search.naver.com/search.naver?query=" + urllib.parse.quote(q),
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(1500)
+        txt = page.inner_text("body")
+    except Exception:
+        return {"name": name, "found": None}
+    d = parse_place_text(txt)
+    d["name"] = name
+    d["found"] = (name.split()[0] in txt) if name else False
+    return d
+
+
+def _median(xs: list[int]) -> int:
+    xs = sorted(x for x in xs if x is not None)
+    return xs[len(xs) // 2] if xs else 0
+
+
+def measure_place_assets(target: dict, cid: str, csec: str, debug: bool = False) -> dict:
+    """우리 + 상위 경쟁사 5곳의 리뷰·사진 비교 + '따라잡기' 계산."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return {"measured": False}
+    salon = (_salon_names(target) or [""])[0]
+    region = target.get("region", "")
+    names = _names(target)
+    key = (region + " 미용실").strip()
+    try:
+        comp_names = [it["name"] for it in naver_local_search(key, cid, csec, display=5)
+                      if not any(n in it["name"] for n in names)][:5]
+    except Exception:
+        comp_names = []
+
+    with sync_playwright() as pw:
+        b = pw.chromium.launch(headless=not debug, args=["--disable-blink-features=AutomationControlled"])
+        ctx = b.new_context(user_agent=_UA, viewport={"width": 1366, "height": 900})
+        pg = ctx.new_page()
+        ours = scrape_place_assets(pg, salon, region)
+        comps = [scrape_place_assets(pg, c) for c in comp_names]
+        if debug:
+            print(f"      우리({salon}): 리뷰 {ours.get('reviews')} · 사진 {ours.get('photos')} · 별점 {ours.get('rating')}")
+            for c in comps:
+                print(f"      경쟁 {c['name']}: 리뷰 {c.get('reviews')} · 사진 {c.get('photos')}")
+        ctx.close()
+        b.close()
+
+    comp_rev = [c.get("reviews", 0) for c in comps if c.get("found")]
+    comp_pho = [c.get("photos", 0) for c in comps if c.get("found")]
+    med_rev, med_pho = _median(comp_rev), _median(comp_pho)
+    return {
+        "measured": True if ours.get("found") else False,
+        "reviews": ours.get("reviews", 0), "photos": ours.get("photos", 0),
+        "rating": ours.get("rating"),
+        "comp_reviews_median": med_rev, "comp_photos_median": med_pho,
+        "catch_up_reviews": max(0, med_rev - ours.get("reviews", 0)),
+        "competitors": [{"name": c["name"], "reviews": c.get("reviews", 0),
+                         "photos": c.get("photos", 0)} for c in comps if c.get("found")],
+    }
+
+
 def collect(target: dict) -> dict:
     """AI + 네이버 측정 → signals. 네이버는 OpenAPI(키) 우선, 없으면 스크랩 폴백.
 
@@ -251,7 +337,10 @@ def collect(target: dict) -> dict:
         elif base.get("name_found") is False:
             print(f"  · 이름 검색('{base.get('name_query')}'): 상위에 안 보임 — 등록·정보 확인 필요")
 
-    place = target.get("place")                      # 사람이 채웠으면 사용, 아니면 미측정
+    place = target.get("place")                      # 사람이 채웠으면 사용
+    if target.get("_place") and cid and csec:        # --place: 플레이스 리뷰·사진 스크랩
+        print("  · 플레이스 자산(리뷰·사진) 스크랩 중…")
+        place = measure_place_assets(target, cid, csec, debug=show)
     if not place:
         place = {"measured": False}
     return {

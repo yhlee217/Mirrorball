@@ -701,13 +701,26 @@
     }).join('')+'</div>';
     qHtml=baseHtml+nvHtml+qHtml;
 
+    // 리뷰 비교 (우리 vs 주변 경쟁) + 따라잡기
+    var pl=ex.place||{}, placeHtml='';
+    if(pl.measured && pl.competitors && pl.competitors.length){
+      var allr=[pl.reviews||0].concat(pl.competitors.map(function(c){return c.reviews||0;}));
+      var mx=Math.max.apply(null,allr.concat([1]));
+      var bar=function(nm,rev,us){ var w=Math.round((rev/mx)*100);
+        return '<div style="display:flex;align-items:center;gap:8px;margin:5px 0"><div style="flex:1;font-size:12px;'+(us?'font-weight:800;color:var(--accent-d)':'color:var(--muted)')+'">'+esc(nm)+'</div>'+
+          '<div style="width:110px;height:8px;background:var(--soft);border-radius:5px;overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+(us?'var(--sage)':'var(--line)')+'"></div></div>'+
+          '<div style="font-size:11.5px;font-weight:700;width:36px;text-align:right">'+rev+'</div></div>'; };
+      var rows=bar('우리 ('+((ex.name_baseline||{}).name_query?'살롱톤':'우리')+')',pl.reviews||0,true)+pl.competitors.slice(0,5).map(function(c){return bar(c.name,c.reviews||0,false);}).join('');
+      var catchH=(pl.catch_up_reviews>0)? '<div class="exp-act" style="border-left-color:var(--gold);margin-top:9px"><div class="t">리뷰 '+pl.catch_up_reviews+'건만 더 받으면 주변 중위권 따라잡아요</div><div class="w">우리 '+(pl.reviews||0)+'건 · 경쟁 중위 '+(pl.comp_reviews_median||0)+'건'+((pl.photos!=null)?(' · 사진 '+pl.photos+'장'):'')+'</div></div>':'';
+      placeHtml='<div class="sec-h" style="margin-top:14px">리뷰 비교 (우리 vs 주변)</div><div class="card" style="padding:13px 15px">'+rows+'</div>'+catchH;
+    }
     // 측정 범위(정직성) — 무엇을 쟀고 무엇은 아직인지
     var md=ex.measured||{};
     var mline=function(on,t){return '<span class="exp-t '+(on?'on':'off')+'">'+(on?'✓ ':'— ')+t+'</span>';};
     var scope='<div style="display:flex;gap:5px;flex-wrap:wrap;margin:9px 2px 2px">'+
       mline(md.ai,'AI 발견')+mline(md.naver,'웹/네이버 발견')+mline(md.place,'플레이스 리뷰·사진')+mline(md.blog,'블로그 후기')+'</div>';
 
-    box.innerHTML=head+scope+actHtml+qHtml+
+    box.innerHTML=head+scope+actHtml+placeHtml+qHtml+
       (ex.note?'<div style="font-size:10.5px;color:var(--muted);text-align:center;margin:12px 0 4px;line-height:1.5">'+esc(ex.note)+'</div>':'');
     setTimeout(function(){box.querySelectorAll('.exp-spark .sb').forEach(function(b){b.style.height=b.getAttribute('data-h')+'px';});},60);
   }
