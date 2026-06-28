@@ -662,5 +662,10 @@ def collect(target: dict) -> dict:
         "place": place,
         "blog_mentions": target.get("blog_mentions"),   # None = 미측정
         "name_baseline": base,
+        "identity": {                                    # AI 웹흔적 처방을 위한 신원(이름·역·시술)
+            "designer": (target.get("designer", {}) or {}).get("name", ""),
+            "salon": (target.get("salon", {}) or {}).get("name", ""),
+            "region": (_regions(target) or [""])[0],
+        },
         "measured_by": f"AI(Claude CLI) + 네이버({used}) · 발견키워드 {len(nq)}개",
     }

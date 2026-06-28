@@ -270,13 +270,50 @@ def designer_card(sig: dict) -> dict | None:
     }
 
 
+def ai_footprint_plan(sig: dict) -> dict:
+    """AI 가 디자이너/매장을 인용하게 만드는 '웹 흔적' 처방 — 인용할 콘텐츠가 없으면 AI 는 침묵.
+
+    핵심: AI(Claude/검색)는 웹에 있는 텍스트만 인용함. 디자이너 이름+지역+시술이
+    함께 적힌 글(프로필·블로그·후기)이 적으면 0/10. 우리가 '실제로 강한' 키워드를
+    제목·소개에 박아 인용 가능한 흔적을 늘린다(없는 강점을 지어내지 않음 — 정직).
+    """
+    qs = sig.get("queries") or []
+    ident = sig.get("identity") or {}
+    designer = ident.get("designer") or "디자이너"
+    region = ident.get("region") or ""
+    n = len(qs) or 1
+    ai_hits = sum(1 for q in qs if q.get("ai_mentioned"))
+    # 콘텐츠로 밀 키워드: 우리가 이미 노출되는(ok/low) 시술 우선 — 이긴 싸움에 흔적을 더한다.
+    plans = keyword_plan(sig)
+    ranked = [p for p in plans if p.get("rank")]
+    ranked.sort(key=lambda p: p["rank"])
+    spec = ranked[0]["spec"] if ranked else (
+        next((p["spec"] for p in plans), "시술"))
+    actions = []
+    if ai_hits / n < 0.5:           # AI 가 충분히 언급하면 굳이 흔들지 않음
+        actions = [
+            {"area": "ai", "title": f"플레이스 소개글 첫 줄에 「{region} {spec} · {designer}」",
+             "why": "AI·검색이 가장 먼저 인용하는 한 문장 — 이름+지역+시술을 한 줄에", "effort": "5분"},
+            {"area": "ai", "title": f"이번 달 후기 글 제목 「{region} {spec} - {designer}」(전후 사진 1장)",
+             "why": "디자이너 이름이 시술·지역과 함께 적힌 글이 늘수록 AI 가 인용", "effort": "15분"},
+            {"area": "ai", "title": f"방문 손님 후기에 '{designer}쌤' 호칭으로 남겨달라 요청",
+             "why": "이름이 박힌 후기 = AI 가 디자이너를 학습하는 1차 신호", "effort": "고객당 20초"},
+        ]
+    return {"ai_mentions": ai_hits, "ai_total": len(qs), "push_keyword": spec, "actions": actions}
+
+
 def build_exposure(sig: dict, prev: dict | None = None, today: date | None = None) -> dict:
     """signals → exposure.yaml 구조(점수·처방·추세 포함)."""
     today = today or date.today()
     s = score(sig)
+    qs = sig.get("queries") or []
+    ai_hits = sum(1 for q in qs if q.get("ai_mentioned"))
     hist = list((prev or {}).get("history", []) or [])
     if s is not None and (not hist or hist[-1].get("date") != str(today)):
-        hist.append({"date": str(today), "score": s})
+        entry = {"date": str(today), "score": s}
+        if qs:
+            entry["ai"] = ai_hits           # AI 언급 추세도 함께 추적
+        hist.append(entry)
     hist = hist[-12:]                # 최근 12회만
     return {
         "generated_at": str(today),
@@ -288,8 +325,10 @@ def build_exposure(sig: dict, prev: dict | None = None, today: date | None = Non
         "place": sig.get("place", {}),
         "blog_mentions": sig.get("blog_mentions"),
         "name_baseline": sig.get("name_baseline") or {},
+        "identity": sig.get("identity") or {},
         "actions": prescribe(sig),
         "keyword_plan": keyword_plan(sig),  # 발견 키워드 구체 입력안
+        "ai_plan": ai_footprint_plan(sig),  # AI 가 인용하게 만드는 웹 흔적 처방
         "designer_card": designer_card(sig),  # 하예원쌤이 앱에서 보는 '이번 주 딱 하나'
         "history": hist,
     }

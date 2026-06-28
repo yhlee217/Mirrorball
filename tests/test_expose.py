@@ -41,7 +41,8 @@ def test_build_exposure_appends_history_and_actions():
     prev = {"history": [{"date": "2026-06-01", "score": 30}]}
     exp = expose.build_exposure(_sig(ai=2, nv=4), prev=prev, today=date(2026, 6, 28))
     assert exp["score"] == expose.score(_sig(ai=2, nv=4))
-    assert exp["history"][-1] == {"date": "2026-06-28", "score": exp["score"]}
+    last = exp["history"][-1]
+    assert last["date"] == "2026-06-28" and last["score"] == exp["score"] and last["ai"] == 2
     assert len(exp["history"]) == 2 and exp["actions"]
 
 
@@ -100,6 +101,28 @@ def test_designer_card_low_rank_says_position_not_absent():
            "place": {"styles": ["레이어드컷"], "reviews": 1791}, "name_baseline": {"name_rank": 1}}
     c = expose.designer_card(sig)
     assert "8위" in c["ask"] and "안 보여요" not in c["ask"]   # '안 떠요'가 아니라 '8위'로 정직하게
+
+
+def test_ai_footprint_plan_uses_strong_keyword_and_name():
+    sig = {
+        "queries": [{"q": "q1", "ai_mentioned": False}, {"q": "q2", "ai_mentioned": False}],
+        "identity": {"designer": "하예원", "salon": "살롱톤", "region": "영등포시장역"},
+        "naver_queries": [
+            {"q": "영등포시장역 레이어드펌", "spec": "레이어드펌", "naver_rank": 4, "top": []},
+            {"q": "영등포시장역 뿌리펌", "spec": "뿌리펌", "naver_rank": None, "top": []},
+        ],
+        "place": {"styles": []},
+    }
+    ap = expose.ai_footprint_plan(sig)
+    assert ap["ai_mentions"] == 0 and ap["push_keyword"] == "레이어드펌"   # 이미 강한 4위 시술로
+    assert any("하예원" in a["title"] and "영등포시장역" in a["title"] for a in ap["actions"])
+
+
+def test_ai_footprint_plan_quiet_when_ai_already_cites():
+    sig = {"queries": [{"q": "q1", "ai_mentioned": True}],
+           "identity": {"designer": "하예원", "region": "영등포시장역"},
+           "naver_queries": [], "place": {}}
+    assert expose.ai_footprint_plan(sig)["actions"] == []     # 충분히 언급되면 안 흔듦
 
 
 def test_franchise_ratio_and_hard_flag():
