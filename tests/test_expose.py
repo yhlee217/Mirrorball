@@ -103,6 +103,17 @@ def test_designer_card_low_rank_says_position_not_absent():
     assert "8위" in c["ask"] and "안 보여요" not in c["ask"]   # '안 떠요'가 아니라 '8위'로 정직하게
 
 
+def test_kakao_message_renders_card_for_relay():
+    card = {"greeting": "이번 주 딱 하나만요 🙏", "good": "레이어드펌 4위",
+            "ask": "손님이 '영등포시장역 뿌리펌' 검색하면 안 보여요.",
+            "do": "스마트플레이스 스타일에 '뿌리펌'을 등록해 주세요.",
+            "footer": "나머지는 제가 챙길게요"}
+    msg = expose.kakao_message(card, "하예원")
+    assert msg.startswith("하예원님") and "뿌리펌" in msg and "→ " in msg
+    assert "레이어드펌 4위" in msg
+    assert expose.kakao_message(None) == ""
+
+
 def test_ai_footprint_plan_uses_strong_keyword_and_name():
     sig = {
         "queries": [{"q": "q1", "ai_mentioned": False}, {"q": "q2", "ai_mentioned": False}],

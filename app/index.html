@@ -114,6 +114,7 @@
   /* 하예원님께 — 디자이너용 '이번 주 딱 하나' 카드 */
   .dcard{background:linear-gradient(160deg,#FBF6EC,#F6EEDD);border:1px solid #E8D9B8;border-radius:16px;padding:17px 17px 15px;margin-bottom:13px;box-shadow:0 2px 10px rgba(176,141,87,.10);}
   .dcard .dc-h{font-family:var(--serif);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);}
+  .dcard .dc-copy{float:right;border:1px solid #E0CB9E;background:#fff;color:var(--gold);font-family:inherit;font-weight:700;font-size:10.5px;border-radius:8px;padding:3px 9px;cursor:pointer;letter-spacing:0;text-transform:none;}
   .dcard .dc-g{font-family:var(--serif);font-size:18px;font-weight:800;color:var(--accent-d);margin-top:3px;}
   .dcard .dc-good{display:inline-block;font-size:11.5px;font-weight:700;color:var(--sage);background:var(--sage-bg);border-radius:8px;padding:3px 9px;margin-top:9px;}
   .dcard .dc-ask{font-size:13.5px;color:var(--ink);margin-top:11px;line-height:1.55;}
@@ -753,7 +754,7 @@
     // 하예원님께 — 이번 주 딱 하나(디자이너용 카드, 맨 위)
     var dc=ex.designer_card;
     var dcard=dc? '<div class="dcard reveal">'+
-      '<div class="dc-h">하예원님께</div>'+
+      '<div class="dc-h">하예원님께'+(ex.kakao?'<button id="kakaoCopy" class="dc-copy">카톡 복사</button>':'')+'</div>'+
       '<div class="dc-g">'+esc(dc.greeting)+'</div>'+
       (dc.good?'<div class="dc-good">✓ '+esc(dc.good)+'</div>':'')+
       '<div class="dc-ask">'+esc(dc.ask)+'</div>'+
@@ -764,6 +765,11 @@
     box.innerHTML=dcard+head+scope+actHtml+placeHtml+qHtml+
       (ex.note?'<div style="font-size:10.5px;color:var(--muted);text-align:center;margin:12px 0 4px;line-height:1.5">'+esc(ex.note)+'</div>':'');
     setTimeout(function(){box.querySelectorAll('.exp-spark .sb').forEach(function(b){b.style.height=b.getAttribute('data-h')+'px';});},60);
+    var cb=box.querySelector('#kakaoCopy');
+    if(cb) cb.onclick=function(){
+      var done=function(){cb.textContent='복사됨 ✓';setTimeout(function(){cb.textContent='카톡 복사';},1800);};
+      try{ navigator.clipboard.writeText(ex.kakao).then(done,done); }catch(e){ done(); }
+    };
   }
 
   // ── render: home 통계 요약 카드 ──

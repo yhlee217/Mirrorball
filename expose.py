@@ -302,6 +302,18 @@ def ai_footprint_plan(sig: dict) -> dict:
     return {"ai_mentions": ai_hits, "ai_total": len(qs), "push_keyword": spec, "actions": actions}
 
 
+def kakao_message(card: dict | None, designer: str = "") -> str:
+    """디자이너 카드 → 카톡 복붙용 텍스트(사장님이 중계하거나 쌤께 바로 전송)."""
+    if not card:
+        return ""
+    who = (designer or "원장") + "님"
+    lines = [f"{who} 🙂 이번 주 살롱톤 노출 체크 공유드려요!", ""]
+    if card.get("good"):
+        lines += [f"좋은 소식: {card['good']}", ""]
+    lines += [card["greeting"], card["ask"], "→ " + card["do"], "", card["footer"]]
+    return "\n".join(lines)
+
+
 def build_exposure(sig: dict, prev: dict | None = None, today: date | None = None) -> dict:
     """signals → exposure.yaml 구조(점수·처방·추세 포함)."""
     today = today or date.today()
@@ -315,6 +327,7 @@ def build_exposure(sig: dict, prev: dict | None = None, today: date | None = Non
             entry["ai"] = ai_hits           # AI 언급 추세도 함께 추적
         hist.append(entry)
     hist = hist[-12:]                # 최근 12회만
+    card = designer_card(sig)        # 한 번만 계산해 카드·카톡 양쪽에 재사용
     return {
         "generated_at": str(today),
         "score": s,
@@ -329,7 +342,8 @@ def build_exposure(sig: dict, prev: dict | None = None, today: date | None = Non
         "actions": prescribe(sig),
         "keyword_plan": keyword_plan(sig),  # 발견 키워드 구체 입력안
         "ai_plan": ai_footprint_plan(sig),  # AI 가 인용하게 만드는 웹 흔적 처방
-        "designer_card": designer_card(sig),  # 하예원쌤이 앱에서 보는 '이번 주 딱 하나'
+        "designer_card": card,              # 하예원쌤이 앱에서 보는 '이번 주 딱 하나'
+        "kakao": kakao_message(card, (sig.get("identity") or {}).get("designer", "")),
         "history": hist,
     }
 
@@ -387,6 +401,10 @@ def main() -> int:
     print(f"✓ {slug}: 발견점수 {exp['score']} · 액션 {len(exp['actions'])}개 → {exp_path}")
     for a in exp["actions"]:
         print(f"  · [{a['area']}] {a['title']} ({a['effort']})")
+    if exp.get("kakao"):                      # 카톡 복붙용(쌤 직접 전송 or 사장님 중계) — 파일로도 저장
+        (cdir / "kakao.txt").write_text(exp["kakao"], encoding="utf-8")
+        print("\n── 카톡 복붙용(아래 그대로 보내면 돼요) · clients/%s/kakao.txt ──" % slug)
+        print(exp["kakao"])
     return 0
 
 
