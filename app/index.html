@@ -711,7 +711,9 @@
           '<div style="width:110px;height:8px;background:var(--soft);border-radius:5px;overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+(us?'var(--sage)':'var(--line)')+'"></div></div>'+
           '<div style="font-size:11.5px;font-weight:700;width:36px;text-align:right">'+rev+'</div></div>'; };
       var rows=bar('우리 ('+((ex.name_baseline||{}).name_query?'살롱톤':'우리')+')',pl.reviews||0,true)+pl.competitors.slice(0,5).map(function(c){return bar(c.name,c.reviews||0,false);}).join('');
-      var catchH=(pl.catch_up_reviews>0)? '<div class="exp-act" style="border-left-color:var(--gold);margin-top:9px"><div class="t">리뷰 '+pl.catch_up_reviews+'건만 더 받으면 주변 중위권 따라잡아요</div><div class="w">우리 '+(pl.reviews||0)+'건 · 경쟁 중위 '+(pl.comp_reviews_median||0)+'건'+((pl.photos!=null)?(' · 사진 '+pl.photos+'장'):'')+'</div></div>':'';
+      var catchH=(pl.catch_up_reviews>0)?
+        '<div class="exp-act" style="border-left-color:var(--gold);margin-top:9px"><div class="t">리뷰 '+pl.catch_up_reviews+'건만 더 받으면 주변 중위권 따라잡아요</div><div class="w">우리 '+(pl.reviews||0)+'건 · 경쟁 중위 '+(pl.comp_reviews_median||0)+'건</div></div>'
+        : '<div class="exp-act reveal" style="border-left-color:var(--sage);margin-top:9px"><div class="t">✓ 리뷰는 주변 중위권 이상 ('+(pl.reviews||0)+'건'+(pl.rating?(' · ★'+pl.rating):'')+')</div><div class="w">리뷰는 충분해요 — 과제는 <b>발견 노출</b>(키워드)이에요</div></div>';
       placeHtml='<div class="sec-h" style="margin-top:14px">리뷰 비교 (우리 vs 주변)</div><div class="card" style="padding:13px 15px">'+rows+'</div>'+catchH;
     }
     // 측정 범위(정직성) — 무엇을 쟀고 무엇은 아직인지

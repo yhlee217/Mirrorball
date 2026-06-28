@@ -243,7 +243,11 @@ def parse_place_text(txt: str) -> dict:
     reviews = visit + blog
     if not reviews:                                # '리뷰 1,234' 단일 표기 폴백
         reviews = _num(re.search(r"리뷰\s*([\d,]+)", txt or ""))
-    photos = _num(re.search(r"사진\s*([\d,]+)", txt or ""))
+    photos = 0                                     # 사진 라벨 후보 여러 개 시도(네이버 표기 변동)
+    for pat in (r"사진/?동?영?상?\s*([\d,]+)", r"사진\s*([\d,]+)", r"포토\s*([\d,]+)"):
+        photos = _num(re.search(pat, txt or ""))
+        if photos:
+            break
     return {"reviews": reviews, "visitor_reviews": visit, "blog_reviews": blog,
             "photos": photos, "rating": _ratingf(txt)}
 
@@ -299,16 +303,19 @@ def measure_place_assets(target: dict, cid: str, csec: str, debug: bool = False)
         b.close()
 
     comp_rev = [c.get("reviews", 0) for c in comps if c.get("found")]
-    comp_pho = [c.get("photos", 0) for c in comps if c.get("found")]
-    med_rev, med_pho = _median(comp_rev), _median(comp_pho)
+    med_rev = _median(comp_rev)
+    our_rev, our_pho = ours.get("reviews", 0), ours.get("photos", 0)
+    # 우리·경쟁사 전부 사진 0 = 스크랩 실패 → 사진은 '미측정'(None)으로(잘못된 처방 방지)
+    all_pho = [our_pho] + [c.get("photos", 0) for c in comps]
+    if all(p == 0 for p in all_pho):
+        our_pho = None
     return {
         "measured": True if ours.get("found") else False,
-        "reviews": ours.get("reviews", 0), "photos": ours.get("photos", 0),
-        "rating": ours.get("rating"),
-        "comp_reviews_median": med_rev, "comp_photos_median": med_pho,
-        "catch_up_reviews": max(0, med_rev - ours.get("reviews", 0)),
-        "competitors": [{"name": c["name"], "reviews": c.get("reviews", 0),
-                         "photos": c.get("photos", 0)} for c in comps if c.get("found")],
+        "reviews": our_rev, "photos": our_pho, "rating": ours.get("rating"),
+        "comp_reviews_median": med_rev,
+        "catch_up_reviews": max(0, med_rev - our_rev),
+        "competitors": [{"name": c["name"], "reviews": c.get("reviews", 0)}
+                        for c in comps if c.get("found")],
     }
 
 

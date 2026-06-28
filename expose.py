@@ -75,9 +75,13 @@ def score(sig: dict):
     if m["place"]:
         place = sig["place"]
         comp = place.get("comp_reviews_median") or 0
-        rev_ok = min(1.0, place["reviews"] / comp) if comp else min(1.0, place["reviews"] / 20)
-        photo_ok = min(1.0, place.get("photos", 0) / 10)
-        parts.append((W_PLACE, 0.6 * rev_ok + 0.4 * photo_ok))
+        reviews = place.get("reviews", 0)
+        rev_ok = min(1.0, reviews / comp) if comp else min(1.0, reviews / 20)
+        photos = place.get("photos")
+        if photos is not None:                   # 사진 측정됐을 때만 반영, 아니면 리뷰만
+            parts.append((W_PLACE, 0.6 * rev_ok + 0.4 * min(1.0, photos / 10)))
+        else:
+            parts.append((W_PLACE, rev_ok))
     if m["blog"]:
         parts.append((W_BLOG, min(1.0, sig["blog_mentions"] / 5)))
     if not parts:
@@ -122,10 +126,11 @@ def prescribe(sig: dict) -> list[dict]:
                         "title": "방문 고객께 네이버 리뷰 요청(목표 20건)",
                         "why": f"리뷰 {reviews}건 — 신규 고객 신뢰의 1순위",
                         "effort": "고객당 30초"})
-        if place.get("photos", 0) < 10:
+        photos = place.get("photos")
+        if photos is not None and photos < 10:
             out.append({"priority": 3, "area": "place",
                         "title": "플레이스 시술 사진 5장 추가(전후·스타일별)",
-                        "why": f"사진 {place.get('photos', 0)}장 — 클릭률·체류에 직결",
+                        "why": f"사진 {photos}장 — 클릭률·체류에 직결",
                         "effort": "10분"})
 
     if m["ai"] and sum(1 for q in qs if q.get("ai_mentioned")) / n < 0.3:
