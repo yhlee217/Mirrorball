@@ -227,8 +227,31 @@ def measure_naver(target: dict, queries: list[str], debug: bool = False) -> dict
 
 
 # ── 플레이스 자산(리뷰·사진) — 공식 API 가 안 줘서 스크랩. CSS 대신 '텍스트 패턴'으로(덜 깨짐). ──
+# 네이버는 큰 수를 '1.2천', '3.4만' 처럼 줄여 표기 — 숫자 캡처에 천/만 단위를 포함시킨다.
+_CNT = r"([\d.,]+\s*[천만]?)"
+
+
+def _kor_num(s: str) -> int:
+    """'1,234' / '1.2천' / '3.4만' / '1만2천' → 정수."""
+    if not s:
+        return 0
+    s = s.strip().replace(",", "")
+    total, m = 0, re.findall(r"([\d.]+)\s*([천만]?)", s)
+    if not m:
+        return 0
+    matched = False
+    for num, unit in m:
+        if not num:
+            continue
+        matched = True
+        v = float(num)
+        v *= {"천": 1000, "만": 10000, "": 1}.get(unit, 1)
+        total += v
+    return int(round(total)) if matched else 0
+
+
 def _num(m) -> int:
-    return int(m.group(1).replace(",", "")) if m else 0
+    return _kor_num(m.group(1)) if m else 0
 
 
 def _ratingf(txt: str):
@@ -238,13 +261,14 @@ def _ratingf(txt: str):
 
 def parse_place_text(txt: str) -> dict:
     """네이버 검색/플레이스 텍스트 → 리뷰·사진 수(방문자+블로그 리뷰 합)."""
-    visit = _num(re.search(r"방문자\s*리뷰\s*([\d,]+)", txt or ""))
-    blog = _num(re.search(r"블로그\s*리뷰\s*([\d,]+)", txt or ""))
+    visit = _num(re.search(r"방문자\s*리뷰\s*" + _CNT, txt or ""))
+    blog = _num(re.search(r"블로그\s*리뷰\s*" + _CNT, txt or ""))
     reviews = visit + blog
     if not reviews:                                # '리뷰 1,234' 단일 표기 폴백
-        reviews = _num(re.search(r"리뷰\s*([\d,]+)", txt or ""))
+        reviews = _num(re.search(r"리뷰\s*" + _CNT, txt or ""))
     photos = 0                                     # 사진 라벨 후보 여러 개 시도(네이버 표기 변동)
-    for pat in (r"사진/?동?영?상?\s*([\d,]+)", r"사진\s*([\d,]+)", r"포토\s*([\d,]+)"):
+    for pat in (r"사진/?동?영?상?\s*" + _CNT, r"사진\s*" + _CNT,
+                r"포토\s*" + _CNT, _CNT + r"\s*장의?\s*사진"):
         photos = _num(re.search(pat, txt or ""))
         if photos:
             break
@@ -252,8 +276,64 @@ def parse_place_text(txt: str) -> dict:
             "photos": photos, "rating": _ratingf(txt)}
 
 
-def scrape_place_assets(page, name: str, region: str = "") -> dict:
-    """네이버 검색 결과에서 한 매장의 리뷰·사진 수(베스트에포트)."""
+# 플레이스 ID 추출 패턴: 검색결과·플레이스 링크에서 매장 고유 ID 를 뽑는다.
+_PLACE_ID_RE = re.compile(r"(?:hairshop|beauty|place|restaurant)/(\d{6,})")
+
+
+def _find_place_id(page) -> str | None:
+    """검색결과 페이지 링크/HTML 에서 플레이스 고유 ID 추출(사진 탭 진입용)."""
+    try:                                           # 1) place 링크 href
+        for a in page.query_selector_all("a[href*='place'], a[href*='pcmap']"):
+            href = a.get_attribute("href") or ""
+            m = (_PLACE_ID_RE.search(href)
+                 or re.search(r"[?&]id=(\d{6,})", href)
+                 or re.search(r"/(\d{6,})", href))
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+    try:                                           # 2) iframe src(엔트리/플레이스 패널)
+        for fr in page.query_selector_all("iframe"):
+            src = fr.get_attribute("src") or ""
+            m = _PLACE_ID_RE.search(src) or re.search(r"[?&]id=(\d{6,})", src)
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+    try:                                           # 3) 전체 HTML 폴백
+        m = _PLACE_ID_RE.search(page.content() or "")
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+
+def _place_page_text(page, place_id: str, tab: str = "home") -> str:
+    """플레이스 페이지(홈/사진 탭) 본문 텍스트. 호스트·업종 경로를 순서대로 시도."""
+    for host in ("m.place.naver.com", "pcmap.place.naver.com"):
+        for kind in ("place", "hairshop", "beauty"):
+            url = "https://%s/%s/%s/%s" % (host, kind, place_id, tab)
+            try:
+                page.goto(url, wait_until="domcontentloaded")
+                page.wait_for_timeout(1300)
+                t = page.inner_text("body")
+                if t and len(t) > 60 and "페이지를 찾을 수 없습니다" not in t:
+                    return t
+            except Exception:
+                continue
+    return ""
+
+
+def _around(txt: str, kw: str, span: int = 36) -> str:
+    """진단용: 키워드 주변 텍스트(사진/리뷰 표기 형태 확인)."""
+    i = (txt or "").find(kw)
+    if i < 0:
+        return f"'{kw}' 없음"
+    s = max(0, i - 8)
+    return re.sub(r"\s+", " ", txt[s:i + span]).strip()
+
+
+def scrape_place_assets(page, name: str, region: str = "", debug: bool = False) -> dict:
+    """한 매장의 리뷰·사진 수. 검색 → 플레이스 페이지 진입(사진은 사진 탭에서 정확히)."""
     q = (name + " " + region).strip()
     try:
         page.goto("https://search.naver.com/search.naver?query=" + urllib.parse.quote(q),
@@ -262,9 +342,30 @@ def scrape_place_assets(page, name: str, region: str = "") -> dict:
         txt = page.inner_text("body")
     except Exception:
         return {"name": name, "found": None}
-    d = parse_place_text(txt)
+    d = parse_place_text(txt)                       # 검색결과 본문에서 1차 추정
     d["name"] = name
     d["found"] = (name.split()[0] in txt) if name else False
+
+    pid = _find_place_id(page)                       # 2차: 플레이스 페이지에서 정확히
+    if pid:
+        d["place_id"] = pid
+        home = _place_page_text(page, pid, "home")
+        if home:
+            hd = parse_place_text(home)
+            for k in ("reviews", "visitor_reviews", "blog_reviews", "rating"):
+                if hd.get(k):
+                    d[k] = hd[k]
+            d["found"] = True
+        if not d.get("photos"):                      # 사진은 사진 탭 헤더에 총계가 있음
+            photo_txt = _place_page_text(page, pid, "photo")
+            pd = parse_place_text(photo_txt)
+            if pd.get("photos"):
+                d["photos"] = pd["photos"]
+            elif debug and photo_txt:
+                print(f"        [진단] {name} 사진탭 '사진' 주변: {_around(photo_txt, '사진')}")
+    if debug and not d.get("photos"):
+        print(f"        [진단] {name} 검색 '사진' 주변: {_around(txt, '사진')}"
+              f" | '리뷰' 주변: {_around(txt, '리뷰')} | place_id={pid}")
     return d
 
 
@@ -293,8 +394,8 @@ def measure_place_assets(target: dict, cid: str, csec: str, debug: bool = False)
         b = pw.chromium.launch(headless=not debug, args=["--disable-blink-features=AutomationControlled"])
         ctx = b.new_context(user_agent=_UA, viewport={"width": 1366, "height": 900})
         pg = ctx.new_page()
-        ours = scrape_place_assets(pg, salon, region)
-        comps = [scrape_place_assets(pg, c) for c in comp_names]
+        ours = scrape_place_assets(pg, salon, region, debug=debug)
+        comps = [scrape_place_assets(pg, c, debug=debug) for c in comp_names]
         if debug:
             print(f"      우리({salon}): 리뷰 {ours.get('reviews')} · 사진 {ours.get('photos')} · 별점 {ours.get('rating')}")
             for c in comps:

@@ -45,6 +45,27 @@ def test_parse_place_text_single_review_fallback():
     assert d["reviews"] == 1234 and d["photos"] == 9
 
 
+def test_kor_num_abbreviated():
+    assert ec._kor_num("1,234") == 1234
+    assert ec._kor_num("1.2천") == 1200
+    assert ec._kor_num("3.4만") == 34000
+    assert ec._kor_num("1만2천") == 12000
+    assert ec._kor_num("") == 0
+
+
+def test_parse_place_text_abbreviated_photos():
+    # 네이버 축약 표기: '사진 1.2천' → 1200, '방문자 리뷰 3.4만' → 34000
+    d = ec.parse_place_text("살롱톤 ★ 4.9 방문자 리뷰 3.4만 블로그 리뷰 1,512 사진 1.2천")
+    assert d["photos"] == 1200
+    assert d["visitor_reviews"] == 34000 and d["blog_reviews"] == 1512
+    assert d["reviews"] == 35512
+
+
+def test_around_finds_window():
+    assert "사진" in ec._around("앞 텍스트 사진 1.2천 뒤 텍스트", "사진")
+    assert ec._around("리뷰만 있음", "사진") == "'사진' 없음"
+
+
 def test_median():
     assert ec._median([10, 30, 20, 40, 5]) == 20
     assert ec._median([]) == 0
