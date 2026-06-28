@@ -173,13 +173,14 @@ def measure_naver_canonical(target: dict, cid: str, csec: str, show: bool = Fals
             items = naver_local_search(kw, cid, csec)
             rank = _rank_in_items(items, names)
             top = [it["name"] for it in items[:3]]
-            res.append({"q": kw, "spec": spec, "naver_found": rank is not None,
-                        "naver_rank": rank, "top": top})
+            res.append({"q": kw, "spec": spec, "region": kwd.get("region"),
+                        "naver_found": rank is not None, "naver_rank": rank, "top": top})
             if show:
                 print(f"      네이버 '{kw}': {('우리 '+str(rank)+'위' if rank else '미노출')}"
                       f" | 상위: {', '.join(top) or '(결과 없음)'}")
         except Exception as e:
-            res.append({"q": kw, "spec": spec, "naver_found": None, "naver_rank": None, "top": []})
+            res.append({"q": kw, "spec": spec, "region": kwd.get("region"),
+                        "naver_found": None, "naver_rank": None, "top": []})
             if show:
                 print(f"      네이버 '{kw}': 오류 {str(e)[:60]}")
     return res
@@ -188,6 +189,8 @@ def measure_naver_canonical(target: dict, cid: str, csec: str, show: bool = Fals
 # ── 실제 지도 순위(콜드) — 지역검색 API 는 top-5 만 줘서 '미노출'을 과장함. 플레이스 리스트 전체를 스크랩해 진짜 순위를 본다. ──
 _RANK_UI = re.compile(r"^(광고|예약|영업\S*|리뷰|블로그|사진|쿠폰|길찾기|전화|저장|더보기|지도|"
                       r"필터|정렬|거리순|정확도순|관련도순|홈|메뉴|소식|N|예약확정|\d[\d.,]*)$")
+# 결과가 적은 키워드에선 셀렉터가 UI 텍스트(영업시간·네이버페이 등)를 잡음 → 부분일치로 제거.
+_RANK_NOISE = re.compile(r"영업|네이버페이|톡톡|예약확정|길찾기|\d{1,2}:\d{2}|영업\s*(중|종료|시작)")
 # 업종 판별(미용실만 공정 비교) — 카테고리 텍스트로 1차 분류, 애매하면 Claude.
 _SALON_CAT = re.compile(r"미용실|헤어|살롱|바버|이용원|펌|염색|컷")
 _NONSALON_CAT = re.compile(r"네일|속눈썹|왁싱|피부|메이크업|퍼스널|골격|태닝|문신|마사지|"
@@ -215,7 +218,8 @@ def _extract_place_items(page, depth: int) -> list[dict]:
         seen, tmp = set(), []
         for e in els:
             name = (e.inner_text() or "").strip()
-            if not name or _RANK_UI.match(name) or not (1 < len(name) <= 25) or name in seen:
+            if (not name or _RANK_UI.match(name) or _RANK_NOISE.search(name)
+                    or not (1 < len(name) <= 25) or name in seen):
                 continue
             try:                                     # 같은 리스트 항목(li) 전체 텍스트에서 업종 추출
                 ctx = e.evaluate("el=>{const li=el.closest('li');return li?li.innerText:''}")
@@ -632,11 +636,9 @@ def collect(target: dict) -> dict:
         elif base.get("name_found") is False:
             print(f"  · 이름 검색('{base.get('name_query')}'): 상위에 안 보임 — 등록·정보 확인 필요")
 
-    if target.get("_rank") and nq:                   # --rank: API top-5 한계 보완(실제 지도 순위)
-        primary = (_regions(target) or [None])[0]     # 실제 위치(primary) 키워드만 깊게(부하·차단 관리)
-        deep_items = [x for x in nq if x.get("region") == primary] or nq
-        print(f"  · 네이버 지도 실제 순위(콜드·익명) 측정 중… [{primary} 기준 {len(deep_items)}개]")
-        deep = measure_naver_deep(target, deep_items, show=show)
+    if target.get("_rank") and nq:                   # --rank: API top-5 한계 보완(실제 지도 순위, 전 지역)
+        print(f"  · 네이버 지도 실제 순위(콜드·익명) 측정 중… [{len(nq)}개 키워드, 느림]")
+        deep = measure_naver_deep(target, nq, show=show)
         for x in nq:
             d = deep.get(x["q"])
             if not d:

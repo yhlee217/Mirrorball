@@ -204,7 +204,11 @@ def designer_card(sig: dict) -> dict | None:
     todo = [p for p in plans if p["status"] == "gap"] + [p for p in plans if p["status"] == "low"]
 
     bits = []                                   # 잘 되고 있는 강점 한 줄(잔소리 아닌 칭찬으로 시작)
-    if nb.get("name_rank"):
+    wins = sorted((p for p in plans if p["status"] == "ok" and p.get("rank")),
+                  key=lambda p: p["rank"])      # 발견 순위 강점(가장 높은 순위 1개)
+    if wins:
+        bits.append(f"{wins[0]['spec']} {wins[0]['rank']}위")
+    elif nb.get("name_rank"):
         bits.append(f"이름 검색 {nb['name_rank']}위")
     if place.get("reviews"):
         bits.append(f"리뷰 {place['reviews']:,}")
