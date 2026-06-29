@@ -10,6 +10,7 @@ clients/*/_raw/
 secrets/*
 !secrets/stores.example.yaml
 !secrets/naver.example.yaml
+!secrets/instagram.example.yaml
 content/
 __pycache__/
 *.pyc
