@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>인스타그램 Graph API 셋업 안내서 · Mirrorball</title>
+<style>
+  :root{
+    --bg:#F4F1EC; --paper:#FCFAF6; --ink:#2A2622; --muted:#8C8479; --line:#E6DFD4;
+    --accent:#6E5B47; --accent-d:#4E4031; --soft:#EFE9DF; --sage:#5C7A57; --sage-bg:#EAF0E6;
+    --gold:#9A7B33; --gold-bg:#F5EEDB; --rose:#B0574A; --rose-bg:#F3E6E2;
+    --serif:'Nanum Myeongjo','Apple SD Gothic Neo','Malgun Gothic',serif;
+    --sans:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    --mono:'D2Coding','Consolas','Menlo',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:780px;margin:0 auto;padding:40px 22px 80px;}
+  header{text-align:center;padding:26px 0 18px;border-bottom:1px solid var(--line);margin-bottom:30px;}
+  .brand{font-family:var(--serif);font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);}
+  h1{font-family:var(--serif);font-size:28px;font-weight:800;color:var(--accent-d);margin:8px 0 6px;line-height:1.3;}
+  .sub{font-size:13px;color:var(--muted);line-height:1.6;}
+  .meta{display:inline-flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px;}
+  .pill{font-size:11.5px;font-weight:700;background:var(--soft);color:var(--accent);border-radius:20px;padding:4px 11px;}
+  .note{background:var(--gold-bg);border:1px solid #E8D9B8;border-radius:13px;padding:13px 16px;font-size:13.5px;color:var(--accent-d);margin:18px 0;line-height:1.65;}
+  .note b{color:var(--gold);}
+  h2{font-family:var(--serif);font-size:20px;font-weight:800;color:var(--accent-d);margin:34px 0 4px;
+    display:flex;align-items:baseline;gap:11px;}
+  .num{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent-d);color:#fff;
+    font-family:var(--sans);font-size:14px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;
+    transform:translateY(3px);}
+  .when{font-size:12px;font-weight:700;color:var(--sage);background:var(--sage-bg);border-radius:8px;padding:2px 9px;margin-left:auto;transform:translateY(2px);}
+  section{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:6px 20px 18px;margin-top:10px;}
+  ol,ul{padding-left:22px;margin:10px 0;}
+  li{margin:7px 0;}
+  li small{color:var(--muted);}
+  code{font-family:var(--mono);font-size:13px;background:var(--soft);border-radius:5px;padding:1px 6px;color:var(--accent-d);}
+  pre{font-family:var(--mono);font-size:12.5px;background:#2C2722;color:#EDE6D8;border-radius:11px;
+    padding:13px 15px;overflow-x:auto;line-height:1.55;margin:12px 0;}
+  pre .c{color:#9DBE8E;}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--line);}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-family:var(--serif);color:var(--accent);font-size:12.5px;text-transform:uppercase;letter-spacing:.5px;}
+  td:first-child{font-weight:700;color:var(--accent-d);white-space:nowrap;}
+  .perm{display:inline-block;font-family:var(--mono);font-size:12px;background:var(--sage-bg);color:var(--sage);
+    border-radius:6px;padding:2px 8px;margin:3px 4px 0 0;}
+  .ok{background:#2C2722;color:#9DBE8E;font-family:var(--mono);font-size:12.5px;border-radius:11px;padding:12px 15px;margin:12px 0;}
+  .foot{text-align:center;font-size:12px;color:var(--muted);margin-top:40px;padding-top:18px;border-top:1px solid var(--line);line-height:1.7;}
+  @media print{body{background:#fff;}section,.note{break-inside:avoid;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">Mirrorball · 발견 케어</div>
+  <h1>인스타그램 Graph API 셋업 안내서</h1>
+  <div class="sub">살롱 <b>기존 인스타 계정</b>으로 토큰을 발급해 모니터링을 켠다. 새 계정 안 만듦 · 전부 무료.</div>
+  <div class="meta">
+    <span class="pill">⏱ 약 40~60분 (대부분 1회성)</span>
+    <span class="pill">💸 비용 0원</span>
+    <span class="pill">🔒 유령계정 아님 · 밴 위험 없음</span>
+  </div>
+</header>
+
+<div class="note">
+  <b>준비물</b> — 살롱 인스타 계정 · 페이스북 계정(없으면 무료 생성) · PC 브라우저<br>
+  ※ Meta 화면·메뉴 이름은 수시로 바뀝니다. 이름이 다르면 <b>비슷한 항목</b>을 찾으면 돼요.
+</div>
+
+<h2><span class="num">1</span> 인스타를 '비즈니스 계정'으로 전환 <span class="when">폰 · 5분</span></h2>
+<section>
+  <ol>
+    <li>인스타 앱 → 내 프로필 → 우상단 <b>☰ 메뉴</b> → <b>설정 및 개인정보</b></li>
+    <li><b>계정 유형 및 도구</b> → <b>프로페셔널 계정으로 전환</b></li>
+    <li>카테고리 <b>미용실/헤어살롱</b> 선택 → <b>비즈니스(Business)</b> 선택 <small>(크리에이터도 되지만 살롱은 비즈니스 권장)</small></li>
+    <li>완료. 게시물·팔로워 그대로, 언제든 개인계정으로 되돌릴 수 있어요.</li>
+  </ol>
+  <div class="note" style="margin:4px 0 6px">이미 비즈니스/크리에이터면 이 단계는 건너뛰세요.</div>
+</section>
+
+<h2><span class="num">2</span> 페이스북 페이지 연결 <span class="when">10분</span></h2>
+<section>
+  <p style="font-size:14px;color:var(--muted);margin:12px 0 0">Graph API는 보통 <b>인스타 비즈니스 계정 ↔ 페이스북 페이지</b> 연결을 요구해요.</p>
+  <ol>
+    <li>페이지가 없으면 생성: <a href="https://www.facebook.com/pages/create">facebook.com/pages/create</a> → 살롱 이름으로(무료)</li>
+    <li>인스타에 연결: 인스타 앱 → 설정 → <b>계정 센터(Account Center)</b> → <b>계정 연결</b> → 페이스북 페이지 연결
+      <br><small>또는 Meta Business Suite(business.facebook.com)에서 인스타·페이지를 한 비즈니스에 묶기</small></li>
+    <li>확인: Meta Business Suite에 인스타 계정과 페이지가 같이 보이면 OK</li>
+  </ol>
+</section>
+
+<h2><span class="num">3</span> Meta 개발자 앱 만들기 <span class="when">10분</span></h2>
+<section>
+  <ol>
+    <li><a href="https://developers.facebook.com">developers.facebook.com</a> → <b>로그인</b>(살롱 페북) → 최초면 <b>개발자 등록</b>(무료)</li>
+    <li><b>내 앱(My Apps)</b> → <b>앱 만들기(Create App)</b></li>
+    <li>앱 유형 <b>비즈니스(Business)</b> → 앱 이름(예: <code>Mirrorball-Insta</code>) → 생성</li>
+    <li>좌측 <b>제품 추가</b>에서 <b>Instagram</b>(Instagram Graph API) <b>설정(Set up)</b> 추가</li>
+    <li><b>앱 설정 → 기본 설정</b>에서 <b>앱 ID</b>·<b>앱 시크릿</b> 확인 → <code>secrets/instagram.yaml</code>의 <code>app_id</code>/<code>app_secret</code>에 기록</li>
+  </ol>
+  <div class="note" style="border-color:#E3C9C2;background:var(--rose-bg)" >⚠️ <b>앱 시크릿은 비밀번호급</b>입니다. 공개·커밋 금지 (우리는 <code>secrets/</code>로 git 제외).</div>
+</section>
+
+<h2><span class="num">4</span> 액세스 토큰 + 인스타 계정 ID 받기 <span class="when">15분</span></h2>
+<section>
+  <h3 style="font-size:14px;color:var(--accent-d);margin:14px 0 0">4-1. Graph API 탐색기로 단기 토큰</h3>
+  <ol>
+    <li><a href="https://developers.facebook.com/tools/explorer">Graph API Explorer</a> 접속</li>
+    <li>우측 <b>Meta App</b>: 방금 만든 앱 선택</li>
+    <li><b>User Token</b> 선택 → <b>Add Permissions</b>에서 아래 권한 체크:
+      <div style="margin-top:6px">
+        <span class="perm">instagram_basic</span><span class="perm">instagram_manage_insights</span>
+        <span class="perm">instagram_manage_comments</span><span class="perm">pages_show_list</span>
+        <span class="perm">pages_read_engagement</span><span class="perm">business_management</span>
+      </div>
+    </li>
+    <li><b>Generate Access Token</b> → 로그인·동의 → 단기 토큰 생성</li>
+  </ol>
+
+  <h3 style="font-size:14px;color:var(--accent-d);margin:18px 0 0">4-2. 인스타 비즈니스 계정 ID 찾기</h3>
+  <pre><span class="c"># 살롱 페이지의 id(page-id) 확인</span>
+GET /me/accounts
+
+<span class="c"># 그 페이지에 연결된 인스타 계정 id 확인 → 이게 ig_user_id</span>
+GET /{page-id}?fields=instagram_business_account</pre>
+
+  <h3 style="font-size:14px;color:var(--accent-d);margin:18px 0 0">4-3. 단기 → 장기(60일) 토큰 교환</h3>
+  <p style="font-size:14px;color:var(--muted);margin:8px 0 0">브라우저 주소창에 값 채워서:</p>
+  <pre>https://graph.facebook.com/v23.0/oauth/access_token?grant_type=fb_exchange_token
+  &client_id={app_id}&client_secret={app_secret}&fb_exchange_token={단기토큰}</pre>
+  <p style="font-size:14px;margin:8px 0 0">→ 반환된 <code>access_token</code>(60일)을 <code>secrets/instagram.yaml</code>에 기록.
+  무기한이 필요하면 <b>시스템 유저 토큰</b>(Business Settings → System Users)으로 발급(후속).</p>
+</section>
+
+<h2><span class="num">5</span> secrets/instagram.yaml 채우기 <span class="when">5분</span></h2>
+<section>
+  <pre><span class="c"># 템플릿 복사 후 편집</span>
+copy secrets\instagram.example.yaml secrets\instagram.yaml
+notepad secrets\instagram.yaml</pre>
+  <pre>ig_user_id:   "1784xxxxxxxxxxx"
+access_token: "EAAG...(장기 토큰)"
+app_id:       "1234567890"
+app_secret:   "abcd...(공개 금지)"
+hashtags:     ["영등포미용실", "영등포레이어드컷", "레이어드펌", "살롱톤", "하예원"]   <span class="c"># 7일당 30개 한도</span>
+competitors:  ["경쟁살롱username1", "경쟁살롱username2"]                       <span class="c"># 비즈니스 계정만</span></pre>
+  <p style="font-size:13.5px;color:var(--muted);margin:8px 0 0"><code>secrets/</code>는 git에서 제외돼 토큰이 안전해요. 템플릿만 추적됩니다.</p>
+</section>
+
+<h2><span class="num">6</span> 연결 테스트 <span class="when">1분</span></h2>
+<section>
+  <p style="font-size:14px;margin:12px 0 0">토큰이 살아있는지 확인:</p>
+  <pre>curl "https://graph.facebook.com/v23.0/{ig_user_id}?fields=username,followers_count,media_count&access_token={access_token}"</pre>
+  <p style="font-size:14px;margin:8px 0 0">아래처럼 나오면 <b>성공</b>:</p>
+  <div class="ok">{"username":"salontone_...","followers_count":1234,"media_count":567}</div>
+</section>
+
+<h2 style="margin-top:36px">자주 막히는 곳</h2>
+<section>
+  <table>
+    <tr><th>증상</th><th>원인 · 해결</th></tr>
+    <tr><td><code>instagram_business_account</code> 비어있음</td><td>인스타가 비즈니스 계정이 아니거나 페이지 연결 안 됨 → STEP 1·2 재확인</td></tr>
+    <tr><td>권한 오류 (#10, #200)</td><td>토큰에 권한 미포함 → 4-1 권한 다시 체크해 재발급</td></tr>
+    <tr><td>경쟁사 조회가 빈 결과</td><td>상대가 <b>개인/비공개 계정</b> → API로는 안 보임(해시태그 언급으로만 포착)</td></tr>
+    <tr><td>토큰 60일 후 만료</td><td>4-3 재교환, 또는 시스템 유저 토큰으로 무기한 발급</td></tr>
+    <tr><td>해시태그 조회 막힘</td><td>7일당 30개 한도 초과 → 추적 해시태그 줄이기</td></tr>
+    <tr><td>타 계정 공개데이터 거부</td><td>앱이 개발 모드 → 본인 계정만이면 OK, 확장 시 Meta <b>앱 검수</b> 필요</td></tr>
+  </table>
+</section>
+
+<div class="note" style="margin-top:30px">
+  <b>다음</b> — <code>secrets/instagram.yaml</code>이 채워지고 STEP 6 테스트가 통과하면,
+  <code>insta_collect.py</code>(수집) + <code>insta.py</code>(지표)를 붙여
+  <b>인스타 발견 점수</b>(언급 · 점유율 · 트렌드 · 인게이지먼트)를 주간 추세로 만듭니다.
+</div>
+
+<div class="foot">
+  Mirrorball · 발견 케어 — 인스타그램 모니터링 셋업<br>
+  설계·지표 상세는 <code>scripts/INSTAGRAM.md</code> 보고서 참고
+</div>
+
+</div>
+</body>
+</html>
