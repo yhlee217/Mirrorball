@@ -656,6 +656,80 @@
   }
 
   // ── render: exposure ──
+  // ── render: 인스타 발견 섹션 (instagram.yaml → 점유율·언급·트렌드·인게이지) ──
+  function renderInstaSection(ig){
+    if(!ig||ig.score==null) return '';
+    var md=ig.measured||{};
+    var mline=function(on,t){return '<span class="exp-t '+(on?'on':'off')+'">'+(on?'✓ ':'— ')+t+'</span>';};
+
+    // 점수 + 추세(발견 점수와 같은 문법)
+    var hist=(ig.history||[]).slice(-8);
+    var hmax=Math.max.apply(null,hist.map(function(h){return h.score||0;}).concat([1,ig.score]));
+    var spark=hist.map(function(h){var ph=Math.round(((h.score||0)/hmax)*42)+4;
+      return '<div class="sb" data-h="'+ph+'" style="height:4px" title="'+esc(h.date)+' · '+h.score+'"></div>';}).join('');
+    var head='<div class="card reveal" style="padding:16px 16px 14px"><div class="exp-score">'+
+      '<div><div class="big">'+ig.score+'</div><div class="lab">인스타 발견 / 100</div></div>'+
+      '<div style="flex:1"></div><div class="exp-spark">'+spark+'</div></div>'+
+      '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:9px">'+
+      mline(md.sov,'점유율')+mline(md.engage,'인게이지먼트')+mline(md.presence,'언급량')+'</div></div>';
+
+    // 점유율(SoV) 히어로 — 1순위 지표. 커버리지(분모)를 정직하게 표기.
+    var sovHtml='';
+    if(ig.sov!=null){
+      var pct=Math.round(ig.sov*100), ch=ig.changes||{};
+      var delta=(ch.sov_delta!=null)?
+        '<span style="font-size:12px;font-weight:800;color:'+(ch.sov_delta>=0?'var(--sage)':'var(--rose)')+'">'+
+        (ch.sov_delta>=0?'▲':'▼')+' '+Math.abs(Math.round(ch.sov_delta*100))+'%p'+(ch.weeks?(' · '+ch.weeks+'주 전 대비'):'')+'</span>':'';
+      sovHtml='<div class="card reveal" style="padding:14px 16px;margin-top:9px;display:flex;align-items:center;gap:14px">'+
+        '<div><div style="font-family:var(--serif);font-size:34px;font-weight:800;color:var(--accent-d);line-height:1">'+pct+'%</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:3px">언급 점유율 (SoV)</div></div>'+
+        '<div style="flex:1;font-size:11.5px;color:var(--muted);line-height:1.5">브랜드 해시태그 기준 · 경쟁 '+(ig.sov_coverage||0)+'곳과 비교'+
+        (delta?('<div style="margin-top:4px">'+delta+'</div>'):'')+'</div></div>';
+    }
+
+    // 언급 비교 바(우리 vs 경쟁 brand_count) — 리뷰 비교와 같은 바 문법(us=sage, 경쟁=중립, 직접 라벨)
+    var our=ig.our||{}, comps=(ig.competitors||[]).filter(function(c){return c.brand_count!=null;});
+    var barsHtml='';
+    if(our.brand_count!=null&&comps.length){
+      var mx=Math.max.apply(null,[our.brand_count].concat(comps.map(function(c){return c.brand_count;})).concat([1]));
+      var bar=function(nm,v,us){var w=Math.round((v/mx)*100);
+        return '<div style="display:flex;align-items:center;gap:8px;margin:5px 0"><div style="flex:1;font-size:12px;'+(us?'font-weight:800;color:var(--accent-d)':'color:var(--muted)')+'">'+esc(nm)+'</div>'+
+        '<div style="width:110px;height:8px;background:var(--soft);border-radius:5px;overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+(us?'var(--sage)':'var(--line)')+'"></div></div>'+
+        '<div style="font-size:11.5px;font-weight:700;width:30px;text-align:right">'+v+'</div></div>';};
+      barsHtml='<div class="sec-h" style="margin-top:12px">인스타 언급 (최근 샘플)</div><div class="card" style="padding:13px 15px">'+
+        bar('우리 ('+esc(our.username||'살롱')+')',our.brand_count,true)+
+        comps.slice(0,5).map(function(c){return bar(c.username,c.brand_count,false);}).join('')+'</div>';
+    }
+
+    // 해시태그 트렌드 — 델타는 상태색+글리프(▲/▼), 값은 잉크 토큰
+    var tags=(ig.hashtags||[]).filter(function(h){return h.count!=null;}).slice(0,6);
+    var tagHtml='';
+    if(tags.length){
+      tagHtml='<div class="sec-h" style="margin-top:12px">해시태그 트렌드</div><div class="card">'+
+        tags.map(function(h){
+          var d=(h.delta==null)?'<span style="font-size:11px;color:var(--muted)">—</span>':
+            (h.delta>0?'<span style="font-size:11.5px;font-weight:800;color:var(--sage)">▲ '+h.delta+'</span>':
+             h.delta<0?'<span style="font-size:11.5px;font-weight:800;color:var(--rose)">▼ '+Math.abs(h.delta)+'</span>':
+             '<span style="font-size:11px;color:var(--muted)">·</span>');
+          return '<div class="li" style="cursor:default;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+            '<div class="exp-q">#'+esc(h.tag)+'</div><div style="display:flex;gap:12px;align-items:center">'+
+            '<span style="font-size:11.5px;color:var(--muted)">'+h.count+'건</span>'+d+'</div></div>';
+        }).join('')+'</div>';
+    }
+
+    // 인게이지먼트 — 우리 vs 경쟁 중위(한 줄, 상태 톤)
+    var engHtml='';
+    if(ig.engage_index!=null){
+      var good=ig.engage_index>=1;
+      engHtml='<div class="exp-act reveal" style="border-left-color:'+(good?'var(--sage)':'var(--gold)')+';margin-top:9px">'+
+        '<div class="t">'+(good?'✓ 게시물 반응이 경쟁 중위 이상':'게시물 반응이 경쟁 중위의 '+Math.round(ig.engage_index*100)+'%')+'</div>'+
+        '<div class="w">우리 평균 '+(our.engagement!=null?our.engagement:'?')+' · 좋아요+댓글 기준(최근 12개)</div></div>';
+    }
+
+    return '<div class="sec-h" style="margin-top:18px">인스타 발견</div>'+head+sovHtml+barsHtml+tagHtml+engHtml+
+      (ig.note?'<div style="font-size:10.5px;color:var(--muted);text-align:center;margin:10px 0 2px;line-height:1.5">'+esc(ig.note)+'</div>':'');
+  }
+
   function renderExposure(){
     var box=document.getElementById('exposureBody');
     var ex=DATA&&DATA.exposure;
@@ -781,7 +855,9 @@
         rc.map(function(c){return '<div class="li" style="cursor:default;display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="exp-q">'+esc(c.keyword)+'</div>'+mv(c)+'</div>';}).join('')+'</div>';
     }
 
-    box.innerHTML=dcard+head+scope+changesHtml+actHtml+placeHtml+qHtml+
+    var igHtml=renderInstaSection(DATA&&DATA.instagram);   // 인스타 발견(있을 때만)
+
+    box.innerHTML=dcard+head+scope+changesHtml+actHtml+placeHtml+qHtml+igHtml+
       (ex.note?'<div style="font-size:10.5px;color:var(--muted);text-align:center;margin:12px 0 4px;line-height:1.5">'+esc(ex.note)+'</div>':'');
     setTimeout(function(){box.querySelectorAll('.exp-spark .sb').forEach(function(b){b.style.height=b.getAttribute('data-h')+'px';});},60);
     var cb=box.querySelector('#kakaoCopy');

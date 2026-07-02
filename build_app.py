@@ -338,6 +338,11 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
     if exp_path.exists():
         data["exposure"] = _load(str(exp_path))
 
+    # 인스타 발견 지표(insta.py 산출)가 있으면 노출 탭 '인스타' 섹션에 주입.
+    ig_path = Path(client_dir) / "instagram.yaml"
+    if ig_path.exists():
+        data["instagram"] = _load(str(ig_path))
+
     out = Path(dist) / f"{slug}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     data = _redact_pii(data)   # 메모 등 자유입력에 섞인 전화번호 최종 마스킹(PII 안전망)
