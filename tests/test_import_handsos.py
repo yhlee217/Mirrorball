@@ -174,6 +174,84 @@ def test_write_out_preserves_manual_on_resync(tmp_path, monkeypatch):
     assert d2["loyalty_visits"] == 2                                    # 이력은 갱신
 
 
+# ── ① 아이덴티티·병합 정비 ──
+def test_custno_all_zero_preserved():
+    assert ih._custno("0005120") == "5120"
+    assert ih._custno("0") == "0" and ih._custno("000") == "000"   # 전부-0 은 빈값化 금지
+    assert ih._custno("") == "" and ih._custno(None) == ""
+
+
+def test_merge_replaces_group_on_memo_or_price_edit():
+    # 핸드SOS에서 메모/금액을 수정해 재수확 → 신·구 2건이 아니라 최신 1건
+    old = [{"date": "2026-06-01", "name": "김", "custno": "5", "service": "컷",
+            "price": 20000, "memo": "옛 메모"}]
+    new = [{"date": "2026-06-01", "name": "김", "custno": "5", "service": "컷",
+            "price": 25000, "memo": "고친 메모"}]
+    merged = ih.merge_records(old, new)
+    assert len(merged) == 1 and merged[0]["price"] == 25000 and merged[0]["memo"] == "고친 메모"
+
+
+def test_merge_keeps_other_dates_and_same_day_pair():
+    # 새 스크랩 범위 밖 날짜는 유지 + 같은 방문에 같은 시술 2건(금액 다름)은 붕괴 안 함
+    old = [{"date": "2025-08-01", "name": "김", "custno": "5", "service": "펌", "price": 90000}]
+    new = [{"date": "2026-06-01", "name": "김", "custno": "5", "service": "클리닉", "price": 40000},
+           {"date": "2026-06-01", "name": "김", "custno": "5", "service": "클리닉", "price": 30000}]
+    merged = ih.merge_records(old, new)
+    assert len(merged) == 3
+    assert sum(1 for r in merged if r["service"] == "클리닉") == 2
+
+
+def test_reconcile_merges_split_cards():
+    # 같은 손님: 6월 방문엔 custno 없음, 1월 방문엔 있음 → 카드 1장으로
+    rows = [
+        {"date": "2026-01-02", "name": "조희진", "phone": "010-9", "custno": "2767",
+         "service": "뿌리염색", "price": 30000},
+        {"date": "2026-06-26", "name": "조희진", "phone": "010-9",
+         "service": "모발클리닉", "price": 80000},          # custno 누락 방문
+    ]
+    merges = []
+    custs = ih.build_customers(rows, merges=merges)
+    assert len(custs) == 1 and custs[0]["custno"] == "2767"
+    assert custs[0]["loyalty_visits"] == 2                   # 방문·매출 안 갈라짐
+    assert merges and merges[0]["custno"] == "2767"
+
+
+def test_reconcile_skips_ambiguous_same_name():
+    # 동명이인(전화 다름) → 병합 안 함
+    rows = [
+        {"date": "2026-01-02", "name": "김민지", "phone": "010-1", "custno": "1", "service": "컷"},
+        {"date": "2026-02-02", "name": "김민지", "phone": "010-2", "service": "펌"},   # 다른 사람
+    ]
+    custs = ih.build_customers(rows)
+    assert len(custs) == 2
+
+
+def test_write_out_reconcile_moves_manual_and_removes_orphan(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # 1차: custno 없는 방문만 → np 카드 생성, 수동 메모 기입
+    ih.write_out("demo", [{"date": "2026-06-01", "name": "조희진", "phone": "010-9",
+                           "service": "컷", "price": 20000}])
+    import yaml as _y
+    np_p = tmp_path / "clients" / "demo" / "customers" / f"{ih._cid('조희진', '010-9')}.yaml"
+    d = _y.safe_load(np_p.read_text(encoding="utf-8")); d["memo"] = "수다 좋아함"
+    np_p.write_text(_y.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    # 2차: custno 있는 방문 도착 → 화해 병합
+    ih.write_out("demo", [{"date": "2026-06-20", "name": "조희진", "phone": "010-9",
+                           "custno": "2767", "service": "펌", "price": 90000}])
+    assert not np_p.exists()                                   # 고아 카드 정리
+    c = _y.safe_load((tmp_path / "clients" / "demo" / "customers" / "c2767.yaml")
+                     .read_text(encoding="utf-8"))
+    assert c["loyalty_visits"] == 2 and c["memo"] == "수다 좋아함"   # 이력 합침 + 수동 승계
+
+
+def test_anon_identical_rows_survive_import():
+    # 같은 날 같은 시술·금액의 익명 2건 — 붕괴하면 매출 과소집계
+    rows = [{"date": "2026-06-01", "name": "손님", "service": "컷", "price": 20000},
+            {"date": "2026-06-01", "name": "손님", "service": "컷", "price": 20000}]
+    merged = ih.merge_records([], rows)
+    assert len(merged) == 2
+
+
 def test_build_app_redacts_phone_in_notes(tmp_path):
     import build_app
     cdir = tmp_path / "clients" / "demo"

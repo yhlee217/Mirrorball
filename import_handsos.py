@@ -152,7 +152,7 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
         ph = cell("phone")
         if ph:
             rec["phone"] = ph
-        cn = re.sub(r"\D", "", cell("custno")).lstrip("0")
+        cn = _custno(cell("custno"))
         if cn:
             rec["custno"] = cn
         me = _clean_memo(cell("memo"))      # 보일러플레이트·메뉴/가격 제거
@@ -171,17 +171,51 @@ def _cid(name: str, phone: str) -> str:
     return (base or "c") + (tail or "")
 
 
-def build_customers(rows: list[dict]) -> list[dict]:
+def _custno(v) -> str:
+    """고객번호 정규화 — 앞자리 0 제거하되 '0'/'000' 같은 전부-0 은 보존(빈값化 방지)."""
+    d = re.sub(r"\D", "", str(v or ""))
+    return d.lstrip("0") or d
+
+
+def _reconcile(groups: dict[str, list[dict]], log: list | None = None) -> None:
+    """custno 없는 방문 묶음(np:)이 custno 있는 카드(no:)와 이름+전화 모두 일치하면 병합.
+
+    같은 손님이 어떤 방문엔 고객번호가 있고 어떤 방문엔 없을 때 카드가 2장으로
+    갈라지는 것(방문·매출·리핏 반쪽 왜곡)을 막는다. 이름+전화가 정확히 한 카드와
+    일치할 때만 병합(동명이인 안전). in-place 수정, log 에 병합 내역 기록."""
+    by_np: dict[tuple, set] = {}
+    for key, recs in groups.items():
+        if not key.startswith("no:"):
+            continue
+        for r in recs:
+            ph = re.sub(r"\D", "", r.get("phone", "") or "")
+            if r.get("name") and ph:
+                by_np.setdefault((r["name"], ph), set()).add(key)
+    for key in [k for k in list(groups) if k.startswith("np:")]:
+        name, ph = key[3:].split("|", 1)
+        if not ph:
+            continue                          # 전화 없으면 병합 안 함(동명이인 위험)
+        targets = by_np.get((name, ph))
+        if targets and len(targets) == 1:
+            target = next(iter(targets))
+            groups[target].extend(groups.pop(key))
+            if log is not None:
+                log.append({"name": name, "phone": ph,
+                            "custno": target[3:], "np_id": _cid(name, ph)})
+
+
+def build_customers(rows: list[dict], merges: list | None = None) -> list[dict]:
     """거래 행 → 고객 마스터. 고객번호 우선으로 묶고(없으면 이름+전화), 방문=distinct 날짜.
-    시술은 날짜별로 합치고, 메모는 그 방문의 notes 로."""
+    시술은 날짜별로 합치고, 메모는 그 방문의 notes 로. merges 에 화해 병합 내역 기록."""
     groups: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
         if is_anon(r.get("name", "")):       # 불특정 다수: 고객 카드 미생성(장부엔 보존)
             continue
-        cn = (r.get("custno") or "").strip()
+        cn = _custno(r.get("custno"))
         ph = re.sub(r"\D", "", r.get("phone", ""))
         key = ("no:" + cn) if cn else ("np:" + r["name"] + "|" + ph)
         groups[key].append(r)
+    _reconcile(groups, log=merges)           # 카드 분열 방지(custno 유/무 방문 병합)
 
     customers = []
     for recs in groups.values():
@@ -220,21 +254,28 @@ def build_customers(rows: list[dict]) -> list[dict]:
     return customers
 
 
-def _rec_key(r: dict) -> tuple:
-    """거래 중복 판정 키(여러 번/여러 기간 동기화해도 안 겹치게)."""
-    cn = re.sub(r"\D", "", str(r.get("custno") or "")).lstrip("0")
-    return (r.get("date", ""), cn or (r.get("name") or ""),
-            r.get("service") or "", r.get("price"), r.get("memo") or "")
+def _visit_key(r: dict) -> tuple:
+    """방문 정체성 키: (날짜, 고객, 시술). 금액·메모는 키에 안 넣는다 —
+    핸드SOS 에서 나중에 메모/금액을 수정해도 '같은 방문의 갱신'으로 본다(이중집계 방지)."""
+    return (r.get("date", ""), _custno(r.get("custno")) or (r.get("name") or ""),
+            r.get("service") or "")
 
 
 def merge_records(existing: list[dict], new: list[dict]) -> list[dict]:
-    """기존 + 새 거래를 키로 중복 제거해 누적(400일 제한으로 나눠 받아도 합쳐짐)."""
-    seen, out = set(), []
-    for r in (existing or []) + (new or []):
-        k = _rec_key(r)
-        if k not in seen:
-            seen.add(k)
-            out.append(r)
+    """누적 병합 — 새 스크랩이 같은 (날짜·고객·시술) 그룹을 다시 가져오면 **그룹째 교체**.
+
+    · 400일 제한으로 기간을 나눠 받아도 누적됨(새 스크랩에 없는 날짜의 기존 그룹은 유지).
+    · 메모/금액 수정 → 신·구 2건이 아니라 최신 1건(최신 스크랩이 그 방문의 진실).
+    · 같은 방문에 같은 시술 2건(금액 다름 등)도 그룹 안에 그대로 보존(합쳐 붕괴 안 함).
+    """
+    groups: dict[tuple, list[dict]] = {}
+    for r in existing or []:
+        groups.setdefault(_visit_key(r), []).append(r)
+    fresh: dict[tuple, list[dict]] = {}
+    for r in new or []:
+        fresh.setdefault(_visit_key(r), []).append(r)
+    groups.update(fresh)                     # 새 스크랩의 그룹이 그대로 진실
+    out = [r for recs in groups.values() for r in recs]
     out.sort(key=lambda r: (r.get("date") or "", r.get("name") or ""))
     return out
 
@@ -255,7 +296,10 @@ def _preserve_manual(old: dict, new: dict) -> dict:
 
 
 def write_out(slug: str, rows: list[dict], customers: list[dict] | None = None) -> tuple[int, int]:
-    """거래 원장 누적 병합 → 병합 전체에서 고객 재구성(수동 필드 보존)."""
+    """거래 원장 누적 병합 → 병합 전체에서 고객 재구성(수동 필드 보존).
+
+    화해 병합(np:→no:)이 일어나면, 과거에 갈라져 있던 np 카드 파일의 수동 필드를
+    합쳐진 카드로 옮기고 고아 파일은 제거(카드 분열 흔적 정리)."""
     base = Path("clients") / slug
     (base / "customers").mkdir(parents=True, exist_ok=True)
 
@@ -264,12 +308,25 @@ def write_out(slug: str, rows: list[dict], customers: list[dict] | None = None) 
     merged = merge_records(existing, rows)
     rec_path.write_text(yaml.safe_dump(merged, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
+    merges: list[dict] = []
+    built = build_customers(merged, merges=merges)   # 병합 전체에서 이력 재구성
+    np_manual = {}                                   # 화해된 옛 np 카드의 수동 필드 회수
+    for m in merges:
+        np_path = base / "customers" / f"{m['np_id']}.yaml"
+        if np_path.exists():
+            old_np = yaml.safe_load(np_path.read_text(encoding="utf-8")) or {}
+            np_manual[f"c{m['custno']}"] = old_np
+            np_path.unlink()                         # 고아(분열) 카드 정리
+            print(f"  · 카드 병합: {m['name']} — 고객번호 {m['custno']} 카드로 합침")
+
     n_new = 0
-    for c in build_customers(merged):            # 병합 전체에서 이력 재구성
+    for c in built:
         p = base / "customers" / f"{c['id']}.yaml"
+        if c["id"] in np_manual:                     # 옛 np 카드의 메모·관계 먼저 승계
+            c = _preserve_manual(np_manual[c["id"]], c)
         if p.exists():
             old = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-            c = _preserve_manual(old, c)         # 메모·관계 등 수동 입력 유지
+            c = _preserve_manual(old, c)             # 메모·관계 등 수동 입력 유지
         else:
             n_new += 1
         p.write_text(yaml.safe_dump(c, allow_unicode=True, sort_keys=False), encoding="utf-8")
