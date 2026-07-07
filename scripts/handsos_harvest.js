@@ -147,23 +147,23 @@ globalThis.__handsosHarvest = async function (opts) {
     return false;
   };
 
-  // 멈춤 진단용: 진짜 페이저(페이지 링크가 가장 많이 모인 컨테이너)를 잘라 돌려준다.
+  // 멈춤 진단용: 페이지 컨트롤을 '하나씩' 나열(컨테이너 추측 없이). onclick/href 에 페이지함수가
+  // 있거나, 텍스트/alt 가 화살표(›»다음)인 요소만. → 실제 <a onclick="gotoP(38)">38</a> 와 '다음' 컨트롤이 보인다.
   const pagerDump = (doc) => {
     try {
-      const links = [...doc.querySelectorAll('[onclick]')].filter((e) =>
-        /gotoP|goPage|paging|page_move|fnPage|goBlock|movePage/.test(e.getAttribute('onclick') || ''));
-      if (!links.length) {   // onclick 없으면 페이지번호 링크(a) 텍스트 기준
-        const nums = [...doc.querySelectorAll('a,td,span,li,button')].filter((e) => /^\d+$/.test(norm(e.textContent)));
-        if (!nums.length) return '(페이지 컨트롤 못 찾음)';
-        let a = nums[0]; for (let i = 0; i < 5 && a.parentElement; i++) a = a.parentElement;
-        return norm(a.outerHTML).slice(0, 1800);
-      }
-      const counts = new Map();   // 페이지 링크를 가장 많이 품은 조상 = 페이저 컨테이너
-      links.forEach((e) => { let a = e; for (let i = 0; i < 6 && a; i++) { counts.set(a, (counts.get(a) || 0) + 1); a = a.parentElement; } });
-      let best = null, bn = 0;
-      counts.forEach((n, el) => { if (n >= bn) { bn = n; best = el; } });
-      return best ? norm(best.outerHTML).slice(0, 1800) : '';
-    } catch (e) { return ''; }
+      const out = [];
+      [...doc.querySelectorAll('[onclick],[href]')].forEach((e) => {
+        const oc = ((e.getAttribute('onclick') || '') + ' ' + (e.getAttribute('href') || ''));
+        if (/gotoP|goPage|goBlock|movePage|nextBlock|paging|fnPage/i.test(oc)) out.push(norm(e.outerHTML).slice(0, 160));
+      });
+      [...doc.querySelectorAll('a,button,span,td,img,area,input,li')].forEach((e) => {
+        const t = norm(e.textContent);
+        const a = norm((e.getAttribute('alt') || e.getAttribute('title') || e.value || ''));
+        if (NEXT_RE.test(t) || NEXT_RE.test(a) || (a && /(다음|next)/i.test(a))) out.push('[arrow] ' + norm(e.outerHTML).slice(0, 160));
+      });
+      const uniq = [...new Set(out)];
+      return uniq.length ? uniq.slice(0, 60).join('\n') : '(gotoP/화살표 컨트롤 못 찾음 — 이미지/플러그인 페이저일 수 있음)';
+    } catch (e) { return String(e); }
   };
 
   let stallRetries = 0;

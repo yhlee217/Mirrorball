@@ -359,6 +359,8 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                     return r                                 # 전체 페이지 다 받음 → 확정
             if not (best.get("rows")):                       # 실패면 화면·DOM 저장(자가치유용)
                 best["fail_dir"] = _capture_failure(ctx, store["slug"], best.get("error"))
+            elif best.get("error"):                          # 부분수집(멈춤)이면 프레임 DOM 백업 저장(페이저 정밀진단)
+                best["fail_dir"] = _capture_failure(ctx, store["slug"], "partial:" + str(best.get("error")))
             return best
         except Exception as exc:                             # 예외에도 DOM 캡처(치유 입력 확보)
             fail_dir = None
