@@ -386,6 +386,9 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     sys.path.insert(0, str(ROOT))
     import import_handsos as ih
     parsed = ih.parse_rows(str(csv_path), staff=staff)
+    mm = ih.prev_visit_mismatches(parsed)      # 핸드SOS '이전방문' 크로스체크(누락·분열 감지)
+    if mm:
+        print(f"  ⚠ 이전방문 불일치 {len(mm)}건 — 수집 누락/카드 분열 신호")
     nr, nc = ih.write_out(slug, parsed)        # records 누적 병합 + 고객 재구성(수동필드 보존)
 
     # 최초 동기화면 config.yaml 부트스트랩(디자이너 이름·살롱·기준일). 이후 사람이 보강 가능.

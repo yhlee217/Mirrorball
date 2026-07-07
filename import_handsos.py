@@ -35,6 +35,8 @@ COLS = {
     "staff": ["담당", "담당자"],
     "custno": ["고객번호", "회원번호"],
     "memo": ["메모", "비고", "특이사항"],
+    "prev": ["이전방문", "전방문"],            # 핸드SOS 자체 계산 — 우리 병합 검증용
+    "birthday": ["생일", "생년월일"],           # 내보내기에 있으면 생일 케어 자동 점화
 }
 
 
@@ -110,6 +112,12 @@ def _date(v: str) -> str:
     return f"{y:04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
 
 
+def _time(v: str) -> str:
+    """'26-06-26 19:41' → '19:41' (없으면 ''). 피크시간 통계(stats.busiest_hour)에 쓰임."""
+    m = re.search(r"\b(\d{1,2}):(\d{2})\b", v or "")
+    return f"{int(m.group(1)):02d}:{m.group(2)}" if m else ""
+
+
 def _price(v: str) -> int | None:
     d = re.sub(r"[^\d]", "", v or "")
     return int(d) if d else None
@@ -149,12 +157,24 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
         if not name or not d:
             continue
         rec = {"date": d, "name": name, "service": _service(cell("service"))}
+        t = _time(cell("date"))             # 시각 → 피크시간 통계 부활
+        if t:
+            rec["time"] = t
         ph = cell("phone")
         if ph:
             rec["phone"] = ph
         cn = _custno(cell("custno"))
         if cn:
             rec["custno"] = cn
+        st = cell("staff")                  # 담당 보존(멀티 디자이너 확장·성과 분리 대비)
+        if st:
+            rec["staff"] = st
+        pv = _date(cell("prev"))            # 핸드SOS의 '이전방문' — 병합 검증용 크로스체크
+        if pv:
+            rec["prev_visit"] = pv
+        bd = cell("birthday")               # 생일 칼럼이 있으면 → 생일 케어 자동 점화
+        if bd:
+            rec["birthday"] = bd
         me = _clean_memo(cell("memo"))      # 보일러플레이트·메뉴/가격 제거
         if me:
             rec["memo"] = me
@@ -162,6 +182,30 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
         if p is not None:
             rec["price"] = p
         out.append(rec)
+    return out
+
+
+def prev_visit_mismatches(rows: list[dict]) -> list[dict]:
+    """핸드SOS '이전방문' vs 우리 원장의 직전 방문 — 어긋나면 병합/누락 신호(①의 감지기).
+
+    같은 고객의 방문 날짜를 정렬해, 각 레코드의 prev_visit 이 우리가 아는 직전
+    방문과 다르면 리포트. '우리 원장에 그 방문이 없다' = 수집 누락 or 카드 분열."""
+    by_cust: dict[str, set] = defaultdict(set)
+    for r in rows:
+        key = _custno(r.get("custno")) or (r.get("name") or "")
+        if key and r.get("date"):
+            by_cust[key].add(r["date"])
+    out = []
+    for r in rows:
+        pv = r.get("prev_visit")
+        if not pv:
+            continue
+        key = _custno(r.get("custno")) or (r.get("name") or "")
+        before = sorted(d for d in by_cust.get(key, ()) if d < r["date"])
+        ours = before[-1] if before else None
+        if ours != pv:
+            out.append({"name": r.get("name"), "date": r.get("date"),
+                        "handsos": pv, "ours": ours})
     return out
 
 
@@ -222,6 +266,7 @@ def build_customers(rows: list[dict], merges: list | None = None) -> list[dict]:
         name = recs[0]["name"]
         phone = next((r.get("phone") for r in recs if r.get("phone")), "")
         custno = next((r.get("custno") for r in recs if r.get("custno")), "")
+        birthday = next((r.get("birthday") for r in recs if r.get("birthday")), "")
         svc: dict[str, list[str]] = defaultdict(list)
         notes: dict[str, list[str]] = defaultdict(list)
         for r in recs:
@@ -246,6 +291,8 @@ def build_customers(rows: list[dict], merges: list | None = None) -> list[dict]:
             cust["contact"] = phone
         if custno:
             cust["custno"] = custno
+        if birthday:                          # 생일 케어(bday 알림) 자동 점화 — 수동 입력이 있으면 그쪽 우선
+            cust["birthday"] = birthday
         if dates:
             cust["first_visit"] = dates[0]
         if history:
@@ -349,6 +396,10 @@ def main() -> int:
     customers = build_customers(rows)
     print(f"거래 {len(rows)}건 → 고객 {len(customers)}명"
           + (f" (담당={args.staff})" if args.staff else ""))
+    mm = prev_visit_mismatches(rows)
+    if mm:                                   # 핸드SOS '이전방문'과 어긋남 = 누락/분열 신호
+        print(f"  ⚠ 이전방문 불일치 {len(mm)}건 (수집 누락 또는 카드 분열 신호) — 예: "
+              + ", ".join(f"{m['name']} {m['date']}" for m in mm[:3]))
     for c in sorted(customers, key=lambda x: -x["loyalty_visits"])[:5]:
         print(f"  · {c['name']} (방문 {c['loyalty_visits']}회, 최근 {c['history'][0]['service']})")
     if args.dry:

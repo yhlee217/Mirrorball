@@ -252,6 +252,45 @@ def test_anon_identical_rows_survive_import():
     assert len(merged) == 2
 
 
+# ── ② 버려지던 필드 살리기 ──
+def test_time_staff_prev_captured(tmp_path):
+    p = tmp_path / "h.csv"
+    _w(p, [H2,
+           ["26-06-26 19:41", "배상웅", "010-1", "100", "2026-05-29", "남자컷", "하예원", "28000", ""]])
+    r = ih.parse_rows(str(p))[0]
+    assert r["time"] == "19:41"                 # 피크시간 통계 부활
+    assert r["staff"] == "하예원"                # 담당 보존
+    assert r["prev_visit"] == "2026-05-29"      # 이전방문 크로스체크용
+
+
+def test_stats_busiest_hour_alive_with_time():
+    import stats
+    recs = [{"date": "2026-06-0%d" % d, "time": "19:00", "name": "김", "phone": "1",
+             "service": "컷", "price": 10000} for d in range(1, 6)]
+    s = stats.compute(recs, today=__import__("datetime").date(2026, 6, 26))
+    assert s.get("busiest_hour") is not None    # time 이 채워지면 피크시간이 산다
+
+
+def test_birthday_column_flows_to_customer(tmp_path):
+    p = tmp_path / "h.csv"
+    _w(p, [H2[:-1] + ["생일", "메모"],
+           ["2026-06-26", "조희진", "010-9", "2767", "", "컷", "하예원", "30000", "03-15", ""]])
+    custs = ih.build_customers(ih.parse_rows(str(p)))
+    assert custs[0]["birthday"] == "03-15"      # 생일 케어 자동 점화
+
+
+def test_prev_visit_mismatch_detector():
+    rows = [
+        {"date": "2026-05-29", "name": "배상웅", "custno": "100", "service": "펌"},
+        {"date": "2026-06-26", "name": "배상웅", "custno": "100", "service": "컷",
+         "prev_visit": "2026-05-29"},                      # 일치 — 문제 없음
+        {"date": "2026-06-26", "name": "김주환", "custno": "200", "service": "컷",
+         "prev_visit": "2026-04-01"},                      # 우리 원장에 4/1 이 없음 → 신호
+    ]
+    mm = ih.prev_visit_mismatches(rows)
+    assert len(mm) == 1 and mm[0]["name"] == "김주환" and mm[0]["ours"] is None
+
+
 def test_build_app_redacts_phone_in_notes(tmp_path):
     import build_app
     cdir = tmp_path / "clients" / "demo"
