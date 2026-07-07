@@ -101,3 +101,12 @@ def test_write_status_keeps_last_success_on_failure(tmp_path, monkeypatch):
     hs.write_status("demo", {"ok": False, "error": "no-table"})  # 실패해도 직전 성공시각 유지
     st = _j.loads((tmp_path / "clients" / "demo" / "_status.json").read_text(encoding="utf-8"))
     assert st["ok"] is False and st["last_success"] == prev
+
+
+# ── ③ 부분성공 정직화 ──
+def test_partial_of_reconciles_total():
+    assert hs.partial_of({"rows": [1] * 80, "total": 100}) == "수집 80/100행"   # 조용한 미달 감지
+    assert hs.partial_of({"rows": [1] * 100, "total": 100}) is None            # 완전 수집
+    assert hs.partial_of({"rows": [1] * 5, "total": 0}) is None                # 총계 미파싱 → 판정 보류
+    assert hs.partial_of({"rows": [1] * 5, "total": 100,
+                          "error": "pagination-stalled"}) == "pagination-stalled"

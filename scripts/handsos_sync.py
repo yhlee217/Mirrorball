@@ -102,6 +102,18 @@ def apply_overrides(store: dict) -> dict:
     return store
 
 
+def partial_of(res: dict) -> str | None:
+    """수확 결과의 부분수집 판정 — JS 오류가 없어도 '총 N개' 대비 미달이면 부분(정직성).
+
+    페이지네이션이 조용히 덜 돈 경우를 잡는다. None 이면 완전 수집."""
+    if res.get("error"):
+        return str(res["error"])
+    got, expected = len(res.get("rows") or []), res.get("total") or 0
+    if expected and got < expected:
+        return f"수집 {got}/{expected}행"
+    return None
+
+
 # ── 상태/하트비트: 매 실행 기록 → 오래 미성공이면 점검 알림(조용한 고장 방지) ──
 def write_status(slug: str, result: dict) -> dict:
     p = ROOT / "clients" / slug / "_status.json"
@@ -177,9 +189,6 @@ def _capture_failure(ctx, slug: str, err) -> str:
 def _fill(page, sel: str, value: str) -> None:
     if sel and value is not None:
         page.fill(sel, str(value))
-def _fill(page, sel: str, value: str) -> None:
-    if sel and value is not None:
-        page.fill(sel, str(value))
 
 
 # 핸드SOS 로그인 셀렉터는 모든 매장 공통 → 코드 기본값. 사용자는 설정에서 건드릴 필요 없음.
@@ -230,6 +239,15 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                 page.wait_for_selector(login["success_wait"])
             else:
                 page.wait_for_load_state("networkidle")
+            # 로그인 성공 단언 — 비번 필드가 여전히 보이면 자격증명 오류.
+            # (없으면 비번 오류도 '0행 실패'로 보여 원인 구분이 안 됨)
+            try:
+                login_failed = page.is_visible(fields.get("password") or "#userPWD")
+            except Exception:
+                login_failed = False
+            if login_failed:
+                return {"rows": [], "total": 0, "error": "login-failed",
+                        "fail_dir": _capture_failure(ctx, store["slug"], "login-failed: 비밀번호/아이디 확인")}
 
             # 2) 매출상세목록을 mainFrame(자식 프레임) 안에 로드 = 메뉴 클릭과 동일 구조.
             #    top-level 로 직접 열면 페이지넘김(gotoP)이 페이지 전체를 리로드해 수확이 끊김 →
@@ -326,6 +344,15 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
             if not (best.get("rows")):                       # 실패면 화면·DOM 저장(자가치유용)
                 best["fail_dir"] = _capture_failure(ctx, store["slug"], best.get("error"))
             return best
+        except Exception as exc:                             # 예외에도 DOM 캡처(치유 입력 확보)
+            fail_dir = None
+            try:
+                fail_dir = _capture_failure(ctx, store["slug"], f"exception: {exc}")
+            except Exception:
+                pass
+            return {"rows": [], "total": 0,
+                    "error": "exception: " + str(exc).splitlines()[0][:160],
+                    "fail_dir": fail_dir}
         finally:
             if not debug:
                 ctx.close()
@@ -375,7 +402,8 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
 
     return {"slug": slug, "ok": True, "rows": len(rows), "txns": nr,
             "new_customers": nc, "csv": str(csv_path), "total": res.get("total"),
-            "built": built and built.get("out"), "partial": res.get("error")}
+            "built": built and built.get("out"),
+            "partial": partial_of(res)}
 
 
 def main() -> int:
@@ -421,11 +449,16 @@ def main() -> int:
             heal = f" → 자가치유: python scripts/handsos_heal.py --slug {r['slug']}" if r.get("fail_dir") else ""
             print(f"  ✗ [{r['stage']}] {r['error']}{heal}")
 
+    partials = [r for r in results if r.get("ok") and r.get("partial")]
     if failed:
         notify(cfg, "핸드SOS 동기화 실패: " + ", ".join(
             f"{f['slug']}({f['error']})" for f in failed)
             + " — 자가치유: python scripts/handsos_heal.py --slug <slug>")
-    print(f"\n완료: 성공 {len(results)-len(failed)} / 실패 {len(failed)}")
+    if partials:                                   # 부분수집도 조용히 넘기지 않는다(정직성)
+        notify(cfg, "핸드SOS 부분수집: " + ", ".join(
+            f"{p['slug']}({p['partial']})" for p in partials) + " — 다음 실행에서 재수확 권장")
+    print(f"\n완료: 성공 {len(results)-len(failed)} / 실패 {len(failed)}"
+          + (f" / 부분수집 {len(partials)}" if partials else ""))
     return 1 if failed else 0
 
 
