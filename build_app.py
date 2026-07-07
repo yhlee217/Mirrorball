@@ -27,6 +27,7 @@ from pathlib import Path
 import yaml
 
 import copydata
+import crosssell as _crosssell
 import drafts
 import relations
 
@@ -177,13 +178,16 @@ def spend_by_custno(records: list[dict]) -> dict[str, int]:
     return spend
 
 
-# 누적결제 기준 등급(검증된 경계: VIP 50만, 단골 25만, 일반 10만)
+# 누적결제 기준 등급 경계 — **단일 소스**. dist JSON 의 thresholds 로 내보내 앱 JS 도 이 값을 쓴다.
+TIER_THRESHOLDS = {"vip": 500000, "regular": 250000, "normal": 100000}
+
+
 def spend_tier(won: int) -> str:
-    if won >= 500000:
+    if won >= TIER_THRESHOLDS["vip"]:
         return "vip"
-    if won >= 250000:
+    if won >= TIER_THRESHOLDS["regular"]:
         return "regular"
-    if won >= 100000:
+    if won >= TIER_THRESHOLDS["normal"]:
         return "normal"
     return "light"
 
@@ -210,7 +214,8 @@ def build_customer(cust: dict, today: date | None = None) -> dict:
         "revisit_state": ri["state"],     # overdue·due·soon·new·ok
         "total_won": won,                 # 누적결제(records 합산) — LTV
         "tier": spend_tier(won),          # vip·regular·normal·light
-        # 교차판매(crosssell)는 앱 JS(derive)가 시드 이력에서 런타임 산출 — dist 카드엔 싣지 않음(중복 회피)
+        # 교차판매 — 파이썬(crosssell.py, 테스트됨)이 단일 소스. 앱 JS 는 이 값을 렌더만.
+        "crosssell": _crosssell.crosssell_for(cust),
         "booking": _clean_booking(cust.get("booking")),
         "history": [
             {"date": str(_parse_date(h.get("date"))), "service": h.get("service"),
@@ -342,6 +347,9 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
     ig_path = Path(client_dir) / "instagram.yaml"
     if ig_path.exists():
         data["instagram"] = _load(str(ig_path))
+
+    # 규칙 상수 단일화 — 앱 JS 가 이 값을 읽어 파이썬과 드리프트 없게(⑤)
+    data["thresholds"] = {"tiers": TIER_THRESHOLDS}
 
     out = Path(dist) / f"{slug}.json"
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -923,7 +923,7 @@
   var SLUG = new URLSearchParams(location.search).get('d') ||
              (typeof PREVIEW_DATA!=='undefined' && PREVIEW_DATA.slug) || 'my';
   var LS_KEY = 'salon_crm_' + SLUG;
-  var META = {today: null, designer:'', salon:'', exposure:null, stats:null};
+  var META = {today: null, designer:'', salon:'', exposure:null, stats:null, instagram:null, thresholds:null};
   var CUSTS = [];
 
   function lsLoad(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ return null; } }
@@ -941,15 +941,18 @@
                      sharp:{overdue:1.3,due:0.8,newDays:90,label:'민감'} };
   var sensKey=(function(){try{return localStorage.getItem('crm_sens')||'normal';}catch(e){return 'normal';}})();
   function SENS(){ return SENS_PRESETS[sensKey]||SENS_PRESETS.normal; }
-  // 누적결제 등급(검증된 경계: VIP 50만·단골 25만·일반 10만)
-  function tierOf(c){ var w=+c.total_won||0; return w>=500000?'vip':(w>=250000?'regular':(w>=100000?'normal':'light')); }
+  // 누적결제 등급 — 경계는 빌드(build_app)가 주입한 DATA.thresholds 단일 소스(파이썬과 드리프트 방지)
+  function tierOf(c){ var t=(DATA&&DATA.thresholds&&DATA.thresholds.tiers)||{vip:500000,regular:250000,normal:100000};
+    var w=+c.total_won||0; return w>=t.vip?'vip':(w>=t.regular?'regular':(w>=t.normal?'normal':'light')); }
   function wonShort(w){ w=+w||0; if(w>=10000){ var m=w/10000; return (m>=100?Math.round(m):(Math.round(m*10)/10))+'만'; } return w?w.toLocaleString():'0'; }
   // 시술 카테고리(교차판매·분석용)
   function catOf(s){ s=s||''; if(s.indexOf('컷')>=0)return '컷';
     if(/펌|아이롱|셋팅|매직/.test(s))return '펌'; if(/염색|이노아|새치|탈색/.test(s))return '염색';
     if(/클리닉|트리트|두피/.test(s))return '클리닉'; if(/추가|기장/.test(s))return '옵션'; return '기타'; }
-  // 교차판매: 가장 강한 규칙 1개(우선순위 염색손상 > 컷만 > 펌+클리닉0 > 4회+옵션0)
-  function crosssellFor(c){ var hist=c.history||[]; var v=c.loyalty_visits||hist.length; if(v<2) return null;
+  // 교차판매 — 단일 소스는 파이썬(crosssell.py, 테스트됨). 카드에 값이 실려오면 그대로 사용,
+  // 없는 옛 JSON 만 아래 폴백 계산(파이썬과 동일 규칙: 염색손상 > 컷만 > 펌+클리닉0 > 4회+옵션0).
+  function crosssellFor(c){ if('crosssell' in c) return c.crosssell||null;
+    var hist=c.history||[]; var v=c.loyalty_visits||hist.length; if(v<2) return null;
     var cnt={컷:0,펌:0,염색:0,클리닉:0,옵션:0,기타:0}, colorDays={};
     hist.forEach(function(h){ (String(h.service||'').split(' · ')).forEach(function(s){ var k=catOf(s); if(cnt[k]!=null)cnt[k]++; if(k==='염색')colorDays[h.date]=1; }); });
     var nm=c.name||'고객';
@@ -1014,8 +1017,11 @@
     var ord={bday:0,atrisk:1,revisit:2}; care.sort(function(a,b){return (ord[a.kind]==null?9:ord[a.kind])-(ord[b.kind]==null?9:ord[b.kind]);});
     var clients=CUSTS.map(function(c){ var ls=latest(c), info=rel[c.id]||{}, ri=revisitInfo(c,t);
       var card={id:c.id,custno:c.custno||'',name:c.name,memo:c.memo||'',prefer:c.prefer||[],loyalty_visits:c.loyalty_visits||(c.history||[]).length,first_visit:c.first_visit||null,last_visit:ls.date?ymd(ls.date):null,care_cycle_days:ri.cycle,days_since:ri.gap,revisit_state:ri.state,total_won:+c.total_won||0,booking:c.booking||null,history:(c.history||[]).slice().sort(function(a,b){return (a.date<b.date)?1:-1;}),aftercare:ls.service?tipsFor(ls.service):[],relations:info.relations||[],referred_by:info.referred_by||null,referred:info.referred||[]};
-      card.tier=tierOf(card); card.crosssell=crosssellFor(card); return card; });
-    DATA={slug:SLUG,designer:META.designer,salon:META.salon,today:ts,exposure:META.exposure,stats:META.stats,bookings:upcoming(CUSTS,ts),care:care,clients:clients};
+      card.tier=tierOf(card);
+      // 교차판매: 빌드가 실어준 값(파이썬 단일 소스) 우선, 없으면(수기 추가 고객 등) JS 폴백
+      card.crosssell=('crosssell' in c)?(c.crosssell||null):crosssellFor(card); return card; });
+    DATA={slug:SLUG,designer:META.designer,salon:META.salon,today:ts,exposure:META.exposure,stats:META.stats,
+          instagram:META.instagram,thresholds:META.thresholds,bookings:upcoming(CUSTS,ts),care:care,clients:clients};
   }
   function refresh(){ derive(); renderAll(); }
 
@@ -1201,6 +1207,7 @@
     // 미리보기는 데이터 기준일(snapshot)에 고정 → 주기 신호가 결정적으로 재현됨. 운영은 기기 오늘.
     META.today=(preview && base && base.today)? base.today : todayStr();
     if(base){ META.designer=base.designer||''; META.salon=base.salon||''; META.exposure=base.exposure||null; META.stats=base.stats||null;
+      META.instagram=base.instagram||null; META.thresholds=base.thresholds||null;
       if(base.config){ CONFIG = base.config; } }     // 업종 카피 단일 소스 주입
     var local=preview?null:lsLoad();
     CUSTS = (local!=null)? local : ((base&&base.seed)? base.seed.slice() : []);
