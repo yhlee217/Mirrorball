@@ -1071,8 +1071,10 @@
   function attachMic(target, btn, hint){
     if(!btn||!target) return;
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if(!SR){   // 버튼은 보이게 두고, 탭하면 왜 안 되는지 안내(타이핑·태그는 그대로)
-      btn.onclick=function(){ if(hint) hint.textContent='이 환경에선 음성 입력이 안 돼요 — Safari로 열거나 홈 화면에 설치하면 됩니다. (타이핑·빠른 태그는 그대로 사용)'; };
+    if(!SR){   // 앱 음성버튼 미지원(iOS 설치형 PWA 등) → 키보드 받아쓰기로 안내(항상 되는 온디바이스 STT)
+      btn.textContent='🎤 키보드로 받아쓰기';
+      btn.onclick=function(){ target.focus();
+        if(hint) hint.textContent='메모칸을 누른 뒤 키보드의 마이크(🎤)를 눌러 말하면 그대로 글자로 들어가요 — 폰이 직접 변환(무료·오프라인).'; };
       return;
     }
     var rec=new SR(); rec.lang='ko-KR'; rec.interimResults=true; rec.continuous=true;
