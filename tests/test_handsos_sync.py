@@ -110,3 +110,66 @@ def test_partial_of_reconciles_total():
     assert hs.partial_of({"rows": [1] * 5, "total": 0}) is None                # 총계 미파싱 → 판정 보류
     assert hs.partial_of({"rows": [1] * 5, "total": 100,
                           "error": "pagination-stalled"}) == "pagination-stalled"
+
+
+# ── ④ 자가치유 자동 루프 — 검증 통과 시에만 적용 ──
+class _FakeHeal:
+    @staticmethod
+    def pick_relevant_html(d):
+        return "<html>companyID list_tbl</html>"
+
+    @staticmethod
+    def build_prompt(slug, html, err):
+        return "prompt"
+
+    @staticmethod
+    def run_claude(prompt, timeout=180):
+        return "```yaml\nreport:\n  search_sel: 'a.newSearch'\n```"
+
+    @staticmethod
+    def parse_selectors(out):
+        return {"report": {"search_sel": "a.newSearch"}}
+
+
+def _fail_res(tmp_path):
+    d = tmp_path / "fail_x"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "page0.html").write_text("x", encoding="utf-8")
+    return {"rows": [], "error": "no-table", "fail_dir": str(d)}
+
+
+def test_auto_heal_applies_after_verified_reharvest(tmp_path, monkeypatch):
+    monkeypatch.setattr(hs, "_load_heal", lambda: _FakeHeal)
+    monkeypatch.setattr(hs, "ROOT", tmp_path)
+    used = []
+    monkeypatch.setattr(hs, "harvest_store", lambda store, headed=False, debug=False:
+                        (used.append(store.get("report", {}).get("search_sel"))
+                         or {"rows": [{"날짜": "2026-06-26"}], "total": 1, "error": None}))
+    store = {"slug": "demo"}
+    out = hs.auto_heal(store, _fail_res(tmp_path), headed=False, cfg={})
+    assert out and len(out["rows"]) == 1
+    assert used == ["a.newSearch"]                       # 제안 셀렉터로 검증 재수확
+    assert (tmp_path / "secrets" / "demo.selectors.yaml").exists()   # 통과 → 영구 적용
+    assert store["report"]["search_sel"] == "a.newSearch"            # 이후 실행에도 반영
+
+
+def test_auto_heal_discards_unverified_proposal(tmp_path, monkeypatch):
+    monkeypatch.setattr(hs, "_load_heal", lambda: _FakeHeal)
+    monkeypatch.setattr(hs, "ROOT", tmp_path)
+    monkeypatch.setattr(hs, "harvest_store",
+                        lambda store, headed=False, debug=False: {"rows": [], "error": "no-table"})
+    out = hs.auto_heal({"slug": "demo"}, _fail_res(tmp_path), headed=False, cfg={})
+    assert out is None                                    # 검증 실패(0행) → 적용 안 함
+    assert not (tmp_path / "secrets" / "demo.selectors.yaml").exists()
+
+
+def test_selectors_yaml_is_single_source():
+    # sync 와 heal 이 같은 canonical 파일을 읽는지(단일 진실)
+    sel = hs.load_selectors()
+    assert sel["login"]["fields"]["company_code"] == "#companyID"
+    assert sel["report"]["result_table"] == "#list_tbl"
+    spec2 = importlib.util.spec_from_file_location("handsos_heal", ROOT / "scripts" / "handsos_heal.py")
+    heal = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(heal)
+    assert heal.CURRENT["report"]["search_sel"] == sel["report"]["search_sel"]
+    assert "list_tbl" in heal.ANCHORS

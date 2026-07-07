@@ -25,17 +25,19 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# 현재(기본) 셀렉터 — Claude 에게 "이게 안 먹는다, 새 값 찾아달라"고 보여줄 기준
-CURRENT = {
-    "login": {"fields": {"company_code": "#companyID", "username": "#userID", "password": "#userPWD"},
-              "submit": "#sendLogin"},
-    "report": {"url": "https://www1.handsos.com/work/detail/saleList.asp",
-               "date_from_sel": "#strDateS", "date_to_sel": "#strDateE",
-               "search_sel": "a.icogSearch", "search_js": "DBProc()",
-               "result_table": "#list_tbl"},
-}
+# 현재(기본) 셀렉터 — 단일 진실(scripts/handsos_selectors.yaml)에서 읽는다. sync 와 항상 동일.
+def _load_sel() -> dict:
+    p = ROOT / "scripts" / "handsos_selectors.yaml"
+    try:
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
 
-ANCHORS = ("strDateS", "list_tbl", "고객명", "companyID", "DBProc", "icogSearch")
+
+_SEL = _load_sel()
+CURRENT = {"login": _SEL.get("login") or {}, "report": _SEL.get("report") or {}}
+ANCHORS = tuple(_SEL.get("anchors") or
+                ("strDateS", "list_tbl", "고객명", "companyID", "DBProc", "icogSearch"))
 
 
 def find_latest_fail(slug: str, fail: str | None = None) -> Path | None:

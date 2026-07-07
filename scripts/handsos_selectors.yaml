@@ -1,0 +1,21 @@
+# 핸드SOS 셀렉터의 단일 진실(canonical) — sync(handsos_sync)·치유(handsos_heal)가 모두 여기서 읽는다.
+# UI 가 바뀌면 이 파일 하나만 고치면 된다. 매장별 예외는 secrets/{slug}.selectors.yaml(오버라이드).
+login:
+  url: "https://www.handsos.com/login/login.asp?p=pc"
+  fields:
+    company_code: "#companyID"
+    username: "#userID"
+    password: "#userPWD"
+  submit: "#sendLogin"
+report:
+  url: "https://www1.handsos.com/work/detail/saleList.asp"
+  home_url: "https://www1.handsos.com/work/default.asp"
+  frame_name: "mainFrame"
+  date_from_sel: "#strDateS"
+  date_to_sel: "#strDateE"
+  staff_sel: "#pkStaff"
+  search_sel: "a.icogSearch"
+  search_js: "DBProc()"
+  result_table: "#list_tbl"
+# 치유 프롬프트에서 '관련 HTML 구간'을 찾는 앵커 단어들
+anchors: ["strDateS", "list_tbl", "고객명", "companyID", "DBProc", "icogSearch"]

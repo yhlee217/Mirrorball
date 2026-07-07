@@ -90,8 +90,8 @@ def load_overrides(slug: str) -> dict:
     return {}
 
 
-def apply_overrides(store: dict) -> dict:
-    ov = load_overrides(store.get("slug", ""))
+def merge_selector_overrides(store: dict, ov: dict) -> dict:
+    """셀렉터 오버라이드(login/report)를 store 에 병합 — 파일/자가치유 공용."""
     if ov.get("login"):
         login = {**store.get("login", {}), **{k: v for k, v in ov["login"].items() if k != "fields"}}
         if ov["login"].get("fields"):
@@ -100,6 +100,10 @@ def apply_overrides(store: dict) -> dict:
     if ov.get("report"):
         store["report"] = {**store.get("report", {}), **ov["report"]}
     return store
+
+
+def apply_overrides(store: dict) -> dict:
+    return merge_selector_overrides(store, load_overrides(store.get("slug", "")))
 
 
 def partial_of(res: dict) -> str | None:
@@ -191,12 +195,24 @@ def _fill(page, sel: str, value: str) -> None:
         page.fill(sel, str(value))
 
 
-# 핸드SOS 로그인 셀렉터는 모든 매장 공통 → 코드 기본값. 사용자는 설정에서 건드릴 필요 없음.
-DEFAULT_LOGIN = {
+# 셀렉터 단일 진실: scripts/handsos_selectors.yaml (sync·heal 공용). 여기 상수는 파일 유실 시 폴백.
+SELECTORS_PATH = Path(__file__).resolve().parent / "handsos_selectors.yaml"
+
+
+def load_selectors() -> dict:
+    try:
+        return yaml.safe_load(SELECTORS_PATH.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+
+
+_SEL = load_selectors()
+DEFAULT_LOGIN = _SEL.get("login") or {
     "url": "https://www.handsos.com/login/login.asp?p=pc",
     "fields": {"company_code": "#companyID", "username": "#userID", "password": "#userPWD"},
     "submit": "#sendLogin",
 }
+DEFAULT_REPORT = _SEL.get("report") or {}
 
 
 def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dict:
@@ -205,7 +221,7 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
 
     login = {**DEFAULT_LOGIN, **(store.get("login") or {})}
     fields = {**DEFAULT_LOGIN["fields"], **(login.get("fields") or {})}
-    report = store.get("report") or {}
+    report = {**DEFAULT_REPORT, **(store.get("report") or {})}
     js = HARVEST_JS.read_text(encoding="utf-8")
 
     with sync_playwright() as pw:
@@ -359,6 +375,51 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                 browser.close()
 
 
+def _load_heal():
+    """handsos_heal 모듈 로드(같은 scripts/ 폴더)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "handsos_heal", Path(__file__).resolve().parent / "handsos_heal.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def auto_heal(store: dict, res: dict, *, headed: bool, cfg: dict) -> dict | None:
+    """실패 직후 자가치유 자동 루프: 진단(Claude) → 제안 셀렉터로 **검증 재수확** →
+    행이 실제로 나올 때만 영구 적용(secrets/{slug}.selectors.yaml) + 알림.
+
+    사람 개입 4단계(실패 확인→heal→--apply→재실행)를 1루프로. 검증 실패 제안은 버린다."""
+    import copy
+    slug = store["slug"]
+    try:
+        heal = _load_heal()
+        fail_dir = Path(res.get("fail_dir") or "")
+        html = heal.pick_relevant_html(fail_dir) if fail_dir.exists() else ""
+        if not html:
+            return None
+        out = heal.run_claude(heal.build_prompt(slug, html, str(res.get("error"))))
+        sel = heal.parse_selectors(out or "")
+        if not sel:
+            return None
+        trial = merge_selector_overrides(copy.deepcopy(store), sel)
+        print("  ↻ 자가치유 제안 수신 — 검증 재수확 중…")
+        res2 = harvest_store(trial, headed=headed)
+        if not (res2.get("rows")):
+            print("  ✗ 치유 제안 검증 실패(여전히 0행) — 적용 안 함")
+            return None
+        outp = ROOT / "secrets" / f"{slug}.selectors.yaml"       # 검증 통과 → 영구 적용
+        outp.parent.mkdir(parents=True, exist_ok=True)
+        outp.write_text(yaml.safe_dump(sel, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        merge_selector_overrides(store, sel)
+        notify(cfg, f"핸드SOS 자가치유 성공: {slug} — 셀렉터 자동 갱신, {len(res2['rows'])}행 수확")
+        print(f"  ✓ 자가치유 성공 — 셀렉터 갱신: {outp}")
+        return res2
+    except Exception as exc:                                     # 치유 실패가 동기화를 더 망치지 않게
+        print(f"  [자가치유 오류] {exc}")
+        return None
+
+
 # ───────────────────────── 매장 1곳 전체 파이프라인 ─────────────────────────
 def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
              headed: bool, debug: bool, cfg: dict) -> dict:
@@ -374,6 +435,11 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
         return {"slug": slug, "ok": False, "stage": "harvest", "error": str(exc)}
 
     rows = res.get("rows") or []
+    if not rows and res.get("fail_dir") and not debug \
+            and (store.get("auto_heal", cfg.get("auto_heal", True))):
+        healed = auto_heal(store, res, headed=headed, cfg=cfg)   # 실패 → 자동 치유 루프
+        if healed:
+            res, rows = healed, healed.get("rows") or []
     if not rows:
         return {"slug": slug, "ok": False, "stage": "harvest",
                 "error": res.get("error") or "0행", "total": res.get("total"),
