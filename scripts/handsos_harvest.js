@@ -98,18 +98,51 @@ globalThis.__handsosHarvest = async function (opts) {
   const firstSig = (t) => {
     try { const r = [...t.querySelectorAll('tr')].find((tr) => !tr.querySelector('th') && norm(tr.innerText)); return r ? norm(r.innerText).slice(0, 50) : ''; } catch (e) { return ''; }
   };
-  const goNext = (ctx, target) => {
+  // 페이지 이동 함수 후보(핸드SOS 버전차) + '다음(블록)' 화살표 글리프
+  const PAGE_FNS = ['gotoP', 'goPage', 'fnPaging', 'fn_paging', 'goPaging', 'page_move', 'fnPage'];
+  const NEXT_RE = /^(›|»|▶|＞|>|다음|다음\s*페이지|next)$/i;
+  const goNext = (ctx, target, cur) => {
     const win = ctx.doc.defaultView;
-    if (win && typeof win.gotoP === 'function') { try { win.gotoP(target); return true; } catch (e) {} }
-    const re = new RegExp('gotoP\\(\\s*' + target + '\\b');
-    const el = [...ctx.doc.querySelectorAll('td,a,span,li')].find((e) => {
+    // 1) 전역 페이지 함수(있으면 블록 경계도 통과) — 이름 변형 대응
+    for (const fn of PAGE_FNS) {
+      if (win && typeof win[fn] === 'function') { try { win[fn](target); return 'fn:' + fn; } catch (e) {} }
+    }
+    const cand = [...ctx.doc.querySelectorAll('a,td,span,li,button,input,area')];
+    // 2) 목표 페이지 번호 링크(onclick 의 숫자 == target, 또는 보이는 텍스트 == target)
+    const reN = new RegExp('(?:gotoP|goPage|page|paging)\\D*(' + target + ')\\b');
+    let el = cand.find((e) => reN.test((e.getAttribute && e.getAttribute('onclick')) || '')
+      || norm(e.textContent) === String(target));
+    if (el) { el.click(); return 'num'; }
+    // 3) 블록 경계: '다음(›/»/다음)' 화살표(텍스트·alt·title·onclick)
+    el = cand.find((e) => {
+      const t = norm(e.textContent);
+      const a = (e.getAttribute && (e.getAttribute('alt') || e.getAttribute('title') || e.value || '')) || '';
       const oc = (e.getAttribute && e.getAttribute('onclick')) || '';
-      return re.test(oc) || norm(e.textContent) === String(target);
+      return NEXT_RE.test(t) || NEXT_RE.test(norm(a)) || /(다음|next)/i.test(oc);
     });
-    if (el) { el.click(); return true; }
+    if (el) { el.click(); return 'arrow'; }
+    // 4) onclick 페이지번호가 현재보다 큰 컨트롤(블록 이동 링크 등) 중 가장 작은 것
+    let best = null, bestN = 1e9;
+    cand.forEach((e) => {
+      const m = ((e.getAttribute && e.getAttribute('onclick')) || '').match(/(?:gotoP|goPage|page|paging)\D*(\d+)/);
+      if (m) { const n = parseInt(m[1], 10); if (n > (cur || 0) && n < bestN) { best = e; bestN = n; } }
+    });
+    if (best) { best.click(); return 'jump:' + bestN; }
     return false;
   };
 
+  // 멈춤 진단용: 페이지 컨트롤(페이지번호·화살표) 영역 HTML 을 잘라 돌려준다.
+  const pagerDump = (doc) => {
+    try {
+      const marks = [...doc.querySelectorAll('a,td,span,li,button')].filter((e) =>
+        /^\d+$/.test(norm(e.textContent)) || /gotoP|goPage|paging|page_move/.test((e.getAttribute && e.getAttribute('onclick')) || ''));
+      if (!marks.length) return '';
+      let anc = marks[0]; for (let i = 0; i < 4 && anc.parentElement; i++) anc = anc.parentElement;
+      return norm(anc.outerHTML || '').slice(0, 1400);
+    } catch (e) { return ''; }
+  };
+
+  let stallRetries = 0;
   for (let p = 1; p <= maxPage; p++) {
     const ctx = findCtx(); if (!ctx) break;
     harvestPage(ctx.t);
@@ -118,17 +151,29 @@ globalThis.__handsosHarvest = async function (opts) {
 
     const target = p + 1;
     const sigBefore = firstSig(ctx.t);
-    if (!goNext(ctx, target)) break;
+    const beforeCount = recs.length;
+    const how = goNext(ctx, target, p);
+    if (!how) {   // 다음 컨트롤 자체가 없음 — 마지막 페이지거나 페이저 구조 미상
+      return { rows: recs, total: totalN, stoppedAt: p,
+               error: (totalN && recs.length < totalN) ? 'no-next-control' : null,
+               pager: pagerDump(ctx.doc) };
+    }
 
     let changed = false;
-    for (let i = 0; i < 50; i++) {
-      await sleep(300);
+    for (let i = 0; i < 40; i++) {                 // 최대 ~24s (느린 프레임·서버 대비 여유)
+      await sleep(600);
       const c2 = findCtx(); if (!c2) continue;
       const cp = curPage(c2.doc);
       if ((cp && cp >= target) || (firstSig(c2.t) && firstSig(c2.t) !== sigBefore)) { changed = true; break; }
-      if (i === 14) goNext(c2, target);
+      if (i === 8 || i === 20) goNext(c2, target, p);   // 중간에 두 번 재시도
     }
-    if (!changed) return { rows: recs, total: totalN, error: 'pagination-stalled', stoppedAt: p };
+    if (!changed) {
+      // 한 번 멈춰도 즉시 포기하지 않고, 페이지 재산정 후 몇 번 더 시도(블록 경계 흔들림 대비)
+      if (stallRetries < 2) { stallRetries++; p--; await sleep(1200); continue; }
+      return { rows: recs, total: totalN, error: 'pagination-stalled', stoppedAt: p,
+               how: how, harvestedNew: recs.length - beforeCount, pager: pagerDump(ctx.doc) };
+    }
+    stallRetries = 0;
   }
 
   return { rows: recs, total: totalN, error: null };

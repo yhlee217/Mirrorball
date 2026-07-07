@@ -469,10 +469,17 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
         import build_app
         built = build_app.build_one(str(ROOT / "clients" / slug))
 
+    partial = partial_of(res)
+    if partial and res.get("pager"):        # 멈춤 시 페이저 DOM 저장 → 정밀 진단
+        pf = raw_dir / f"pager_{stamp}.txt"
+        pf.write_text(f"error={res.get('error')} stoppedAt={res.get('stoppedAt')} "
+                      f"how={res.get('how')}\n\n{res['pager']}", encoding="utf-8")
+        print(f"  ↳ 멈춘 지점 페이저 DOM 저장: {pf}")
+
     return {"slug": slug, "ok": True, "rows": len(rows), "txns": nr,
             "new_customers": nc, "csv": str(csv_path), "total": res.get("total"),
-            "built": built and built.get("out"),
-            "partial": partial_of(res)}
+            "built": built and built.get("out"), "partial": partial,
+            "pager": res.get("pager"), "stopped_at": res.get("stoppedAt")}
 
 
 def main() -> int:

@@ -93,3 +93,42 @@ def test_harvest_full_two_pages(page):
 def test_harvest_no_table(page):
     r = _harvest(page, "<html><body><p>빈 화면</p></body></html>")
     assert r["error"] == "no-table" and r["rows"] == []
+
+
+# 블록 페이징: 전역 gotoP 함수 없음 + 페이지번호 링크도 없음 → '›' 다음 화살표로만 넘어감.
+# (실기기 342/727 stall 의 유력 원인 — 블록 경계에서 번호링크가 사라지고 화살표가 필요)
+FIXTURE_BLOCK = """<!doctype html><html><body>
+<div>총 2개</div>
+<table id="list_tbl">
+ <tr><th>날짜</th><th>고객명</th><th>상세메뉴</th><th>담당</th><th>결제액</th><th>메모</th></tr>
+ <tbody id="tb">
+  <tr><td>26-06-26 14:20</td><td>조희진</td><td title="뿌리염색">뿌리염색</td><td>하예원</td><td>30,000</td><td></td></tr>
+ </tbody>
+</table>
+<div id="pager"><span class="current">1</span> <a href="#" onclick="adv();return false;">›</a></div>
+<script>
+ var pageNo=1;
+ function adv(){ pageNo++;
+   if(pageNo===2){ document.getElementById('tb').innerHTML =
+     '<tr><td>26-06-20 11:00</td><td>배상웅</td><td title="남자컷">남자컷</td><td>하예원</td><td>28,000</td><td></td></tr>'; }
+   var c=document.querySelector('#pager .current'); if(c) c.textContent=String(pageNo); }
+</script>
+</body></html>"""
+
+
+def test_harvest_block_pagination_via_next_arrow(page):
+    r = _harvest(page, FIXTURE_BLOCK)
+    assert r["error"] is None                              # '›' 화살표로 끝까지
+    names = [x["고객명"] for x in r["rows"]]
+    assert names == ["조희진", "배상웅"] and len(r["rows"]) == 2
+
+
+def test_stall_returns_pager_dump(page):
+    # 다음 컨트롤이 아예 없는데 총건수는 더 많다고 표기 → no-next-control + 페이저 DOM 반환
+    html = """<html><body><div>총 9개</div>
+      <table id="list_tbl"><tr><th>날짜</th><th>고객명</th><th>상세메뉴</th><th>담당</th><th>결제액</th><th>메모</th></tr>
+      <tr><td>26-06-26 10:00</td><td>김</td><td title="컷">컷</td><td>하예원</td><td>10,000</td><td></td></tr></table>
+      <div id="pager"><span class="current">1</span><span onclick="gotoP(1)">1</span></div></body></html>"""
+    r = _harvest(page, html)
+    assert r["error"] == "no-next-control"                 # 3페이지째 넘길 데 없음
+    assert "pager" in r and r["pager"]                     # 진단용 DOM 확보
