@@ -131,14 +131,38 @@ globalThis.__handsosHarvest = async function (opts) {
     return false;
   };
 
-  // 멈춤 진단용: 페이지 컨트롤(페이지번호·화살표) 영역 HTML 을 잘라 돌려준다.
+  // 블록형 페이저 탈출: '다음 블록(›/»/다음)' 컨트롤을 눌러 gotoP 이 다음 페이지를 인식하게.
+  const nextBlock = (ctx) => {
+    const cand = [...ctx.doc.querySelectorAll('a,td,span,li,button,input,img,area')];
+    const el = cand.find((e) => {
+      const t = norm(e.textContent);
+      const a = norm((e.getAttribute && (e.getAttribute('alt') || e.getAttribute('title') || e.value || '')) || '');
+      const oc = (e.getAttribute && e.getAttribute('onclick')) || '';
+      const hrefj = (e.getAttribute && e.getAttribute('href')) || '';
+      return NEXT_RE.test(t) || NEXT_RE.test(a)
+        || /(next|다음|block|nextBlock|goBlock|movePage)/i.test(oc)
+        || /(next|다음)/i.test(hrefj);
+    });
+    if (el) { try { el.click(); return true; } catch (e) {} }
+    return false;
+  };
+
+  // 멈춤 진단용: 진짜 페이저(페이지 링크가 가장 많이 모인 컨테이너)를 잘라 돌려준다.
   const pagerDump = (doc) => {
     try {
-      const marks = [...doc.querySelectorAll('a,td,span,li,button')].filter((e) =>
-        /^\d+$/.test(norm(e.textContent)) || /gotoP|goPage|paging|page_move/.test((e.getAttribute && e.getAttribute('onclick')) || ''));
-      if (!marks.length) return '';
-      let anc = marks[0]; for (let i = 0; i < 4 && anc.parentElement; i++) anc = anc.parentElement;
-      return norm(anc.outerHTML || '').slice(0, 1400);
+      const links = [...doc.querySelectorAll('[onclick]')].filter((e) =>
+        /gotoP|goPage|paging|page_move|fnPage|goBlock|movePage/.test(e.getAttribute('onclick') || ''));
+      if (!links.length) {   // onclick 없으면 페이지번호 링크(a) 텍스트 기준
+        const nums = [...doc.querySelectorAll('a,td,span,li,button')].filter((e) => /^\d+$/.test(norm(e.textContent)));
+        if (!nums.length) return '(페이지 컨트롤 못 찾음)';
+        let a = nums[0]; for (let i = 0; i < 5 && a.parentElement; i++) a = a.parentElement;
+        return norm(a.outerHTML).slice(0, 1800);
+      }
+      const counts = new Map();   // 페이지 링크를 가장 많이 품은 조상 = 페이저 컨테이너
+      links.forEach((e) => { let a = e; for (let i = 0; i < 6 && a; i++) { counts.set(a, (counts.get(a) || 0) + 1); a = a.parentElement; } });
+      let best = null, bn = 0;
+      counts.forEach((n, el) => { if (n >= bn) { bn = n; best = el; } });
+      return best ? norm(best.outerHTML).slice(0, 1800) : '';
     } catch (e) { return ''; }
   };
 
@@ -165,11 +189,16 @@ globalThis.__handsosHarvest = async function (opts) {
       const c2 = findCtx(); if (!c2) continue;
       const cp = curPage(c2.doc);
       if ((cp && cp >= target) || (firstSig(c2.t) && firstSig(c2.t) !== sigBefore)) { changed = true; break; }
-      if (i === 8 || i === 20) goNext(c2, target, p);   // 중간에 두 번 재시도
+      // gotoP 이 안 먹으면(블록 경계) '다음 블록' 화살표를 누른 뒤 다시 gotoP — 이게 342/727 stall 핵심
+      if (i === 6 || i === 16 || i === 28) { nextBlock(c2); await sleep(500); goNext(c2, target, p); }
     }
     if (!changed) {
-      // 한 번 멈춰도 즉시 포기하지 않고, 페이지 재산정 후 몇 번 더 시도(블록 경계 흔들림 대비)
-      if (stallRetries < 2) { stallRetries++; p--; await sleep(1200); continue; }
+      // 즉시 포기하지 않고, 다음블록 클릭 + 페이지 재산정 후 몇 번 더(블록 경계 흔들림 대비)
+      if (stallRetries < 3) {
+        stallRetries++;
+        const c3 = findCtx(); if (c3) { nextBlock(c3); }
+        p--; await sleep(1200); continue;
+      }
       return { rows: recs, total: totalN, error: 'pagination-stalled', stoppedAt: p,
                how: how, harvestedNew: recs.length - beforeCount, pager: pagerDump(ctx.doc) };
     }
