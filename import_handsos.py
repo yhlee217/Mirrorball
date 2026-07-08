@@ -353,12 +353,14 @@ def _preserve_manual(old: dict, new: dict) -> dict:
     return out
 
 
-def write_out(slug: str, rows: list[dict], customers: list[dict] | None = None) -> tuple[int, int]:
+def write_out(slug: str, rows: list[dict], customers: list[dict] | None = None,
+              base_dir: str | Path | None = None) -> tuple[int, int]:
     """거래 원장 누적 병합 → 병합 전체에서 고객 재구성(수동 필드 보존).
 
+    base_dir 로 저장 위치 고정(실행 폴더 무관). 없으면 CWD 의 clients/(단독 CLI 호환).
     화해 병합(np:→no:)이 일어나면, 과거에 갈라져 있던 np 카드 파일의 수동 필드를
     합쳐진 카드로 옮기고 고아 파일은 제거(카드 분열 흔적 정리)."""
-    base = Path("clients") / slug
+    base = (Path(base_dir) if base_dir else Path("clients")) / slug
     (base / "customers").mkdir(parents=True, exist_ok=True)
 
     rec_path = base / "records.yaml"

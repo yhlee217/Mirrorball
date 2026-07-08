@@ -473,8 +473,24 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     breakdown = ih.staff_breakdown(all_parsed)
     print("  · 담당별 수집: " + ", ".join(f"{k} {v}건" for k, v in breakdown[:10]))
 
-    # 대상: designers 리스트가 있으면 담당별 분리, 없으면 단일(staff+slug, 기존 호환)
-    targets = store.get("designers") or [{"slug": slug, "staff": staff}]
+    # 대상 결정:
+    #  · all_designers: 데이터의 '모든 담당'을 자동 분리(담당명 안 적어도 전원 추출)
+    #  · designers: 명시한 담당만(+slug 지정)
+    #  · 둘 다 없으면: 단일(staff+slug, 기존 호환)
+    designers = store.get("designers") or []
+    mapping = {d["staff"]: d["slug"] for d in designers if d.get("staff") and d.get("slug")}
+    if store.get("all_designers"):
+        targets = []
+        for st_name, _cnt in breakdown:
+            if st_name == "(담당 미지정)":            # 담당 없는 워크인 등은 개별 client 안 만듦
+                continue
+            sl = mapping.get(st_name) or _slug_for(st_name)
+            if sl:
+                targets.append({"slug": sl, "staff": st_name})
+    elif designers:
+        targets = designers
+    else:
+        targets = [{"slug": slug, "staff": staff}]
     dresults = []
     for d in targets:
         dresults.append(_import_build_one(
@@ -494,6 +510,19 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
             "partial": partial, "pager": res.get("pager"), "stopped_at": res.get("stoppedAt")}
 
 
+import re as _re
+_ROLE_RE = _re.compile(r"\s*(부원장|원장|실장|디자이너|점장|대표|팀장|수석|인턴|매니저|메니저)\s*")
+
+
+def _slug_for(staff: str) -> str | None:
+    """담당명 → 파일/URL 안전 slug(명시 매핑 없을 때). 직함 제거 후 한글/영숫자만.
+
+    한글 slug 도 파일·URL 에서 동작(윈도우 파일명·URL 인코딩 OK). 예: '하예원 부원장'→'하예원'."""
+    s = _ROLE_RE.sub("", staff or "").strip()
+    s = _re.sub(r"[^\w가-힣]", "", s)
+    return s or None
+
+
 def _import_build_one(csv_path, slug: str, staff, salon: str, *, do_build: bool) -> dict:
     """CSV → (담당 필터) → 한 디자이너의 client 로 import+build. 담당별 분리의 최소 단위."""
     import import_handsos as ih
@@ -502,7 +531,7 @@ def _import_build_one(csv_path, slug: str, staff, salon: str, *, do_build: bool)
         print(f"    · [{slug}] '{staff}' 담당 행 없음 — 건너뜀")
         return {"slug": slug, "staff": staff, "txns": 0, "new": 0}
     mm = ih.prev_visit_mismatches(parsed)             # 범위 내 구멍만
-    nr, nc = ih.write_out(slug, parsed)               # records 누적 병합 + 고객 재구성(수동필드 보존)
+    nr, nc = ih.write_out(slug, parsed, base_dir=ROOT / "clients")   # 실행 폴더 무관, 항상 루트 기준
 
     cfg_path = ROOT / "clients" / slug / "config.yaml"   # 최초 1회 config 부트스트랩
     if not cfg_path.exists():

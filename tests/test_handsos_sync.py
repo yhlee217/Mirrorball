@@ -192,3 +192,22 @@ def test_import_build_one_splits_by_designer(tmp_path, monkeypatch):
     custs = list((tmp_path / "clients" / "hayewoni" / "customers").glob("*.yaml"))
     names = {_y.safe_load(p.read_text(encoding="utf-8"))["name"] for p in custs}
     assert names == {"김"}                               # 다른 디자이너(김민지) 고객 제외
+
+
+def test_slug_for_strips_role_and_sanitizes():
+    assert hs._slug_for("하예원 부원장") == "하예원"
+    assert hs._slug_for("김민지") == "김민지"
+    assert hs._slug_for("Jenny(원장)") == "Jenny"
+    assert hs._slug_for("") is None
+
+
+def test_write_out_base_dir_is_location_independent(tmp_path):
+    import sys
+    sys.path.insert(0, str(ROOT))
+    import import_handsos as ih
+    # CWD 와 무관하게 base_dir 아래에 저장
+    ih.write_out("hayewoni", [{"date": "2026-06-26", "name": "김", "custno": "1",
+                               "service": "컷", "price": 20000}],
+                 base_dir=tmp_path / "clients")
+    assert (tmp_path / "clients" / "hayewoni" / "records.yaml").exists()
+    assert (tmp_path / "clients" / "hayewoni" / "customers").exists()
