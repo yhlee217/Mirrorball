@@ -279,6 +279,35 @@ def test_birthday_column_flows_to_customer(tmp_path):
     assert custs[0]["birthday"] == "03-15"      # 생일 케어 자동 점화
 
 
+def test_staff_breakdown_counts_designers():
+    rows = [{"date": "2026-06-01", "name": "김", "staff": "하예원", "service": "컷"},
+            {"date": "2026-06-02", "name": "이", "staff": "하예원", "service": "펌"},
+            {"date": "2026-06-03", "name": "박", "staff": "김민지", "service": "컷"},
+            {"date": "2026-06-04", "name": "최", "service": "컷"}]
+    bd = dict(ih.staff_breakdown(rows))
+    assert bd["하예원"] == 2 and bd["김민지"] == 1 and bd["(담당 미지정)"] == 1
+
+
+def test_continuation_row_inherits_staff_under_filter(tmp_path):
+    # 연속행(담당 빈칸) — 필터 시 직전 담당 승계로 2번째 시술이 안 빠져야 함
+    p = tmp_path / "h.csv"
+    _w(p, [H2,
+           ["26-06-26 19:41", "배상웅", "010-1", "100", "", "컷", "하예원", "28000", ""],
+           ["", "배상웅", "010-1", "100", "", "펌", "", "60000", ""]])  # 담당 빈칸(연속행)
+    rows = ih.parse_rows(str(p), staff="하예원")
+    assert len(rows) == 2                                # 승계로 둘 다 유지
+    assert rows[1]["service"] == "펌" and rows[1]["staff"] == "하예원"
+
+
+def test_staff_filter_excludes_other_designer(tmp_path):
+    p = tmp_path / "h.csv"
+    _w(p, [H2,
+           ["2026-06-26", "김", "010-1", "1", "", "컷", "하예원", "20000", ""],
+           ["2026-06-26", "박", "010-2", "2", "", "컷", "김민지", "20000", ""]])
+    only = ih.parse_rows(str(p), staff="하예원")
+    assert [r["name"] for r in only] == ["김"]           # 다른 디자이너 고객 제외
+
+
 def test_prev_visit_mismatch_only_in_range_holes():
     rows = [
         {"date": "2026-01-02", "name": "배상웅", "custno": "100", "service": "펌"},   # 최저

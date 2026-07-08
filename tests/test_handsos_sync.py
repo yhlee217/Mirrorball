@@ -173,3 +173,22 @@ def test_selectors_yaml_is_single_source():
     spec2.loader.exec_module(heal)
     assert heal.CURRENT["report"]["search_sel"] == sel["report"]["search_sel"]
     assert "list_tbl" in heal.ANCHORS
+
+
+# ── 담당별 분리(멀티 디자이너) ──
+def test_import_build_one_splits_by_designer(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hs, "ROOT", tmp_path)
+    import csv as _csv
+    raw = tmp_path / "h.csv"
+    with raw.open("w", encoding="utf-8-sig", newline="") as f:
+        w = _csv.writer(f)
+        w.writerow(["날짜", "고객명", "전화번호", "고객번호", "이전방문", "상세메뉴", "담당", "결제액", "메모"])
+        w.writerow(["2026-06-26", "김", "010-1", "1", "", "컷", "하예원", "20000", ""])
+        w.writerow(["2026-06-26", "박", "010-2", "2", "", "컷", "김민지", "20000", ""])
+    r = hs._import_build_one(raw, "hayewoni", "하예원", "살롱톤", do_build=False)
+    assert r["txns"] == 1 and r["staff"] == "하예원"
+    import yaml as _y
+    custs = list((tmp_path / "clients" / "hayewoni" / "customers").glob("*.yaml"))
+    names = {_y.safe_load(p.read_text(encoding="utf-8"))["name"] for p in custs}
+    assert names == {"김"}                               # 다른 디자이너(김민지) 고객 제외

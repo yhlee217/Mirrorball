@@ -140,13 +140,17 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
         raise ValueError(f"필수 컬럼(고객명/날짜) 인식 실패. 헤더: {rows[0]}")
 
     out: list[dict] = []
-    last_date = ""
+    last_date, last_staff = "", ""
     for r in rows[1:]:
         def cell(f: str) -> str:
             i = cmap.get(f)
             return r[i].strip() if i is not None and i < len(r) else ""
 
-        if staff and cmap.get("staff") is not None and staff not in cell("staff"):
+        # 담당: 연속행(같은 방문 추가 시술)은 담당 칸이 비어 직전 담당을 승계 → 필터에서 안 빠지게
+        eff_staff = cell("staff") or last_staff
+        if cell("staff"):
+            last_staff = cell("staff")
+        if staff and eff_staff and staff not in eff_staff:
             continue
         name = _clean_name(cell("name"))
         d = _date(cell("date"))
@@ -166,9 +170,8 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
         cn = _custno(cell("custno"))
         if cn:
             rec["custno"] = cn
-        st = cell("staff")                  # 담당 보존(멀티 디자이너 확장·성과 분리 대비)
-        if st:
-            rec["staff"] = st
+        if eff_staff:                       # 담당 보존(멀티 디자이너 분리·성과)
+            rec["staff"] = eff_staff
         pv = _date(cell("prev"))            # 핸드SOS의 '이전방문' — 병합 검증용 크로스체크
         if pv:
             rec["prev_visit"] = pv
@@ -183,6 +186,13 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
             rec["price"] = p
         out.append(rec)
     return out
+
+
+def staff_breakdown(rows: list[dict]) -> list[tuple]:
+    """담당(디자이너)별 거래 건수 — 매장 전체 수집에서 누가 있는지·slug 매핑을 정하는 데 쓴다."""
+    from collections import Counter
+    c = Counter((r.get("staff") or "(담당 미지정)") for r in rows)
+    return c.most_common()
 
 
 def prev_visit_mismatches(rows: list[dict]) -> list[dict]:

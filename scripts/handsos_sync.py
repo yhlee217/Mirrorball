@@ -466,27 +466,19 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     csv_path = raw_dir / f"handsos_{stamp}.csv"
     write_csv(rows, csv_path)
 
-    # 4) import → build (모듈 직접 호출, 카르테·관계 보존)
+    # 4) import → build. 매장 전체 수확 → 담당(디자이너)별로 분리해 각자 client 로.
     sys.path.insert(0, str(ROOT))
     import import_handsos as ih
-    parsed = ih.parse_rows(str(csv_path), staff=staff)
-    mm = ih.prev_visit_mismatches(parsed)      # 핸드SOS '이전방문' 크로스체크(범위 내 구멍만)
-    if mm:
-        print(f"  · 범위 내 방문 누락 의심 {len(mm)}건 — 확인 권장(예: "
-              + ", ".join(f"{m['name']} {m['handsos']}" for m in mm[:3]) + ")")
-    nr, nc = ih.write_out(slug, parsed)        # records 누적 병합 + 고객 재구성(수동필드 보존)
+    all_parsed = ih.parse_rows(str(csv_path))          # 필터 없이 전체(담당별 집계용)
+    breakdown = ih.staff_breakdown(all_parsed)
+    print("  · 담당별 수집: " + ", ".join(f"{k} {v}건" for k, v in breakdown[:10]))
 
-    # 최초 동기화면 config.yaml 부트스트랩(디자이너 이름·살롱·기준일). 이후 사람이 보강 가능.
-    cfg_path = ROOT / "clients" / slug / "config.yaml"
-    if not cfg_path.exists():
-        cfg_path.write_text(yaml.safe_dump(
-            {"slug": slug, "display_name": staff or slug, "salon": store.get("salon", ""),
-             "today": str(date.today())}, allow_unicode=True, sort_keys=False), encoding="utf-8")
-
-    built = None
-    if do_build:
-        import build_app
-        built = build_app.build_one(str(ROOT / "clients" / slug))
+    # 대상: designers 리스트가 있으면 담당별 분리, 없으면 단일(staff+slug, 기존 호환)
+    targets = store.get("designers") or [{"slug": slug, "staff": staff}]
+    dresults = []
+    for d in targets:
+        dresults.append(_import_build_one(
+            csv_path, d["slug"], d.get("staff"), store.get("salon", ""), do_build=do_build))
 
     partial = partial_of(res)
     if partial and res.get("pager"):        # 멈춤 시 페이저 DOM 저장 → 정밀 진단
@@ -495,10 +487,37 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
                       f"how={res.get('how')}\n\n{res['pager']}", encoding="utf-8")
         print(f"  ↳ 멈춘 지점 페이저 DOM 저장: {pf}")
 
-    return {"slug": slug, "ok": True, "rows": len(rows), "txns": nr,
-            "new_customers": nc, "csv": str(csv_path), "total": res.get("total"),
-            "built": built and built.get("out"), "partial": partial,
-            "pager": res.get("pager"), "stopped_at": res.get("stoppedAt")}
+    return {"slug": slug, "ok": True, "rows": len(rows), "total": res.get("total"),
+            "txns": sum(d["txns"] for d in dresults),
+            "new_customers": sum(d["new"] for d in dresults),
+            "designers": dresults, "csv": str(csv_path),
+            "partial": partial, "pager": res.get("pager"), "stopped_at": res.get("stoppedAt")}
+
+
+def _import_build_one(csv_path, slug: str, staff, salon: str, *, do_build: bool) -> dict:
+    """CSV → (담당 필터) → 한 디자이너의 client 로 import+build. 담당별 분리의 최소 단위."""
+    import import_handsos as ih
+    parsed = ih.parse_rows(str(csv_path), staff=staff)
+    if not parsed:
+        print(f"    · [{slug}] '{staff}' 담당 행 없음 — 건너뜀")
+        return {"slug": slug, "staff": staff, "txns": 0, "new": 0}
+    mm = ih.prev_visit_mismatches(parsed)             # 범위 내 구멍만
+    nr, nc = ih.write_out(slug, parsed)               # records 누적 병합 + 고객 재구성(수동필드 보존)
+
+    cfg_path = ROOT / "clients" / slug / "config.yaml"   # 최초 1회 config 부트스트랩
+    if not cfg_path.exists():
+        cfg_path.write_text(yaml.safe_dump(
+            {"slug": slug, "display_name": staff or slug, "salon": salon,
+             "today": str(date.today())}, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+    built = None
+    if do_build:
+        import build_app
+        built = build_app.build_one(str(ROOT / "clients" / slug))
+    tag = f" · 방문누락의심 {len(mm)}" if mm else ""
+    print(f"    · [{slug}] {staff or '전체'}: 거래 {nr} · 신규 {nc}명{tag}")
+    return {"slug": slug, "staff": staff, "txns": nr, "new": nc,
+            "mismatches": len(mm), "built": built and built.get("out")}
 
 
 def main() -> int:
