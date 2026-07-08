@@ -506,7 +506,9 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
         print(f"  ↳ 멈춘 지점 페이저 DOM 저장: {pf}")
 
     if not debug:                           # 오래된 수확 CSV·덤프 정리(무한 누적 방지)
-        prune_raw(raw_dir, keep=int(store.get("keep_raw", 5)))
+        n_pruned = prune_raw(raw_dir, keep=int(store.get("keep_raw", 5)))
+        if n_pruned:
+            print(f"  · _raw 정리: 오래된 파일 {n_pruned}개 삭제(최근 {store.get('keep_raw', 5)}개 유지)")
 
     return {"slug": slug, "ok": True, "rows": len(rows), "total": res.get("total"),
             "txns": sum(d["txns"] for d in dresults),
@@ -529,22 +531,26 @@ def _slug_for(staff: str) -> str | None:
 
 
 def prune_raw(raw_dir: Path, keep: int = 5) -> int:
-    """오래된 수확 CSV·실패 덤프를 최근 keep 개만 남기고 정리(_raw 무한 누적 방지)."""
+    """오래된 수확물을 최근 keep 개만 남기고 정리(_raw 무한 누적 방지).
+
+    타입별(수확 CSV·페이저 덤프·실패 폴더)로 각각 최근 keep 개 유지. 이름 다른 옛
+    CSV(*.csv 전반)도 대상 — 단 최근 keep 개는 항상 보존(감사용)."""
     import shutil
     removed = 0
-    for p in sorted(raw_dir.glob("handsos_*.csv"), reverse=True)[keep:]:
-        try:
-            p.unlink()
-            removed += 1
-        except Exception:
-            pass
-    for p in sorted(raw_dir.glob("pager_*.txt"), reverse=True)[keep:]:
-        try:
-            p.unlink()
-            removed += 1
-        except Exception:
-            pass
-    for d in sorted([x for x in raw_dir.glob("fail_*") if x.is_dir()], reverse=True)[keep:]:
+
+    def _prune_files(paths):
+        nonlocal removed
+        for p in sorted(paths, key=lambda x: x.name, reverse=True)[keep:]:
+            try:
+                p.unlink()
+                removed += 1
+            except Exception:
+                pass
+
+    _prune_files(list(raw_dir.glob("*.csv")))          # 모든 수확 CSV(옛 이름 포함)
+    _prune_files(list(raw_dir.glob("pager_*.txt")))
+    for d in sorted([x for x in raw_dir.glob("fail_*") if x.is_dir()],
+                    key=lambda x: x.name, reverse=True)[keep:]:
         shutil.rmtree(d, ignore_errors=True)
         removed += 1
     return removed
