@@ -479,6 +479,8 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     #  · 둘 다 없으면: 단일(staff+slug, 기존 호환)
     designers = store.get("designers") or []
     mapping = {d["staff"]: d["slug"] for d in designers if d.get("staff") and d.get("slug")}
+    if store.get("staff") and store.get("slug"):      # 이 store 자체 담당→slug 도 매핑에 포함
+        mapping.setdefault(store["staff"], store["slug"])   # (하예원→hayewoni 연속성 자동 유지)
     if store.get("all_designers"):
         targets = []
         for st_name, _cnt in breakdown:
@@ -557,6 +559,8 @@ def main() -> int:
     ap.add_argument("--debug", action="store_true", help="표 확인용 일시정지(셀렉터 점검)")
     ap.add_argument("--no-build", action="store_true")
     ap.add_argument("--deploy", action="store_true")
+    ap.add_argument("--all-designers", action="store_true",
+                    help="stores.yaml 편집 없이 매장 전체를 담당별로 분리 저장(하예원=hayewoni 유지)")
     ap.add_argument("--healthcheck", action="store_true",
                     help="동기화 안 하고, 오래 미성공인 매장만 점검·알림")
     args = ap.parse_args()
@@ -574,6 +578,9 @@ def main() -> int:
     if not stores:
         print("대상 매장 없음")
         return 1
+    if args.all_designers:                     # 편집 없이 전원 추출(런타임 토글)
+        for s in stores:
+            s["all_designers"] = True
 
     results, failed = [], []
     for s in stores:
