@@ -463,7 +463,8 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
                 "error": res.get("error") or "0행", "total": res.get("total"),
                 "fail_dir": res.get("fail_dir")}
 
-    csv_path = raw_dir / f"handsos_{stamp}.csv"
+    # 수확 CSV 는 고정 이름(매번 덮어씀) → 누적 안 됨. 감사용 '최신 1벌'만 유지.
+    csv_path = raw_dir / ("handsos_debug.csv" if debug else "handsos_latest.csv")
     write_csv(rows, csv_path)
 
     # 4) import → build. 매장 전체 수확 → 담당(디자이너)별로 분리해 각자 client 로.
@@ -530,25 +531,28 @@ def _slug_for(staff: str) -> str | None:
     return s or None
 
 
-def prune_raw(raw_dir: Path, keep: int = 5) -> int:
-    """오래된 수확물을 최근 keep 개만 남기고 정리(_raw 무한 누적 방지).
+_KEEP_CSV = {"handsos_latest.csv", "handsos_debug.csv"}   # 고정 이름 최신본만 보존
 
-    타입별(수확 CSV·페이저 덤프·실패 폴더)로 각각 최근 keep 개 유지. 이름 다른 옛
-    CSV(*.csv 전반)도 대상 — 단 최근 keep 개는 항상 보존(감사용)."""
+
+def prune_raw(raw_dir: Path, keep: int = 5) -> int:
+    """_raw 정리: 수확 CSV 는 최신본만(옛 타임스탬프 스냅샷 전부 삭제),
+    페이저 덤프·실패 폴더는 최근 keep 개만 유지(무한 누적 방지)."""
     import shutil
     removed = 0
-
-    def _prune_files(paths):
-        nonlocal removed
-        for p in sorted(paths, key=lambda x: x.name, reverse=True)[keep:]:
-            try:
-                p.unlink()
-                removed += 1
-            except Exception:
-                pass
-
-    _prune_files(list(raw_dir.glob("*.csv")))          # 모든 수확 CSV(옛 이름 포함)
-    _prune_files(list(raw_dir.glob("pager_*.txt")))
+    for p in raw_dir.glob("*.csv"):                  # 옛 타임스탬프 CSV 스냅샷 제거
+        if p.name in _KEEP_CSV:
+            continue
+        try:
+            p.unlink()
+            removed += 1
+        except Exception:
+            pass
+    for p in sorted(raw_dir.glob("pager_*.txt"), key=lambda x: x.name, reverse=True)[keep:]:
+        try:
+            p.unlink()
+            removed += 1
+        except Exception:
+            pass
     for d in sorted([x for x in raw_dir.glob("fail_*") if x.is_dir()],
                     key=lambda x: x.name, reverse=True)[keep:]:
         shutil.rmtree(d, ignore_errors=True)
