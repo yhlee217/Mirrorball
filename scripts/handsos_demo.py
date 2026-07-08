@@ -61,14 +61,15 @@ FIXTURE = """<!doctype html><html><body>
       <td title="여자컷">여자컷</td><td>하예원</td><td>25,000</td><td></td></tr>
  </tbody>
 </table>
-<span class="current" id="pg">1</span>
+<div id="pager"><a class="current" onclick="gotoP(1)">1</a> <a onclick="gotoP(2)">2</a></div>
 <script>
  window.gotoP = function(n){
+   if(n!==2) return;
    document.getElementById('tb').innerHTML =
      '<tr><td>26-05-01 13:00</td>' +
      '<td>조희진<span id="strCustomerInfo9" style="display:none">고객명 : 조희진\\n전화 번호 : 010-0000-0218</span></td>' +
      '<td title="뿌리펌">뿌리펌</td><td>하예원</td><td>30,000</td><td></td></tr>';
-   document.getElementById('pg').textContent = String(n);
+   document.getElementById('pager').innerHTML = '<a onclick="gotoP(1)">1</a> <a class="current">2</a>';
  };
 </script>
 </body></html>"""

@@ -98,112 +98,67 @@ globalThis.__handsosHarvest = async function (opts) {
   const firstSig = (t) => {
     try { const r = [...t.querySelectorAll('tr')].find((tr) => !tr.querySelector('th') && norm(tr.innerText)); return r ? norm(r.innerText).slice(0, 50) : ''; } catch (e) { return ''; }
   };
-  // 페이지 이동 함수 후보(핸드SOS 버전차) + '다음(블록)' 화살표 글리프
+  // 페이지 이동: 오직 gotoP 계열(페이지 함수/번호 링크)만 클릭. 텍스트 '다음'은 안 씀
+  // — 핸드SOS 의 '다음' 은 날짜이동(plusDay)·예약다음 버튼이라 누르면 엉뚱한 화면으로 감(위험).
   const PAGE_FNS = ['gotoP', 'goPage', 'fnPaging', 'fn_paging', 'goPaging', 'page_move', 'fnPage'];
-  const NEXT_RE = /^(›|»|▶|＞|>|다음|다음\s*페이지|next)$/i;
-  const goNext = (ctx, target, cur) => {
+  const pageOf = (e) => {   // 요소의 onclick 에서 gotoP(N) 페이지번호 추출(없으면 null)
+    const oc = (e.getAttribute && e.getAttribute('onclick')) || '';
+    const m = oc.match(/(?:gotoP|goPage|goPaging|fnPaging|page_move|fnPage)\s*\(\s*'?(\d+)/i);
+    return m ? parseInt(m[1], 10) : null;
+  };
+  // 페이저에 '현재보다 큰 페이지'(다음 페이지/다음 블록 버튼 포함)가 실제로 있나 = 아직 더 있음
+  const pagerHasNext = (doc, cur) => {
+    try { return [...doc.querySelectorAll('[onclick]')].some((e) => { const n = pageOf(e); return n != null && n > cur; }); }
+    catch (e) { return false; }
+  };
+  const goNext = (ctx, target) => {
     const win = ctx.doc.defaultView;
-    // 1) 전역 페이지 함수(있으면 블록 경계도 통과) — 이름 변형 대응
-    for (const fn of PAGE_FNS) {
+    for (const fn of PAGE_FNS) {   // 1) 페이지 함수(있으면 블록 경계도 통과)
       if (win && typeof win[fn] === 'function') { try { win[fn](target); return 'fn:' + fn; } catch (e) {} }
     }
-    const cand = [...ctx.doc.querySelectorAll('a,td,span,li,button,input,area')];
-    // 2) 목표 페이지 번호 링크(onclick 의 숫자 == target, 또는 보이는 텍스트 == target)
-    const reN = new RegExp('(?:gotoP|goPage|page|paging)\\D*(' + target + ')\\b');
-    let el = cand.find((e) => reN.test((e.getAttribute && e.getAttribute('onclick')) || '')
-      || norm(e.textContent) === String(target));
+    // 2) onclick=gotoP(target) 또는 보이는 텍스트==target 인 페이지 링크만(안전)
+    const el = [...ctx.doc.querySelectorAll('a,td,span,li,button')].find((e) =>
+      pageOf(e) === target || norm(e.textContent) === String(target));
     if (el) { el.click(); return 'num'; }
-    // 3) 블록 경계: '다음(›/»/다음)' 화살표(텍스트·alt·title·onclick)
-    el = cand.find((e) => {
-      const t = norm(e.textContent);
-      const a = (e.getAttribute && (e.getAttribute('alt') || e.getAttribute('title') || e.value || '')) || '';
-      const oc = (e.getAttribute && e.getAttribute('onclick')) || '';
-      return NEXT_RE.test(t) || NEXT_RE.test(norm(a)) || /(다음|next)/i.test(oc);
-    });
-    if (el) { el.click(); return 'arrow'; }
-    // 4) onclick 페이지번호가 현재보다 큰 컨트롤(블록 이동 링크 등) 중 가장 작은 것
-    let best = null, bestN = 1e9;
-    cand.forEach((e) => {
-      const m = ((e.getAttribute && e.getAttribute('onclick')) || '').match(/(?:gotoP|goPage|page|paging)\D*(\d+)/);
-      if (m) { const n = parseInt(m[1], 10); if (n > (cur || 0) && n < bestN) { best = e; bestN = n; } }
-    });
-    if (best) { best.click(); return 'jump:' + bestN; }
     return false;
   };
 
-  // 블록형 페이저 탈출: '다음 블록(›/»/다음)' 컨트롤을 눌러 gotoP 이 다음 페이지를 인식하게.
-  const nextBlock = (ctx) => {
-    const cand = [...ctx.doc.querySelectorAll('a,td,span,li,button,input,img,area')];
-    const el = cand.find((e) => {
-      const t = norm(e.textContent);
-      const a = norm((e.getAttribute && (e.getAttribute('alt') || e.getAttribute('title') || e.value || '')) || '');
-      const oc = (e.getAttribute && e.getAttribute('onclick')) || '';
-      const hrefj = (e.getAttribute && e.getAttribute('href')) || '';
-      return NEXT_RE.test(t) || NEXT_RE.test(a)
-        || /(next|다음|block|nextBlock|goBlock|movePage)/i.test(oc)
-        || /(next|다음)/i.test(hrefj);
-    });
-    if (el) { try { el.click(); return true; } catch (e) {} }
-    return false;
-  };
-
-  // 멈춤 진단용: 페이지 컨트롤을 '하나씩' 나열(컨테이너 추측 없이). onclick/href 에 페이지함수가
-  // 있거나, 텍스트/alt 가 화살표(›»다음)인 요소만. → 실제 <a onclick="gotoP(38)">38</a> 와 '다음' 컨트롤이 보인다.
+  // 멈춤 진단용: 페이지 컨트롤(gotoP 든 요소)을 하나씩 나열.
   const pagerDump = (doc) => {
     try {
       const out = [];
-      [...doc.querySelectorAll('[onclick],[href]')].forEach((e) => {
-        const oc = ((e.getAttribute('onclick') || '') + ' ' + (e.getAttribute('href') || ''));
-        if (/gotoP|goPage|goBlock|movePage|nextBlock|paging|fnPage/i.test(oc)) out.push(norm(e.outerHTML).slice(0, 160));
-      });
-      [...doc.querySelectorAll('a,button,span,td,img,area,input,li')].forEach((e) => {
-        const t = norm(e.textContent);
-        const a = norm((e.getAttribute('alt') || e.getAttribute('title') || e.value || ''));
-        if (NEXT_RE.test(t) || NEXT_RE.test(a) || (a && /(다음|next)/i.test(a))) out.push('[arrow] ' + norm(e.outerHTML).slice(0, 160));
+      [...doc.querySelectorAll('[onclick]')].forEach((e) => {
+        if (pageOf(e) != null || /gotoP|goPage/i.test(e.getAttribute('onclick') || '')) out.push(norm(e.outerHTML).slice(0, 160));
       });
       const uniq = [...new Set(out)];
-      return uniq.length ? uniq.slice(0, 60).join('\n') : '(gotoP/화살표 컨트롤 못 찾음 — 이미지/플러그인 페이저일 수 있음)';
+      return uniq.length ? uniq.slice(0, 60).join('\n') : '(gotoP 페이지 컨트롤 못 찾음 — 이미지/플러그인 페이저일 수 있음)';
     } catch (e) { return String(e); }
   };
 
-  let stallRetries = 0;
   for (let p = 1; p <= maxPage; p++) {
     const ctx = findCtx(); if (!ctx) break;
     harvestPage(ctx.t);
-    log(`${p}p · 누적 ${recs.length}${totalN ? ' / ' + totalN : ''}`);
-    if (totalN && recs.length >= totalN) break;
+    log(`${p}p · 누적 ${recs.length}`);
+
+    // 페이저에 현재보다 큰 페이지가 없으면 = 마지막 페이지 → 정상 완료('총 N개'는 건수라 행수와 다름)
+    if (!pagerHasNext(ctx.doc, p)) return { rows: recs, total: totalN, error: null, lastPage: p, complete: true };
 
     const target = p + 1;
     const sigBefore = firstSig(ctx.t);
-    const beforeCount = recs.length;
-    const how = goNext(ctx, target, p);
-    if (!how) {   // 다음 컨트롤 자체가 없음 — 마지막 페이지거나 페이저 구조 미상
-      return { rows: recs, total: totalN, stoppedAt: p,
-               error: (totalN && recs.length < totalN) ? 'no-next-control' : null,
-               pager: pagerDump(ctx.doc) };
+    if (!goNext(ctx, target)) {   // 다음 페이지가 있다는데 이동 컨트롤을 못 찾음(구조 미상)
+      return { rows: recs, total: totalN, error: 'no-next-control', stoppedAt: p, pager: pagerDump(ctx.doc) };
     }
-
     let changed = false;
-    for (let i = 0; i < 40; i++) {                 // 최대 ~24s (느린 프레임·서버 대비 여유)
+    const tries = opts.waitTries || 40;            // 페이지 변경 대기(기본 ~24s; 테스트는 낮춤)
+    for (let i = 0; i < tries; i++) {
       await sleep(600);
       const c2 = findCtx(); if (!c2) continue;
       const cp = curPage(c2.doc);
       if ((cp && cp >= target) || (firstSig(c2.t) && firstSig(c2.t) !== sigBefore)) { changed = true; break; }
-      // gotoP 이 안 먹으면(블록 경계) '다음 블록' 화살표를 누른 뒤 다시 gotoP — 이게 342/727 stall 핵심
-      if (i === 6 || i === 16 || i === 28) { nextBlock(c2); await sleep(500); goNext(c2, target, p); }
+      if (i === 10 || i === 25) goNext(c2, target);   // 안전 재시도(gotoP 만)
     }
-    if (!changed) {
-      // 즉시 포기하지 않고, 다음블록 클릭 + 페이지 재산정 후 몇 번 더(블록 경계 흔들림 대비)
-      if (stallRetries < 3) {
-        stallRetries++;
-        const c3 = findCtx(); if (c3) { nextBlock(c3); }
-        p--; await sleep(1200); continue;
-      }
-      return { rows: recs, total: totalN, error: 'pagination-stalled', stoppedAt: p,
-               how: how, harvestedNew: recs.length - beforeCount, pager: pagerDump(ctx.doc) };
-    }
-    stallRetries = 0;
+    if (!changed) return { rows: recs, total: totalN, error: 'pagination-stalled', stoppedAt: p, pager: pagerDump(ctx.doc) };
   }
 
-  return { rows: recs, total: totalN, error: null };
+  return { rows: recs, total: totalN, error: null, complete: true };
 };

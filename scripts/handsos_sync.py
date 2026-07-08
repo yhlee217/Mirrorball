@@ -107,15 +107,12 @@ def apply_overrides(store: dict) -> dict:
 
 
 def partial_of(res: dict) -> str | None:
-    """수확 결과의 부분수집 판정 — JS 오류가 없어도 '총 N개' 대비 미달이면 부분(정직성).
+    """부분수집 판정 — 페이지네이션 에러(멈춤·구조미상)일 때만.
 
-    페이지네이션이 조용히 덜 돈 경우를 잡는다. None 이면 완전 수집."""
-    if res.get("error"):
-        return str(res["error"])
-    got, expected = len(res.get("rows") or []), res.get("total") or 0
-    if expected and got < expected:
-        return f"수집 {got}/{expected}행"
-    return None
+    핸드SOS '총 N개'는 '건수(시술 라인)'라 목록 '행수'와 다르다(건수 727 vs 목록행 342 등).
+    그래서 총계-행수 대조는 오판이므로 안 한다. 마지막 페이지까지 정상 도달(error 없음)이면 완전 수집."""
+    err = res.get("error")
+    return str(err) if err else None
 
 
 # ── 상태/하트비트: 매 실행 기록 → 오래 미성공이면 점검 알림(조용한 고장 방지) ──
@@ -317,7 +314,26 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                 page.wait_for_timeout(int(report.get("settle_ms", 1200)))
 
             if debug:
-                input("‹디버그› 표가 보이면 Enter… (자동조회됐으면 그대로 Enter)")
+                # Enter 대기 대신: 표가 실제로 채워질 때까지 폴링(이미 됐으면 즉시) — 고정 대기보다 빠르고 안전.
+                # 화면 이동 직후 렌더가 덜 됐어도, 준비되는 순간 진행. 최대 wait_s초까지만 기다린다.
+                wait_s = int(store.get("debug_wait_s", report.get("debug_wait_s", 10)))
+                print(f"‹디버그› 표 준비되면 자동 수집(최대 {wait_s}초 대기, Enter 불필요)…")
+                _READY = ("()=>{var t=document.querySelector('#list_tbl')||"
+                          "[...document.querySelectorAll('table')].find(x=>/고객명/.test(x.innerText)&&/날짜/.test(x.innerText));"
+                          "return !!(t&&t.querySelectorAll('tr').length>2);}")
+                for _ in range(max(1, wait_s * 2)):
+                    ready = False
+                    for fr in page.frames:
+                        try:
+                            if fr.evaluate(_READY):
+                                ready = True
+                                break
+                        except Exception:
+                            pass
+                    if ready:
+                        break
+                    page.wait_for_timeout(500)
+                print("‹디버그› 표 " + ("확인 — 수집 시작" if ready else "미확인 — 그래도 수집 시도"))
                 for i, pg in enumerate(ctx.pages):           # 열린 창/탭 전체(팝업 포함) + 프레임 URL
                     print(f"  [page {i}] {pg.url}")
                     for fr in pg.frames:

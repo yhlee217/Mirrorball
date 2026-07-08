@@ -36,14 +36,16 @@ FIXTURE = """<!doctype html><html><body>
   </tr>
   </tbody>
 </table>
-<span class="current" id="pg">1</span>
+<div id="pager"><a class="current" onclick="gotoP(1)">1</a> <a onclick="gotoP(2)">2</a></div>
 <script>
   window.gotoP = function(n){
-    document.getElementById('tb').innerHTML =
-      '<tr><td>26-06-25 11:00</td>' +
-      '<td>조희진<span id="strCustomerInfo2" style="display:none">고객명 : 조희진\\n전화 번호 : 010-0000-0218\\n고객 번호 : 0002767</span></td>' +
-      '<td title="모발클리닉">모발클리닉</td><td>하예원</td><td>80,000</td><td></td></tr>';
-    document.getElementById('pg').textContent = String(n);
+    if(n===2){
+      document.getElementById('tb').innerHTML =
+        '<tr><td>26-06-25 11:00</td>' +
+        '<td>조희진<span id="strCustomerInfo2" style="display:none">고객명 : 조희진\\n전화 번호 : 010-0000-0218\\n고객 번호 : 0002767</span></td>' +
+        '<td title="모발클리닉">모발클리닉</td><td>하예원</td><td>80,000</td><td></td></tr>';
+      document.getElementById('pager').innerHTML = '<a onclick="gotoP(1)">1</a> <a class="current">2</a>';
+    }
   };
 </script>
 </body></html>"""
@@ -95,40 +97,39 @@ def test_harvest_no_table(page):
     assert r["error"] == "no-table" and r["rows"] == []
 
 
-# 블록 페이징: 전역 gotoP 함수 없음 + 페이지번호 링크도 없음 → '›' 다음 화살표로만 넘어감.
-# (실기기 342/727 stall 의 유력 원인 — 블록 경계에서 번호링크가 사라지고 화살표가 필요)
-FIXTURE_BLOCK = """<!doctype html><html><body>
-<div>총 2개</div>
+# 실기기 342/727 회귀: 마지막 페이지는 stall 이 아니라 '완료'. 페이저에 현재보다 큰 gotoP 가
+# 없으면(=끝) 정상 종료해야 한다. '총 N개'(건수 727)가 행수(1)보다 커도 부분수집 아님.
+# + 핸드SOS 의 '다음'(checkSubmit plusDay=다음날) 버튼은 페이지네이션이 아니므로 절대 안 눌러야 함.
+LAST_PAGE = """<!doctype html><html><body>
+<div>총 727개</div>
 <table id="list_tbl">
  <tr><th>날짜</th><th>고객명</th><th>상세메뉴</th><th>담당</th><th>결제액</th><th>메모</th></tr>
- <tbody id="tb">
-  <tr><td>26-06-26 14:20</td><td>조희진</td><td title="뿌리염색">뿌리염색</td><td>하예원</td><td>30,000</td><td></td></tr>
- </tbody>
+ <tr><td>26-06-26 10:00</td><td>김</td><td title="컷">컷</td><td>하예원</td><td>10,000</td><td></td></tr>
 </table>
-<div id="pager"><span class="current">1</span> <a href="#" onclick="adv();return false;">›</a></div>
-<script>
- var pageNo=1;
- function adv(){ pageNo++;
-   if(pageNo===2){ document.getElementById('tb').innerHTML =
-     '<tr><td>26-06-20 11:00</td><td>배상웅</td><td title="남자컷">남자컷</td><td>하예원</td><td>28,000</td><td></td></tr>'; }
-   var c=document.querySelector('#pager .current'); if(c) c.textContent=String(pageNo); }
-</script>
+<table><tr>
+ <th onclick="javascript:gotoP(0)" class="prevPage">이전</th>
+ <td onclick="javascript:gotoP(1)" class="current">1</td>
+</tr></table>
+<a href="javascript:;" onclick="checkSubmit('plusDay');window.__plusDayClicked=true;">다음</a>
 </body></html>"""
 
 
-def test_harvest_block_pagination_via_next_arrow(page):
-    r = _harvest(page, FIXTURE_BLOCK)
-    assert r["error"] is None                              # '›' 화살표로 끝까지
-    names = [x["고객명"] for x in r["rows"]]
-    assert names == ["조희진", "배상웅"] and len(r["rows"]) == 2
+def test_last_page_is_complete_not_stall(page):
+    # 현재가 마지막 페이지(gotoP>현재 없음) → 완료(error null). '건수 727'과 행수 무관.
+    r = _harvest(page, LAST_PAGE)
+    assert r["error"] is None and r.get("complete") is True   # 342/727 오판 방지
+    assert len(r["rows"]) == 1
+    assert page.evaluate("()=>!window.__plusDayClicked")      # 날짜 '다음' 버튼은 안 눌림(안전)
 
 
-def test_stall_returns_pager_dump(page):
-    # 다음 컨트롤이 아예 없는데 총건수는 더 많다고 표기 → no-next-control + 페이저 DOM 반환
+def test_stall_when_next_exists_but_cannot_advance(page):
+    # 페이저엔 gotoP(2)가 있는데(=다음 있음) 실제 gotoP 는 아무 것도 안 함 → pagination-stalled + 덤프
     html = """<html><body><div>총 9개</div>
       <table id="list_tbl"><tr><th>날짜</th><th>고객명</th><th>상세메뉴</th><th>담당</th><th>결제액</th><th>메모</th></tr>
       <tr><td>26-06-26 10:00</td><td>김</td><td title="컷">컷</td><td>하예원</td><td>10,000</td><td></td></tr></table>
-      <div id="pager"><span class="current">1</span><span onclick="gotoP(1)">1</span></div></body></html>"""
-    r = _harvest(page, html)
-    assert r["error"] == "no-next-control"                 # 3페이지째 넘길 데 없음
-    assert "pager" in r and r["pager"]                     # 진단용 DOM 확보
+      <table><tr><td onclick="gotoP(1)" class="current">1</td><td onclick="gotoP(2)">2</td></tr></table>
+      <script>window.gotoP=function(n){/* 아무 것도 안 함(멈춤 재현) */};</script></body></html>"""
+    r = page.set_content(html) or page.add_script_tag(content=HARVEST_JS.read_text(encoding="utf-8"))
+    r = page.evaluate("__handsosHarvest({waitTries:2})")      # 빠른 stall
+    assert r["error"] == "pagination-stalled"
+    assert r.get("pager") and "gotoP(2)" in r["pager"]        # 진단용 컨트롤 목록

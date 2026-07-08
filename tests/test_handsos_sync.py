@@ -103,13 +103,13 @@ def test_write_status_keeps_last_success_on_failure(tmp_path, monkeypatch):
     assert st["ok"] is False and st["last_success"] == prev
 
 
-# ── ③ 부분성공 정직화 ──
-def test_partial_of_reconciles_total():
-    assert hs.partial_of({"rows": [1] * 80, "total": 100}) == "수집 80/100행"   # 조용한 미달 감지
-    assert hs.partial_of({"rows": [1] * 100, "total": 100}) is None            # 완전 수집
-    assert hs.partial_of({"rows": [1] * 5, "total": 0}) is None                # 총계 미파싱 → 판정 보류
-    assert hs.partial_of({"rows": [1] * 5, "total": 100,
-                          "error": "pagination-stalled"}) == "pagination-stalled"
+# ── ③ 부분성공 정직화(에러 기반 — '총 N개'는 건수라 목록 행수와 대조 안 함) ──
+def test_partial_of_is_error_based():
+    # 마지막 페이지까지 정상 도달(error 없음)이면 행수<건수여도 완전 수집(342행 vs 727건 정상)
+    assert hs.partial_of({"rows": [1] * 342, "total": 727, "complete": True}) is None
+    assert hs.partial_of({"rows": [1] * 342, "total": 727, "error": None}) is None
+    assert hs.partial_of({"rows": [1] * 5, "error": "pagination-stalled"}) == "pagination-stalled"
+    assert hs.partial_of({"rows": [1] * 5, "error": "no-next-control"}) == "no-next-control"
 
 
 # ── ④ 자가치유 자동 루프 — 검증 통과 시에만 적용 ──
