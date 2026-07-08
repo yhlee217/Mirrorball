@@ -479,8 +479,10 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     #  · all_designers: 데이터의 '모든 담당'을 자동 분리(담당명 안 적어도 전원 추출)
     #  · designers: 명시한 담당만(+slug 지정)
     #  · 둘 다 없으면: 단일(staff+slug, 기존 호환)
+    # 라벨(담당) → slug·표시이름 매핑. HandSOS 라벨(주환원·다운v 등)은 별명이라 실제 이름으로 매핑.
     designers = store.get("designers") or []
     mapping = {d["staff"]: d["slug"] for d in designers if d.get("staff") and d.get("slug")}
+    name_map = {d["staff"]: d["name"] for d in designers if d.get("staff") and d.get("name")}
     if store.get("staff") and store.get("slug"):      # 이 store 자체 담당→slug 도 매핑에 포함
         mapping.setdefault(store["staff"], store["slug"])   # (하예원→hayewoni 연속성 자동 유지)
     if store.get("all_designers"):
@@ -490,7 +492,7 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
                 continue
             sl = mapping.get(st_name) or _slug_for(st_name)
             if sl:
-                targets.append({"slug": sl, "staff": st_name})
+                targets.append({"slug": sl, "staff": st_name, "name": name_map.get(st_name)})
     elif designers:
         targets = designers
     else:
@@ -498,7 +500,8 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     dresults = []
     for d in targets:
         dresults.append(_import_build_one(
-            csv_path, d["slug"], d.get("staff"), store.get("salon", ""), do_build=do_build))
+            csv_path, d["slug"], d.get("staff"), store.get("salon", ""),
+            do_build=do_build, display_name=d.get("name")))
 
     partial = partial_of(res)
     if partial and res.get("pager"):        # 멈춤 시 페이저 DOM 저장 → 정밀 진단
@@ -561,8 +564,11 @@ def prune_raw(raw_dir: Path, keep: int = 5) -> int:
     return removed
 
 
-def _import_build_one(csv_path, slug: str, staff, salon: str, *, do_build: bool) -> dict:
-    """CSV → (담당 필터) → 한 디자이너의 client 로 import+build. 담당별 분리의 최소 단위."""
+def _import_build_one(csv_path, slug: str, staff, salon: str, *, do_build: bool,
+                      display_name: str | None = None) -> dict:
+    """CSV → (담당 필터) → 한 디자이너의 client 로 import+build. 담당별 분리의 최소 단위.
+
+    display_name: 앱에 표시할 실제 이름(HandSOS 라벨과 다를 때 매핑). 재실행 시 갱신."""
     import import_handsos as ih
     parsed = ih.parse_rows(str(csv_path), staff=staff)
     if not parsed:
@@ -571,19 +577,27 @@ def _import_build_one(csv_path, slug: str, staff, salon: str, *, do_build: bool)
     mm = ih.prev_visit_mismatches(parsed)             # 범위 내 구멍만
     nr, nc = ih.write_out(slug, parsed, base_dir=ROOT / "clients")   # 실행 폴더 무관, 항상 루트 기준
 
-    cfg_path = ROOT / "clients" / slug / "config.yaml"   # 최초 1회 config 부트스트랩
-    if not cfg_path.exists():
+    disp = display_name or staff or slug
+    cfg_path = ROOT / "clients" / slug / "config.yaml"
+    if not cfg_path.exists():                          # 최초 1회 config 부트스트랩
         cfg_path.write_text(yaml.safe_dump(
-            {"slug": slug, "display_name": staff or slug, "salon": salon,
+            {"slug": slug, "display_name": disp, "salon": salon,
              "today": str(date.today())}, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    elif display_name:                                 # 재매핑: 표시이름 갱신(수동수정 반영)
+        cur = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        if cur.get("display_name") != display_name:
+            cur["display_name"] = display_name
+            cfg_path.write_text(yaml.safe_dump(cur, allow_unicode=True, sort_keys=False),
+                                encoding="utf-8")
 
     built = None
     if do_build:
         import build_app
         built = build_app.build_one(str(ROOT / "clients" / slug))
     tag = f" · 방문누락의심 {len(mm)}" if mm else ""
-    print(f"    · [{slug}] {staff or '전체'}: 거래 {nr} · 신규 {nc}명{tag}")
-    return {"slug": slug, "staff": staff, "txns": nr, "new": nc,
+    label = f"{disp}" + (f"←{staff}" if staff and staff != disp else "")
+    print(f"    · [{slug}] {label}: 거래 {nr} · 신규 {nc}명{tag}")
+    return {"slug": slug, "staff": staff, "name": disp, "txns": nr, "new": nc,
             "mismatches": len(mm), "built": built and built.get("out")}
 
 

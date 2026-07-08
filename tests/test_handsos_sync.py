@@ -225,3 +225,23 @@ def test_prune_raw_keeps_latest_csv_and_recent_fails(tmp_path):
     assert {p.name for p in d.glob("*.csv")} == {"handsos_latest.csv"}  # 최신본만 남음
     assert len([x for x in d.glob("fail_*") if x.is_dir()]) == 3        # fail 최근 3개
     assert removed == 6 + 1                                             # 옛 csv 6 + fail 1
+
+
+def test_import_build_one_maps_display_name(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hs, "ROOT", tmp_path)
+    import csv as _csv
+    raw = tmp_path / "h.csv"
+    with raw.open("w", encoding="utf-8-sig", newline="") as f:
+        w = _csv.writer(f)
+        w.writerow(["날짜", "고객명", "전화번호", "고객번호", "이전방문", "상세메뉴", "담당", "결제액", "메모"])
+        w.writerow(["2026-06-26", "김", "010-1", "1", "", "컷", "주환원", "20000", ""])
+    import yaml as _y
+    # 라벨(주환원) → 실제 이름(김주환) 매핑
+    hs._import_build_one(raw, "juhwan", "주환원", "살롱톤", do_build=False, display_name="김주환")
+    cfg = _y.safe_load((tmp_path / "clients" / "juhwan" / "config.yaml").read_text(encoding="utf-8"))
+    assert cfg["display_name"] == "김주환"                 # 라벨 아님
+    # 재실행에 다른 이름 → 갱신
+    hs._import_build_one(raw, "juhwan", "주환원", "살롱톤", do_build=False, display_name="김주환 원장")
+    cfg2 = _y.safe_load((tmp_path / "clients" / "juhwan" / "config.yaml").read_text(encoding="utf-8"))
+    assert cfg2["display_name"] == "김주환 원장"           # 재매핑 반영
