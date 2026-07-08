@@ -279,16 +279,19 @@ def test_birthday_column_flows_to_customer(tmp_path):
     assert custs[0]["birthday"] == "03-15"      # 생일 케어 자동 점화
 
 
-def test_prev_visit_mismatch_detector():
+def test_prev_visit_mismatch_only_in_range_holes():
     rows = [
-        {"date": "2026-05-29", "name": "배상웅", "custno": "100", "service": "펌"},
+        {"date": "2026-01-02", "name": "배상웅", "custno": "100", "service": "펌"},   # 최저
         {"date": "2026-06-26", "name": "배상웅", "custno": "100", "service": "컷",
-         "prev_visit": "2026-05-29"},                      # 일치 — 문제 없음
-        {"date": "2026-06-26", "name": "김주환", "custno": "200", "service": "컷",
-         "prev_visit": "2026-04-01"},                      # 우리 원장에 4/1 이 없음 → 신호
+         "prev_visit": "2026-01-02"},                      # 일치 — 정상
+        {"date": "2026-06-26", "name": "조희진", "custno": "200", "service": "컷",
+         "prev_visit": "2025-12-01"},                      # 범위 이전 과거 이력 → 무시(정상)
+        {"date": "2026-01-05", "name": "김주환", "custno": "300", "service": "컷"},   # 최저
+        {"date": "2026-06-26", "name": "김주환", "custno": "300", "service": "펌",
+         "prev_visit": "2026-03-15"},                      # 범위(1/5~6/26) 안인데 없음 = 진짜 구멍
     ]
     mm = ih.prev_visit_mismatches(rows)
-    assert len(mm) == 1 and mm[0]["name"] == "김주환" and mm[0]["ours"] is None
+    assert len(mm) == 1 and mm[0]["name"] == "김주환"      # 범위 내 구멍만, 과거이력·일치는 제외
 
 
 def test_build_app_redacts_phone_in_notes(tmp_path):

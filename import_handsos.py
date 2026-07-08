@@ -186,10 +186,11 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
 
 
 def prev_visit_mismatches(rows: list[dict]) -> list[dict]:
-    """핸드SOS '이전방문' vs 우리 원장의 직전 방문 — 어긋나면 병합/누락 신호(①의 감지기).
+    """핸드SOS '이전방문' vs 우리 원장 — **수집 범위 안의 진짜 구멍**만 리포트(①의 감지기).
 
-    같은 고객의 방문 날짜를 정렬해, 각 레코드의 prev_visit 이 우리가 아는 직전
-    방문과 다르면 리포트. '우리 원장에 그 방문이 없다' = 수집 누락 or 카드 분열."""
+    보수적으로: prev_visit 이 우리가 가진 방문일이 아니고, 게다가 그 고객의 수집 범위
+    (최저~최고 방문일) '사이'에 있으면 = 중간에 빠진 방문(진짜 누락/분열). 범위 이전의
+    과거 이력(우리 수집 시작 전)은 무시 — 그건 정상(고객 대부분이 그 전부터 다님)."""
     by_cust: dict[str, set] = defaultdict(set)
     for r in rows:
         key = _custno(r.get("custno")) or (r.get("name") or "")
@@ -201,11 +202,11 @@ def prev_visit_mismatches(rows: list[dict]) -> list[dict]:
         if not pv:
             continue
         key = _custno(r.get("custno")) or (r.get("name") or "")
-        before = sorted(d for d in by_cust.get(key, ()) if d < r["date"])
-        ours = before[-1] if before else None
-        if ours != pv:
-            out.append({"name": r.get("name"), "date": r.get("date"),
-                        "handsos": pv, "ours": ours})
+        dates = by_cust.get(key) or set()
+        if pv in dates or not dates:
+            continue                               # 이미 가진 날짜거나 대조 불가 → 정상
+        if min(dates) < pv < max(dates):           # 수집 범위 '안'인데 없음 = 진짜 중간 누락
+            out.append({"name": r.get("name"), "date": r.get("date"), "handsos": pv, "ours": None})
     return out
 
 
@@ -397,9 +398,9 @@ def main() -> int:
     print(f"거래 {len(rows)}건 → 고객 {len(customers)}명"
           + (f" (담당={args.staff})" if args.staff else ""))
     mm = prev_visit_mismatches(rows)
-    if mm:                                   # 핸드SOS '이전방문'과 어긋남 = 누락/분열 신호
-        print(f"  ⚠ 이전방문 불일치 {len(mm)}건 (수집 누락 또는 카드 분열 신호) — 예: "
-              + ", ".join(f"{m['name']} {m['date']}" for m in mm[:3]))
+    if mm:                                   # 수집 범위 안의 진짜 구멍만(과거 이력은 제외)
+        print(f"  · 범위 내 방문 누락 의심 {len(mm)}건 — 확인 권장, 예: "
+              + ", ".join(f"{m['name']} {m['handsos']}" for m in mm[:3]))
     for c in sorted(customers, key=lambda x: -x["loyalty_visits"])[:5]:
         print(f"  · {c['name']} (방문 {c['loyalty_visits']}회, 최근 {c['history'][0]['service']})")
     if args.dry:
