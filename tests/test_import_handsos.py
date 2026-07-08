@@ -244,6 +244,16 @@ def test_write_out_reconcile_moves_manual_and_removes_orphan(tmp_path, monkeypat
     assert c["loyalty_visits"] == 2 and c["memo"] == "수다 좋아함"   # 이력 합침 + 수동 승계
 
 
+def test_merge_records_idempotent_on_rerun():
+    # 같은 데이터를 다시 수집해도 원장이 안 늘어남(중복 누적 방지)
+    rows = [{"date": "2026-06-26", "name": "김", "custno": "1", "service": "컷", "price": 20000},
+            {"date": "2026-06-25", "name": "이", "custno": "2", "service": "펌", "price": 90000}]
+    once = ih.merge_records([], rows)
+    twice = ih.merge_records(once, rows)          # 재실행(동일 스크랩)
+    thrice = ih.merge_records(twice, rows)
+    assert len(once) == len(twice) == len(thrice) == 2
+
+
 def test_anon_identical_rows_survive_import():
     # 같은 날 같은 시술·금액의 익명 2건 — 붕괴하면 매출 과소집계
     rows = [{"date": "2026-06-01", "name": "손님", "service": "컷", "price": 20000},

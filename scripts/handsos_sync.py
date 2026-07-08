@@ -505,6 +505,9 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
                       f"how={res.get('how')}\n\n{res['pager']}", encoding="utf-8")
         print(f"  ↳ 멈춘 지점 페이저 DOM 저장: {pf}")
 
+    if not debug:                           # 오래된 수확 CSV·덤프 정리(무한 누적 방지)
+        prune_raw(raw_dir, keep=int(store.get("keep_raw", 5)))
+
     return {"slug": slug, "ok": True, "rows": len(rows), "total": res.get("total"),
             "txns": sum(d["txns"] for d in dresults),
             "new_customers": sum(d["new"] for d in dresults),
@@ -523,6 +526,28 @@ def _slug_for(staff: str) -> str | None:
     s = _ROLE_RE.sub("", staff or "").strip()
     s = _re.sub(r"[^\w가-힣]", "", s)
     return s or None
+
+
+def prune_raw(raw_dir: Path, keep: int = 5) -> int:
+    """오래된 수확 CSV·실패 덤프를 최근 keep 개만 남기고 정리(_raw 무한 누적 방지)."""
+    import shutil
+    removed = 0
+    for p in sorted(raw_dir.glob("handsos_*.csv"), reverse=True)[keep:]:
+        try:
+            p.unlink()
+            removed += 1
+        except Exception:
+            pass
+    for p in sorted(raw_dir.glob("pager_*.txt"), reverse=True)[keep:]:
+        try:
+            p.unlink()
+            removed += 1
+        except Exception:
+            pass
+    for d in sorted([x for x in raw_dir.glob("fail_*") if x.is_dir()], reverse=True)[keep:]:
+        shutil.rmtree(d, ignore_errors=True)
+        removed += 1
+    return removed
 
 
 def _import_build_one(csv_path, slug: str, staff, salon: str, *, do_build: bool) -> dict:

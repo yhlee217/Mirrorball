@@ -211,3 +211,16 @@ def test_write_out_base_dir_is_location_independent(tmp_path):
                  base_dir=tmp_path / "clients")
     assert (tmp_path / "clients" / "hayewoni" / "records.yaml").exists()
     assert (tmp_path / "clients" / "hayewoni" / "customers").exists()
+
+
+def test_prune_raw_keeps_recent(tmp_path):
+    d = tmp_path / "_raw"
+    (d).mkdir()
+    for i in range(8):
+        (d / f"handsos_2026010{i}-000000.csv").write_text("x", encoding="utf-8")
+    for i in range(4):
+        (d / f"fail_2026010{i}-000000").mkdir()
+    removed = hs.prune_raw(d, keep=3)
+    assert len(list(d.glob("handsos_*.csv"))) == 3          # 최근 3개만
+    assert len([x for x in d.glob("fail_*") if x.is_dir()]) == 3
+    assert removed == 5 + 1                                  # csv 5 + fail 1
