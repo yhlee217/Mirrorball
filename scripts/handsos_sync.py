@@ -163,7 +163,7 @@ def healthcheck(cfg: dict, max_hours: int = 48) -> int:
 # ───────────────────────── Playwright 수확(브라우저) ─────────────────────────
 def _capture_failure(ctx, slug: str, err) -> str:
     """실패 시 화면+DOM 저장 — AI(handsos_heal)나 사람이 바로 진단·수리하게."""
-    d = ROOT / "clients" / slug / "_raw" / ("fail_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+    d = ROOT / "_raw" / slug / ("fail_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
     d.mkdir(parents=True, exist_ok=True)
     try:
         for i, pg in enumerate(ctx.pages):
@@ -444,7 +444,8 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
     slug = store["slug"]
     staff = store.get("staff")
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S") if not debug else "debug"
-    raw_dir = ROOT / "clients" / slug / "_raw"
+    # 공용 수확 원본(매장 전체)은 디자이너 폴더 밖 중립 위치(_raw/)에 — 개인 폴더엔 분리된 데이터만.
+    raw_dir = ROOT / "_raw" / slug
 
     apply_overrides(store)                      # AI/사람이 고친 셀렉터 오버라이드 반영
     try:

@@ -1,5 +1,6 @@
 .env
 runs/
+_raw/
 dist/
 dist_app/
 mockups/data/
