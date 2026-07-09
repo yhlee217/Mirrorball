@@ -146,11 +146,12 @@ def parse_rows(path: str, staff: str | None = None) -> list[dict]:
             i = cmap.get(f)
             return r[i].strip() if i is not None and i < len(r) else ""
 
-        # 담당: 연속행(같은 방문 추가 시술)은 담당 칸이 비어 직전 담당을 승계 → 필터에서 안 빠지게
+        # 담당: 연속행(같은 방문 추가 시술)은 담당 칸이 비어 직전 담당을 승계 → 필터에서 안 빠지게.
+        # 단 승계할 직전 담당도 없으면(무담당·미상) 특정 디자이너로 못 넣는다 → 필터 시 제외(교차오염 방지).
         eff_staff = cell("staff") or last_staff
         if cell("staff"):
             last_staff = cell("staff")
-        if staff and eff_staff and staff not in eff_staff:
+        if staff and staff not in eff_staff:
             continue
         name = _clean_name(cell("name"))
         d = _date(cell("date"))

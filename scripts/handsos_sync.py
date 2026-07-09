@@ -515,8 +515,13 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
         if n_pruned:
             print(f"  · _raw 정리: 오래된 파일 {n_pruned}개 삭제(최근 {store.get('keep_raw', 5)}개 유지)")
 
+    # 집계: 같은 slug 로 합쳐지는 담당(다운부+다운v→daun)은 원장이 누적되므로 txns 는 slug 당
+    # 최종값만(중복합산 방지). 신규(new)는 이번 실행에 새로 만든 카드 수라 호출별 합산이 맞음.
+    txns_by_slug = {}
+    for d in dresults:
+        txns_by_slug[d["slug"]] = d["txns"]      # 같은 slug 는 마지막(최종) 값
     return {"slug": slug, "ok": True, "rows": len(rows), "total": res.get("total"),
-            "txns": sum(d["txns"] for d in dresults),
+            "txns": sum(txns_by_slug.values()),
             "new_customers": sum(d["new"] for d in dresults),
             "designers": dresults, "csv": str(csv_path),
             "partial": partial, "pager": res.get("pager"), "stopped_at": res.get("stoppedAt")}

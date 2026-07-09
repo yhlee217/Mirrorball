@@ -309,6 +309,18 @@ def test_continuation_row_inherits_staff_under_filter(tmp_path):
     assert rows[1]["service"] == "펌" and rows[1]["staff"] == "하예원"
 
 
+def test_no_staff_row_not_leaked_to_filtered_designer(tmp_path):
+    # 담당 비어있고 승계할 직전 담당도 없는 행(무담당) → 특정 디자이너 필터엔 안 들어가야(교차오염 방지)
+    p = tmp_path / "h.csv"
+    _w(p, [H2,
+           ["2026-06-26", "무담당손님", "010-9", "9", "", "상품", "", "10000", ""],   # 담당 빈칸(첫 행)
+           ["2026-06-26", "김", "010-1", "1", "", "컷", "하예원", "20000", ""]])
+    only = ih.parse_rows(str(p), staff="하예원")
+    assert [r["name"] for r in only] == ["김"]           # 무담당 행 제외
+    allrows = ih.parse_rows(str(p))                       # 필터 없으면 둘 다 보존
+    assert len(allrows) == 2
+
+
 def test_staff_filter_excludes_other_designer(tmp_path):
     p = tmp_path / "h.csv"
     _w(p, [H2,

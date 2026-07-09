@@ -245,3 +245,25 @@ def test_import_build_one_maps_display_name(tmp_path, monkeypatch):
     hs._import_build_one(raw, "juhwan", "주환원", "살롱톤", do_build=False, display_name="김주환 원장")
     cfg2 = _y.safe_load((tmp_path / "clients" / "juhwan" / "config.yaml").read_text(encoding="utf-8"))
     assert cfg2["display_name"] == "김주환 원장"           # 재매핑 반영
+
+
+def test_aggregate_txns_no_double_count_for_merged_slug(tmp_path, monkeypatch):
+    # 다운부+다운v → 같은 slug(daun): 집계 txns 가 중복 합산(178+186) 안 되고 최종(186)만
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hs, "ROOT", tmp_path)
+    import csv as _csv
+    raw = tmp_path / "h.csv"
+    with raw.open("w", encoding="utf-8-sig", newline="") as f:
+        w = _csv.writer(f)
+        w.writerow(["날짜", "고객명", "전화번호", "고객번호", "이전방문", "상세메뉴", "담당", "결제액", "메모"])
+        w.writerow(["2026-06-26", "가", "010-1", "1", "", "펌", "다운부", "90000", ""])
+        w.writerow(["2026-06-20", "나", "010-2", "2", "", "컷", "다운v", "20000", ""])
+    # 두 담당을 같은 slug 로
+    d1 = hs._import_build_one(raw, "daun", "다운부", "살롱톤", do_build=False, display_name="이다운")
+    d2 = hs._import_build_one(raw, "daun", "다운v", "살롱톤", do_build=False, display_name="이다운")
+    dresults = [d1, d2]
+    txns_by_slug = {}
+    for d in dresults:
+        txns_by_slug[d["slug"]] = d["txns"]
+    assert d1["txns"] == 1 and d2["txns"] == 2               # 누적: 1 → 2
+    assert sum(txns_by_slug.values()) == 2                   # 집계는 최종 2 (1+2=3 아님)
