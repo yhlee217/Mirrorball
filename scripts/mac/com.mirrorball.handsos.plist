@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  HandSOS 매일 동기화 (macOS launchd). 매일 03:10 에 담당별 전원 수집.
+  {PROJECT} 는 install_schedule.sh 가 실제 저장소 경로로 치환.
+  설치/변경/중지는 scripts/mac/install_schedule.sh 또는 scripts/MAC.md 참고.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.mirrorball.handsos</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>{PROJECT}/scripts/mac/run_sync.sh</string>
+    <string>--all-designers</string>
+  </array>
+  <key>WorkingDirectory</key><string>{PROJECT}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- launchd 는 로그인 PATH 를 안 물려받음 → claude CLI(자가치유용) 경로 명시 -->
+    <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>3</integer>
+    <key>Minute</key><integer>10</integer>
+  </dict>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>{PROJECT}/runs/handsos.out.log</string>
+  <key>StandardErrorPath</key><string>{PROJECT}/runs/handsos.err.log</string>
+</dict>
+</plist>

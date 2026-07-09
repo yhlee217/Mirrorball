@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  발견케어(노출) 주간 측정 (macOS launchd). 매주 월요일 09:00.
+  {PROJECT}/{SLUG} 는 install_schedule.sh 가 치환. Weekday: 1=월 … 0/7=일.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.mirrorball.expose</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>{PROJECT}/scripts/mac/run_expose_auto.sh</string>
+    <string>{SLUG}</string>
+  </array>
+  <key>WorkingDirectory</key><string>{PROJECT}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key><integer>1</integer>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>{PROJECT}/runs/expose.out.log</string>
+  <key>StandardErrorPath</key><string>{PROJECT}/runs/expose.err.log</string>
+</dict>
+</plist>
