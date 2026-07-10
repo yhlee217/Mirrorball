@@ -263,6 +263,8 @@
 </style>
 </head>
 <body>
+<!-- 부팅 스플래시: 첫 진입 시 데이터 로딩 지연 동안 '미설정 홈' 플래시를 가림(암호 게이트/실데이터가 준비되면 boot 이 제거) -->
+<div id="bootSplash" style="position:fixed;inset:0;z-index:99998;background:#faf7f2;color:#2b2b2b;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',Roboto,sans-serif"><div style="text-align:center"><div style="font-size:22px;font-weight:800;letter-spacing:.01em">살롱 컨시어지</div><div style="margin-top:10px;font-size:13px;opacity:.5">불러오는 중…</div></div></div>
 <div class="app">
 
   <div class="bar" id="bar">
@@ -292,6 +294,7 @@
         <div class="li" data-go="s-alerts"><div class="av">🔔</div><div class="bd"><div class="nm">오늘 챙길 고객</div><div class="sub">생일·재방문 시기 자동 정리</div></div><div class="rt">›</div></div>
         <div class="li" data-go="s-clients"><div class="av">👥</div><div class="bd"><div class="nm">고객 카르테</div><div class="sub">지난 시술·취향·대화 메모</div></div><div class="rt">›</div></div>
         <div class="li" data-go="s-exposure"><div class="av">📈</div><div class="bd"><div class="nm">AI 노출 케어</div><div class="sub">검색·AI에 어떻게 보이는지</div></div><div class="rt">›</div></div>
+        <div class="li" data-go="s-profile"><div class="av">📇</div><div class="bd"><div class="nm">소개 페이지 편집</div><div class="sub">손님에게 보이는 공개 소개 고치기</div></div><div class="rt">›</div></div>
       </div>
     </section>
 
@@ -345,6 +348,11 @@
     <!-- 통계 -->
     <section class="screen" id="s-stats" data-title="기록 · 통계">
       <div id="statsBody"></div>
+    </section>
+
+    <!-- 소개 페이지 편집 -->
+    <section class="screen" id="s-profile" data-title="소개 페이지">
+      <div id="profileBody"></div>
     </section>
 
   </div>
@@ -917,13 +925,115 @@
     },60);
   }
 
-  function renderAll(){ renderHome();renderHomeStats();renderAlerts();renderClients();renderExposure();renderStats(); }
+  // <profileform>
+  // 순수: 원본 프로필 + 폼 값 → 병합(구조 보존·트림, 필터 없음 — 편집 중 빈 행 유지).
+  // cleanProfile 이 저장·발행 직전 빈 행 제거. 영문(en)·slug·위치 등은 clone 으로 보존.
+  // 테스트: tests/test_app_profile.py
+  function profileFromForm(base, vals){
+    var p=JSON.parse(JSON.stringify(base||{})), T=function(x){return String(x==null?'':x).trim();};
+    if(vals.tagline!=null) p.tagline=T(vals.tagline);
+    if(vals.booking_url!=null) p.booking_url=T(vals.booking_url);
+    if(vals.instagram!=null) p.instagram=T(vals.instagram);
+    if(vals.about!=null) p.about=vals.about.map(T);
+    if(vals.portfolio_labels!=null) p.portfolio_labels=vals.portfolio_labels.map(T);
+    if(vals.faq!=null) p.faq=vals.faq.map(function(f){return {q:T(f.q),a:T(f.a)};});
+    if(vals.specialties!=null) p.specialties=vals.specialties.map(function(s){ var o={name:T(s.name),desc:T(s.desc)}; if(s.signature) o.signature=true; return o; });
+    return p;
+  }
+  function cleanProfile(p){
+    var q=JSON.parse(JSON.stringify(p||{})), ne=function(x){return !!(x&&String(x).trim());};
+    if(q.about) q.about=q.about.filter(ne);
+    if(q.portfolio_labels) q.portfolio_labels=q.portfolio_labels.filter(ne);
+    if(q.faq) q.faq=q.faq.filter(function(f){return ne(f.q)||ne(f.a);});
+    if(q.specialties) q.specialties=q.specialties.filter(function(s){return ne(s.name)||ne(s.desc);});
+    return q;
+  }
+  // </profileform>
+  var PROFILE=null, profileRendered=false, profileBound=false;
+  var PROFILE_LS='mb_profile_'+SLUG;
+  function profileSource(){
+    try{ var s=localStorage.getItem(PROFILE_LS); if(s) return JSON.parse(s); }catch(e){}
+    return (DATA&&DATA.profile)? JSON.parse(JSON.stringify(DATA.profile)) : null;
+  }
+  function serializeProfile(){
+    var vals={}, g=function(id){ var e=document.getElementById(id); return e? e.value : null; };
+    var L=function(sel,fn){ return Array.prototype.map.call(document.querySelectorAll(sel), fn); };
+    vals.tagline=g('pf_tagline'); vals.booking_url=g('pf_booking'); vals.instagram=g('pf_instagram');
+    if(document.getElementById('pf_about')) vals.about=L('#pf_about textarea',function(t){return t.value;});
+    if(document.getElementById('pf_portfolio')) vals.portfolio_labels=L('#pf_portfolio input',function(i){return i.value;});
+    if(document.getElementById('pf_faq')) vals.faq=L('#pf_faq .pf-faq',function(el){var q=el.querySelector('input'),a=el.querySelector('textarea');return {q:q?q.value:'',a:a?a.value:''};});
+    if(document.getElementById('pf_spec')) vals.specialties=L('#pf_spec .pf-spec',function(el){var n=el.querySelector('.pf-sname'),d=el.querySelector('.pf-sdesc'),s=el.querySelector('.pf-ssig');return {name:n?n.value:'',desc:d?d.value:'',signature:s?s.checked:false};});
+    return profileFromForm(PROFILE, vals);
+  }
+  function renderProfile(){
+    var box=document.getElementById('profileBody'); if(!box || profileRendered) return;
+    PROFILE=PROFILE||profileSource();          // 최초만 소스 로드 · 재렌더(추가/삭제)는 편집중 값 유지
+    if(!PROFILE){ box.innerHTML=empty('📇','소개 정보가 아직 없어요','프로필(designers 소스)이 준비되면\n여기서 공개 소개 페이지를 편집할 수 있어요'); return; }
+    profileRendered=true;
+    var p=PROFILE;
+    var ta=function(id,v,ph,r){return '<textarea id="'+id+'" rows="'+(r||2)+'" placeholder="'+esc(ph||'')+'" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:15px;font-family:inherit;background:var(--paper);color:var(--ink);resize:vertical">'+esc(v||'')+'</textarea>';};
+    var inp=function(id,v,ph){return '<input id="'+id+'" value="'+esc(v||'')+'" placeholder="'+esc(ph||'')+'" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:15px;font-family:inherit;background:var(--paper);color:var(--ink)">';};
+    var h='<div class="sec-h">공개 소개 페이지를 여기서 고쳐요 · 발행하면 실제 페이지에 반영</div>';
+    h+='<div class="card reveal"><div class="ch">한 줄 소개 (태그라인)</div>'+ta('pf_tagline',p.tagline,'예: 정교한 커트 라인과 분위기를 완성하는 펌 디자인.',3)+'</div>';
+    h+='<div class="card reveal"><div class="ch">소개 · 경력</div><div id="pf_about">';
+    (p.about||[]).forEach(function(a,i){ h+='<div style="display:flex;gap:6px;margin-bottom:6px;align-items:flex-start"><div style="flex:1">'+ta('pf_about_'+i,a,'',2)+'</div><button class="btn ghost pf-del" data-list="about" data-i="'+i+'" style="flex:0 0 auto;padding:6px 12px">✕</button></div>'; });
+    h+='</div><button class="btn ghost pf-add" data-list="about" style="margin-top:4px">+ 소개 줄 추가</button></div>';
+    var sta=function(v){return '<textarea class="pf-sdesc" rows="3" placeholder="설명" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:15px;font-family:inherit;background:var(--paper);color:var(--ink);resize:vertical">'+esc(v||'')+'</textarea>';};
+    h+='<div class="card reveal"><div class="ch">시술 설명</div><div id="pf_spec">';
+    (p.specialties||[]).forEach(function(s,i){ h+='<div class="pf-spec" style="margin-bottom:12px;border-left:2px solid var(--line);padding-left:9px"><input class="pf-sname" value="'+esc(s.name||'')+'" placeholder="시술명" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:15px;font-weight:700;font-family:inherit;background:var(--paper);color:var(--ink)"><div style="height:5px"></div>'+sta(s.desc)+'<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-top:7px;cursor:pointer"><input type="checkbox" class="pf-ssig"'+(s.signature?' checked':'')+'> 대표 시술로 표시 ★</label><button class="btn ghost pf-del" data-list="specialties" data-i="'+i+'" style="margin-top:6px;padding:2px 10px;font-size:12px">이 시술 삭제</button></div>'; });
+    h+='</div><button class="btn ghost pf-add" data-list="specialties" style="margin-top:4px">+ 시술 추가</button></div>';
+    h+='<div class="card reveal"><div class="ch">포트폴리오 라벨</div><div style="font-size:12px;opacity:.6;margin-bottom:7px">공개 페이지 포트폴리오 카테고리 (예: 레이어드컷·뿌리펌·단발)</div><div id="pf_portfolio">';
+    (p.portfolio_labels||[]).forEach(function(l,i){ h+='<div style="display:flex;gap:6px;margin-bottom:6px"><input value="'+esc(l)+'" placeholder="라벨" style="flex:1;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:15px;font-family:inherit;background:var(--paper);color:var(--ink)"><button class="btn ghost pf-del" data-list="portfolio_labels" data-i="'+i+'" style="padding:6px 12px">✕</button></div>'; });
+    h+='</div><button class="btn ghost pf-add" data-list="portfolio_labels" style="margin-top:4px">+ 라벨 추가</button></div>';
+    h+='<div class="card reveal"><div class="ch">자주 묻는 질문 (FAQ)</div><div id="pf_faq">';
+    (p.faq||[]).forEach(function(f,i){ h+='<div class="pf-faq" style="margin-bottom:11px;border-left:2px solid var(--line);padding-left:9px">'+inp('pf_faq_q_'+i,f.q,'질문')+'<div style="height:5px"></div>'+ta('pf_faq_a_'+i,f.a,'답변',2)+'<button class="btn ghost pf-del" data-list="faq" data-i="'+i+'" style="margin-top:5px;padding:2px 10px;font-size:12px">삭제</button></div>'; });
+    h+='</div><button class="btn ghost pf-add" data-list="faq" style="margin-top:4px">+ 질문 추가</button></div>';
+    h+='<div class="card reveal"><div class="ch">예약 · 인스타</div><div style="font-size:12px;opacity:.6;margin-bottom:4px">네이버 예약 링크</div>'+inp('pf_booking',p.booking_url,'https://booking.naver.com/...')+'<div style="height:8px"></div><div style="font-size:12px;opacity:.6;margin-bottom:4px">인스타그램 아이디</div>'+inp('pf_instagram',p.instagram,'hayewoni')+'</div>';
+    h+='<div style="display:flex;gap:8px;margin:12px 0 4px"><button class="btn" id="pf_publish" style="flex:2">발행 (공개 페이지 반영)</button><button class="btn ghost" id="pf_save" style="flex:1">임시 저장</button></div>';
+    if(p.site_url) h+='<a href="'+esc(p.site_url)+'" target="_blank" rel="noopener" style="display:block;text-align:center;color:var(--accent);font-size:14px;padding:8px">현재 공개 페이지 미리보기 ↗</a>';
+    box.innerHTML=h;
+    ensureProfileEvents();
+  }
+  function ensureProfileEvents(){
+    if(profileBound) return; profileBound=true;
+    document.getElementById('profileBody').addEventListener('click',function(e){
+      var add=e.target.closest('.pf-add');
+      if(add){ PROFILE=serializeProfile(); var la=add.getAttribute('data-list');
+        if(la==='about') PROFILE.about=(PROFILE.about||[]).concat('');
+        else if(la==='faq') PROFILE.faq=(PROFILE.faq||[]).concat({q:'',a:''});
+        else if(la==='specialties') PROFILE.specialties=(PROFILE.specialties||[]).concat({name:'',desc:'',signature:false});
+        else if(la==='portfolio_labels') PROFILE.portfolio_labels=(PROFILE.portfolio_labels||[]).concat('');
+        profileRendered=false; renderProfile(); return; }
+      var del=e.target.closest('.pf-del');
+      if(del){ PROFILE=serializeProfile(); var ld=del.getAttribute('data-list'), i=+del.getAttribute('data-i');
+        if(PROFILE[ld]) PROFILE[ld].splice(i,1); profileRendered=false; renderProfile(); return; }
+      if(e.target.id==='pf_save') saveProfile(false);
+      else if(e.target.id==='pf_publish') saveProfile(true);
+    });
+  }
+  function saveProfile(publish){
+    var p=serializeProfile(); if(!p) return; PROFILE=p;
+    try{ localStorage.setItem(PROFILE_LS, JSON.stringify(p)); }catch(e){}
+    if(!publish){ toast('임시 저장했어요'); return; }
+    publishProfile(cleanProfile(p));
+  }
+  function publishProfile(p){
+    var btn=document.getElementById('pf_publish'); if(btn){btn.disabled=true;btn.textContent='발행 중…';}
+    var reset=function(){ if(btn){btn.disabled=false;btn.textContent='발행 (공개 페이지 반영)';} };
+    fetch('/.netlify/functions/save-profile',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({slug:SLUG,pass:APP_PW||'',profile:p})})
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(){ reset(); toast('발행됐어요 · 잠시 후 공개 페이지에 반영돼요'); })
+      .catch(function(){ reset(); toast('임시 저장됨 · 자동 발행 연결 전이에요'); });
+  }
+  function renderAll(){ renderHome();renderHomeStats();renderAlerts();renderClients();renderExposure();renderStats();renderProfile(); }
 
   // ══ 로컬 CRM: 직접 추가·수정 (localStorage + JS 파생) ══════════════
   var SLUG = new URLSearchParams(location.search).get('d') ||
              (typeof PREVIEW_DATA!=='undefined' && PREVIEW_DATA.slug) || 'my';
   var LS_KEY = 'salon_crm_' + SLUG;
-  var META = {today: null, designer:'', salon:'', exposure:null, stats:null, instagram:null, thresholds:null, bookings:null};
+  var META = {today: null, designer:'', salon:'', exposure:null, stats:null, instagram:null, thresholds:null, bookings:null, profile:null};
+  var APP_PW='';   // 잠금 해제에 성공한 비밀번호(소개 발행 인증용 · 세션 메모리)
   var CUSTS = [];
 
   function lsLoad(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ return null; } }
@@ -1060,7 +1170,7 @@
       // 교차판매: 빌드가 실어준 값(파이썬 단일 소스) 우선, 없으면(수기 추가 고객 등) JS 폴백
       card.crosssell=('crosssell' in c)?(c.crosssell||null):crosssellFor(card); return card; });
     DATA={slug:SLUG,designer:META.designer,salon:META.salon,today:ts,exposure:META.exposure,stats:META.stats,
-          instagram:META.instagram,thresholds:META.thresholds,bookings:mergeBookings(META.bookings,upcoming(CUSTS,ts),ts),care:care,clients:clients};
+          instagram:META.instagram,thresholds:META.thresholds,bookings:mergeBookings(META.bookings,upcoming(CUSTS,ts),ts),profile:META.profile,care:care,clients:clients};
   }
   function refresh(){ derive(); renderAll(); }
 
@@ -1248,7 +1358,7 @@
     // 미리보기는 데이터 기준일(snapshot)에 고정 → 주기 신호가 결정적으로 재현됨. 운영은 기기 오늘.
     META.today=(preview && base && base.today)? base.today : todayStr();
     if(base){ META.designer=base.designer||''; META.salon=base.salon||''; META.exposure=base.exposure||null; META.stats=base.stats||null;
-      META.instagram=base.instagram||null; META.thresholds=base.thresholds||null; META.bookings=base.bookings||null;
+      META.instagram=base.instagram||null; META.thresholds=base.thresholds||null; META.bookings=base.bookings||null; META.profile=base.profile||null;
       if(base.config){ CONFIG = base.config; } }     // 업종 카피 단일 소스 주입
     var local=preview?null:lsLoad();
     var seed=(base&&base.seed)?base.seed:null;
@@ -1257,6 +1367,7 @@
     else if(seed){ CUSTS = mergeCustomers(seed, local); lsSave(); }            // 이후: 최신 빌드(거래) + 로컬 편집(수동) 병합
     else { CUSTS = local; }                                                    // 빌드 없음(오프라인) → 로컬 유지
     refresh();
+    var _sp=document.getElementById('bootSplash'); if(_sp) _sp.style.display='none';   // 준비 완료 → 스플래시 제거
   }
   // <appcrypto>
   // 배포 데이터가 암호문 봉투면 비밀번호로 복호화(build_app_site 가 --plain 아니면 암호화).
@@ -1284,6 +1395,7 @@
       function done(t){ try{document.body.removeChild(ov);}catch(e){} resolve(t); }
       function attempt(pw, remember, onFail){
         decryptEnvelope(env, pw).then(function(t){
+          APP_PW=pw;                                    // 소개 발행 인증용(세션)
           if(remember){ try{ localStorage.setItem(KEY, pw); }catch(e){} }
           done(t);
         }).catch(function(){ if(onFail) onFail(); });

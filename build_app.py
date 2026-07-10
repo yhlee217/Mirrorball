@@ -181,6 +181,10 @@ def spend_by_custno(records: list[dict]) -> dict[str, int]:
 # 누적결제 기준 등급 경계 — **단일 소스**. dist JSON 의 thresholds 로 내보내 앱 JS 도 이 값을 쓴다.
 TIER_THRESHOLDS = {"vip": 500000, "regular": 250000, "normal": 100000}
 
+# 앱 '소개 편집'에서 다룰 수 있는 프로필 필드(공개 정보). import_profile_edits 의 반영 대상과 일치.
+PROFILE_EDITABLE = ("tagline", "about", "specialties", "portfolio_labels", "faq",
+                    "location", "booking_url", "instagram", "photo_url")
+
 
 def spend_tier(won: int) -> str:
     if won >= TIER_THRESHOLDS["vip"]:
@@ -347,6 +351,14 @@ def build_one(client_dir: str, dist: str = "dist_app") -> dict:
     ig_path = Path(client_dir) / "instagram.yaml"
     if ig_path.exists():
         data["instagram"] = _load(str(ig_path))
+
+    # 소개(프로필) — designers/{slug}.yaml 의 편집 가능 필드(공개 정보). 앱 '소개 편집' 화면 소스.
+    # 역반영: 앱 편집 → import_profile_edits.py → designers/{slug}.yaml → build.py(공개 소개페이지).
+    prof_path = Path("designers") / f"{slug}.yaml"
+    if prof_path.exists():
+        prof = _load(str(prof_path))
+        data["profile"] = {k: prof.get(k) for k in PROFILE_EDITABLE + ("site_url",)
+                           if prof.get(k) is not None}
 
     # 규칙 상수 단일화 — 앱 JS 가 이 값을 읽어 파이썬과 드리프트 없게(⑤)
     data["thresholds"] = {"tiers": TIER_THRESHOLDS}
