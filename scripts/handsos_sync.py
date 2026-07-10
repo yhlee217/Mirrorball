@@ -99,6 +99,8 @@ def merge_selector_overrides(store: dict, ov: dict) -> dict:
         store["login"] = login
     if ov.get("report"):
         store["report"] = {**store.get("report", {}), **ov["report"]}
+    if ov.get("reserve"):
+        store["reserve"] = {**store.get("reserve", {}), **ov["reserve"]}
     return store
 
 
@@ -210,6 +212,16 @@ DEFAULT_LOGIN = _SEL.get("login") or {
     "submit": "#sendLogin",
 }
 DEFAULT_REPORT = _SEL.get("report") or {}
+DEFAULT_RESERVE = _SEL.get("reserve") or {}
+_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+
+
+def _dismiss_dialog(d):
+    try:
+        d.accept()
+    except Exception:
+        pass
 
 
 def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dict:
@@ -393,6 +405,84 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                 browser.close()
 
 
+def harvest_reservations(store: dict, *, headed: bool = False) -> dict:
+    """예약 목록(reserveList) 수확 → 파싱된 예약 행(담당 필터 전, 전 디자이너).
+
+    매출 수확과 별도 로그인 세션(격리 — 매출 파이프라인을 건드리지 않음). reserveList 를
+    mainFrame 에 로드 → 기간(오늘~+N일) 설정 → 검색 → 프레임 HTML 을 handsos_reserve 로 파싱.
+    반환 {parsed:[행dict], total, error?}. 실패해도 예외 없이 빈 결과(매출 동기화 무해)."""
+    from playwright.sync_api import sync_playwright
+    sys.path.insert(0, str(ROOT))
+    import handsos_reserve as hr
+
+    login = {**DEFAULT_LOGIN, **(store.get("login") or {})}
+    fields = {**DEFAULT_LOGIN["fields"], **(login.get("fields") or {})}
+    reserve = {**DEFAULT_RESERVE, **(store.get("reserve") or {})}
+    if not reserve.get("url"):
+        return {"parsed": [], "error": "no-reserve-url"}
+    days = int(reserve.get("days_ahead", 14))
+    start, end = str(date.today()), str(date.today() + timedelta(days=days))
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=not headed,
+                                     args=["--disable-blink-features=AutomationControlled"])
+        ctx = browser.new_context(user_agent=store.get("user_agent", _UA),
+                                  viewport={"width": 1366, "height": 900})
+        page = ctx.new_page()
+        page.on("dialog", _dismiss_dialog)
+        page.set_default_timeout(int(store.get("timeout_ms", 30000)))
+        try:
+            page.goto(login["url"], wait_until="domcontentloaded")
+            for k in ("company_code", "username", "password"):
+                _fill(page, fields.get(k), store.get(k, ""))
+            if login.get("submit"):
+                page.click(login["submit"])
+            page.wait_for_load_state("networkidle")
+            if page.is_visible(fields.get("password") or "#userPWD"):
+                return {"parsed": [], "error": "login-failed"}
+
+            home = reserve.get("home_url", "https://www1.handsos.com/work/default.asp")
+            page.goto(home, wait_until="domcontentloaded")
+            page.wait_for_timeout(int(reserve.get("settle_ms", 1500)))
+            fname = reserve.get("frame_name", "mainFrame")
+            page.evaluate(
+                "a=>{var f=document.querySelector('frame[name=\"'+a.n+'\"],iframe[name=\"'+a.n+'\"],#'+a.n);"
+                "if(f){f.src=a.u;}}", {"n": fname, "u": reserve["url"]})
+            fr = None
+            for _ in range(24):
+                page.wait_for_timeout(500)
+                fr = next((f for f in page.frames if "reserveList" in (f.url or "")), None)
+                if fr:
+                    break
+            if not fr:
+                return {"parsed": [], "error": "no-reserve-frame"}
+            for sel, val in ((reserve.get("date_from_sel", "#strDateS"), start),
+                             (reserve.get("date_to_sel", "#strDateE"), end)):
+                try:
+                    fr.fill(sel, val)
+                except Exception:
+                    pass
+            try:
+                fr.click(reserve.get("search_sel", "a.icogSearch"), timeout=4000)
+            except Exception:
+                try:
+                    fr.evaluate(reserve.get("search_js", "DBProc()"))
+                except Exception:
+                    pass
+            page.wait_for_timeout(int(reserve.get("settle_ms", 1500)) + 1000)
+            try:
+                html = fr.content()
+            except Exception:
+                html = ""
+            parsed = [p for p in (hr.parse_row(c) for c in hr.extract_rows(html)) if p]
+            return {"parsed": parsed, "total": len(parsed)}
+        except Exception as exc:
+            return {"parsed": [], "error": "exception: " + str(exc).splitlines()[0][:160]}
+        finally:
+            ctx.close()
+            browser.close()
+
+
 def _load_heal():
     """handsos_heal 모듈 로드(같은 scripts/ 폴더)."""
     import importlib.util
@@ -497,8 +587,33 @@ def sync_one(store: dict, *, do_build: bool, do_deploy: bool,
         targets = designers
     else:
         targets = [{"slug": slug, "staff": staff}]
+    # 예약 수집(1회, 전 디자이너) → 각 디자이너 bookings.yaml. build 전에 써야 앱에 반영됨.
+    # 매출과 별도 세션·격리 — 실패해도 매출 동기화엔 영향 없음(앱 예약칸만 빈 상태로).
+    booking_rows = []
+    if not debug and store.get("collect_reservations", True) \
+            and ({**DEFAULT_RESERVE, **(store.get("reserve") or {})}).get("url"):
+        try:
+            rres = harvest_reservations(store, headed=headed)
+            booking_rows = rres.get("parsed") or []
+            if rres.get("error"):
+                print(f"  · 예약 수집 경고: {rres['error']}")
+            else:
+                print(f"  · 예약 수집: 예약행 {len(booking_rows)}건(담당별 분리)")
+        except Exception as exc:
+            print(f"  · 예약 수집 실패(무시): {str(exc).splitlines()[0][:120]}")
+
+    sys.path.insert(0, str(ROOT))
+    import handsos_reserve as hr
     dresults = []
     for d in targets:
+        if booking_rows:                          # 이 디자이너 예약 → bookings.yaml (build 가 읽음)
+            try:
+                bks = hr.build_bookings(booking_rows, d.get("staff"), str(date.today()))
+                hr.write_bookings(Path("clients") / d["slug"], bks)
+                if bks:
+                    print(f"    · [{d['slug']}] 다가오는 예약 {len(bks)}건")
+            except Exception:
+                pass
         dresults.append(_import_build_one(
             csv_path, d["slug"], d.get("staff"), store.get("salon", ""),
             do_build=do_build, display_name=d.get("name")))

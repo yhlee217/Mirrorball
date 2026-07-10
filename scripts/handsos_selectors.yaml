@@ -17,5 +17,15 @@ report:
   search_sel: "a.icogSearch"
   search_js: "DBProc()"
   result_table: "#list_tbl"
+# 예약 목록(다가오는 예약) — reserveList. 매출과 같은 로그인·프레임·기간 방식.
+reserve:
+  url: "https://www1.handsos.com/work/reserve/reserveList.asp"
+  home_url: "https://www1.handsos.com/work/default.asp"
+  frame_name: "mainFrame"
+  date_from_sel: "#strDateS"
+  date_to_sel: "#strDateE"
+  search_js: "DBProc()"
+  search_sel: "a.icogSearch"
+  days_ahead: 14
 # 치유 프롬프트에서 '관련 HTML 구간'을 찾는 앵커 단어들
 anchors: ["strDateS", "list_tbl", "고객명", "companyID", "DBProc", "icogSearch"]
