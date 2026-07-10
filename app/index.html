@@ -928,6 +928,27 @@
 
   function lsLoad(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ return null; } }
   function lsSave(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(CUSTS)); }catch(e){} }
+  // <mergeCustomers>
+  // 순수 함수 — 빌드 시드(최신 거래)+로컬 편집(수동필드)을 id(=c{custno}) 기준 병합.
+  // 거래 필드(이력·매출·등급)는 빌드가 최신, 수동 필드(생일·메모·취향·관계 등)는 로컬 편집이 우선(값 있을 때).
+  // 앱에서 추가한 로컬 전용 고객은 보존. 테스트: tests/test_app_merge.py
+  function mergeCustomers(seed, local){
+    seed=seed||[]; local=local||[];
+    var MANUAL=['birthday','memo','prefer','relations','referred_by','referred','care_cycle_days','booking'];
+    function has(v){ return v!=null && (typeof v==='string'? v.trim()!=='' : (Array.isArray(v)? v.length>0 : (typeof v==='object'? Object.keys(v).length>0 : true))); }
+    var byId={}, used={};
+    local.forEach(function(c){ if(c&&c.id!=null) byId[c.id]=c; });
+    var out=seed.map(function(b){
+      var l=byId[b.id]; if(!l) return b;                 // 로컬에 없던(신규 HandSOS) 고객 → 빌드 그대로
+      used[b.id]=1;
+      var m={}; for(var k in b){ if(Object.prototype.hasOwnProperty.call(b,k)) m[k]=b[k]; }  // 빌드 base(거래 최신)
+      MANUAL.forEach(function(f){ if(has(l[f])) m[f]=l[f]; });   // 수동필드는 로컬 값 있으면 덮어씀
+      return m;
+    });
+    local.forEach(function(c){ if(c&&c.id!=null&&!used[c.id]) out.push(c); });  // 로컬 전용(앱 추가) 보존
+    return out;
+  }
+  // </mergeCustomers>
   function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 
   // ── 파생 (build_app/drafts/aftercare/relations 의 JS 포팅) ──
@@ -1203,7 +1224,7 @@
     });
   })();
 
-  // ── 부팅: 빌드 시드 또는 PREVIEW_DATA → 최초 1회 로컬에 적재, 이후 로컬 우선 ──
+  // ── 부팅: 빌드 시드 + 로컬 편집 병합(일관성). 최초 1회는 시드로 적재, 이후엔 최신 빌드에 로컬 수동편집을 병합 ──
   // preview=true(미리보기 파일): 로컬 무시하고 번들 데이터를 항상 보여줌(이전 미리보기 잔여 데이터 방지)
   function boot(base, preview){
     // 미리보기는 데이터 기준일(snapshot)에 고정 → 주기 신호가 결정적으로 재현됨. 운영은 기기 오늘.
@@ -1212,8 +1233,11 @@
       META.instagram=base.instagram||null; META.thresholds=base.thresholds||null;
       if(base.config){ CONFIG = base.config; } }     // 업종 카피 단일 소스 주입
     var local=preview?null:lsLoad();
-    CUSTS = (local!=null)? local : ((base&&base.seed)? base.seed.slice() : []);
-    if(!preview && local==null) lsSave();
+    var seed=(base&&base.seed)?base.seed:null;
+    if(preview){ CUSTS = seed? seed.slice() : []; }
+    else if(local==null){ CUSTS = seed? seed.slice() : []; lsSave(); }         // 최초: 시드로 적재
+    else if(seed){ CUSTS = mergeCustomers(seed, local); lsSave(); }            // 이후: 최신 빌드(거래) + 로컬 편집(수동) 병합
+    else { CUSTS = local; }                                                    // 빌드 없음(오프라인) → 로컬 유지
     refresh();
   }
   (function start(){
