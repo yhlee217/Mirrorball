@@ -42,8 +42,12 @@ def slug_manifest(slug: str, base: dict) -> dict:
     return m
 
 
-def build_site(client_dir: str, out_root: str = "dist_app_site", dist_app: str = "dist_app") -> dict:
-    """한 디자이너의 배포 번들 생성 → out_root/{slug}/ (index.html·sw.js·icon·manifest·data/{slug}.json)."""
+def build_site(client_dir: str, out_root: str = "dist_app_site", dist_app: str = "dist_app",
+               passphrase: str | None = None) -> dict:
+    """한 디자이너의 배포 번들 생성 → out_root/{slug}/ (index.html·sw.js·icon·manifest·data/{slug}.json).
+
+    passphrase 가 있으면 data/{slug}.json 을 AES-GCM 봉투로 암호화한다(공개 URL 노출 보호 —
+    앱이 비밀번호로 복호화). 없으면 평문(데모·PII 아닌 경우)."""
     info = build_app.build_one(client_dir, dist=dist_app)     # dist_app/{slug}.json 생성
     slug = info["slug"]
     src_json = Path(dist_app) / f"{slug}.json"
@@ -54,9 +58,15 @@ def build_site(client_dir: str, out_root: str = "dist_app_site", dist_app: str =
     base = json.loads((APP / "manifest.webmanifest").read_text(encoding="utf-8"))
     (out / "manifest.webmanifest").write_text(
         json.dumps(slug_manifest(slug, base), ensure_ascii=False, indent=2), encoding="utf-8")
-    shutil.copyfile(src_json, out / "data" / f"{slug}.json")
+    data_text = src_json.read_text(encoding="utf-8")
+    dst_json = out / "data" / f"{slug}.json"
+    if passphrase:                                    # 배포물엔 암호문만 — 비번 없이는 못 읽음
+        import app_crypto
+        dst_json.write_text(json.dumps(app_crypto.encrypt_text(data_text, passphrase)), encoding="utf-8")
+    else:
+        dst_json.write_text(data_text, encoding="utf-8")
     return {"slug": slug, "out": str(out), "url": f"/?d={slug}",
-            "clients": info["clients"], "care": info["care"]}
+            "clients": info["clients"], "care": info["care"], "encrypted": bool(passphrase)}
 
 
 def main() -> int:
@@ -64,6 +74,8 @@ def main() -> int:
     ap.add_argument("client_dir", nargs="?", help="clients/{slug}")
     ap.add_argument("--all", action="store_true", help="clients/*/ 전부")
     ap.add_argument("--out", default="dist_app_site")
+    ap.add_argument("--plain", action="store_true",
+                    help="암호화 없이 평문 빌드(데모·PII 아닌 경우만). 기본은 비밀번호 있으면 암호화.")
     args = ap.parse_args()
 
     if args.all:
@@ -74,14 +86,21 @@ def main() -> int:
         print("사용법: python build_app_site.py clients/{slug} | --all")
         return 2
 
+    import app_crypto
+    passphrase = None if args.plain else app_crypto.load_passphrase(ROOT)
+
     rc = 0
     for d in dirs:
         try:
-            r = build_site(d, args.out)
-            print(f"✓ {r['slug']:<12} → {r['out']}/  (고객 {r['clients']} · 챙길 {r['care']})  URL {r['url']}")
+            r = build_site(d, args.out, passphrase=passphrase)
+            lock = "\U0001f512 암호화" if r["encrypted"] else "⚠ 평문"
+            print(f"✓ {r['slug']:<12} → {r['out']}/  (고객 {r['clients']} · 챙길 {r['care']})  [{lock}]  URL {r['url']}")
         except Exception as exc:
             print(f"✗ {d}: {exc}")
             rc = 1
+    if not passphrase and rc == 0:
+        print("⚠ 평문 배포 — 앱 비밀번호 미설정(secrets/deploy.env 의 MIRRORBALL_APP_PASSPHRASE).")
+        print("  실데이터(하예원 등)는 반드시 비밀번호 설정 후 배포하세요(공개 URL 노출 방지).")
     if rc == 0:
         print("배포(무료): Netlify Drop 에 dist_app_site/{slug} 폴더 드래그, 또는 wrangler pages deploy dist_app_site/{slug}")
     return rc

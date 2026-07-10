@@ -1258,12 +1258,74 @@
     else { CUSTS = local; }                                                    // 빌드 없음(오프라인) → 로컬 유지
     refresh();
   }
+  // <appcrypto>
+  // 배포 데이터가 암호문 봉투면 비밀번호로 복호화(build_app_site 가 --plain 아니면 암호화).
+  // 표준 PBKDF2-SHA256 + AES-256-GCM → 파이썬 app_crypto 와 상호호환. 테스트: tests/test_app_crypto_interop.py
+  function b64ToBytes(s){ return Uint8Array.from(atob(s), function(c){ return c.charCodeAt(0); }); }
+  function isEnvelope(o){ return !!(o && o.ct && o.iv && o.salt && o.kdf); }
+  async function deriveKey(passphrase, saltB64, iter){
+    var baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({name:'PBKDF2', salt:b64ToBytes(saltB64), iterations:iter||600000, hash:'SHA-256'},
+      baseKey, {name:'AES-GCM', length:256}, false, ['decrypt']);
+  }
+  async function decryptEnvelope(env, passphrase){
+    var key = await deriveKey(passphrase, env.salt, env.iter);
+    var pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64ToBytes(env.iv)}, key, b64ToBytes(env.ct));
+    return new TextDecoder().decode(pt);              // 틀린 비번이면 예외(reject)
+  }
+  // </appcrypto>
+  // 비밀번호 잠금 UI — 저장된 비번 자동 시도 → 실패/없으면 입력. 성공 시 평문 텍스트로 resolve.
+  function unlockGate(env, slug){
+    var KEY='mb_pw_'+slug;
+    return new Promise(function(resolve){
+      var ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#0b0b0f;color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;font-family:inherit';
+      document.body.appendChild(ov);
+      function done(t){ try{document.body.removeChild(ov);}catch(e){} resolve(t); }
+      function attempt(pw, remember, onFail){
+        decryptEnvelope(env, pw).then(function(t){
+          if(remember){ try{ localStorage.setItem(KEY, pw); }catch(e){} }
+          done(t);
+        }).catch(function(){ if(onFail) onFail(); });
+      }
+      function showPrompt(msg){
+        ov.innerHTML='<div style="width:100%;max-width:340px;text-align:center">'
+          +'<div style="font-size:40px;margin-bottom:8px">🔒</div>'
+          +'<div style="font-size:18px;font-weight:700;margin-bottom:4px">살롱 컨시어지</div>'
+          +'<div style="font-size:13px;opacity:.6;margin-bottom:20px">비밀번호를 입력하세요</div>'
+          +'<input id="mbpw" type="password" autocomplete="current-password" style="width:100%;padding:13px 14px;border-radius:12px;border:1px solid #333;background:#16161c;color:#fff;font-size:16px;box-sizing:border-box" placeholder="비밀번호">'
+          +'<div id="mberr" style="color:#ff6b6b;font-size:12px;min-height:16px;margin:8px 0">'+(msg||'')+'</div>'
+          +'<label style="display:flex;align-items:center;gap:8px;justify-content:center;font-size:13px;opacity:.75;margin-bottom:16px"><input id="mbrem" type="checkbox" checked> 이 기기에서 기억</label>'
+          +'<button id="mbgo" style="width:100%;padding:13px;border:0;border-radius:12px;background:#6c5ce7;color:#fff;font-size:16px;font-weight:700">열기</button></div>';
+        var inp=ov.querySelector('#mbpw'), err=ov.querySelector('#mberr'), go=ov.querySelector('#mbgo'), rem=ov.querySelector('#mbrem');
+        function submit(){
+          if(!inp.value) return;
+          go.disabled=true; err.textContent='확인 중…';
+          attempt(inp.value, rem.checked, function(){ go.disabled=false; err.textContent='비밀번호가 맞지 않아요'; inp.value=''; inp.focus(); });
+        }
+        go.onclick=submit;
+        inp.onkeydown=function(e){ if(e.key==='Enter') submit(); };
+        setTimeout(function(){ inp.focus(); }, 80);
+      }
+      var saved=null; try{ saved=localStorage.getItem(KEY); }catch(e){}
+      if(saved){
+        ov.innerHTML='<div style="text-align:center;opacity:.7"><div style="font-size:34px">🔒</div><div style="margin-top:10px;font-size:14px">잠금 해제 중…</div></div>';
+        attempt(saved, false, function(){ try{localStorage.removeItem(KEY);}catch(e){} showPrompt('저장된 비밀번호가 더 이상 맞지 않아요'); });
+      } else { showPrompt(''); }
+    });
+  }
   (function start(){
     if(typeof PREVIEW_DATA!=='undefined'){ boot(PREVIEW_DATA, true); return; }
     var slug=new URLSearchParams(location.search).get('d');
     if(!slug){ boot(null); return; }
     fetch('./data/'+encodeURIComponent(slug)+'.json',{cache:'no-store'})
-      .then(function(r){return r.ok?r.json():null;}).then(function(j){ boot(j); }).catch(function(){ boot(null); });
+      .then(function(r){ return r.ok?r.text():null; })
+      .then(function(txt){
+        if(!txt){ boot(null); return; }
+        var obj; try{ obj=JSON.parse(txt); }catch(e){ boot(null); return; }
+        if(isEnvelope(obj)){ unlockGate(obj, slug).then(function(plain){ boot(JSON.parse(plain)); }); }
+        else { boot(obj); }
+      }).catch(function(){ boot(null); });
   })();
 
   renderTabs('s-home');
