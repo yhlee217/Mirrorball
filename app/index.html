@@ -923,7 +923,7 @@
   var SLUG = new URLSearchParams(location.search).get('d') ||
              (typeof PREVIEW_DATA!=='undefined' && PREVIEW_DATA.slug) || 'my';
   var LS_KEY = 'salon_crm_' + SLUG;
-  var META = {today: null, designer:'', salon:'', exposure:null, stats:null, instagram:null, thresholds:null};
+  var META = {today: null, designer:'', salon:'', exposure:null, stats:null, instagram:null, thresholds:null, bookings:null};
   var CUSTS = [];
 
   function lsLoad(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ return null; } }
@@ -1032,6 +1032,24 @@
       referred_by:(c.referred_by&&byId[c.referred_by])?{id:c.referred_by,name:nm(c.referred_by)}:null,
       referred:(brought[c.id]||[]).map(function(i){return {id:i,name:nm(i)};}) }; }); return out; }
   function upcoming(cs,ts){ var rows=[]; cs.forEach(function(c){ var b=c.booking||{}; if(!b.date) return; var d=ymd(parseD(b.date)||new Date()); if(d<ts) return; rows.push({name:c.name,service:b.service,time:b.time,date:d,id:c.id}); }); rows.sort(function(a,b){return (a.date+a.time)<(b.date+b.time)?-1:1;}); return rows; }
+  // <mergeBookings>
+  // 순수 함수 — 서버 예약(bookings.yaml→resolve_bookings; HandSOS/네이버 수집분)과 로컬(고객 booking 필드) 병합.
+  // derive 가 서버 예약을 떨어뜨리지 않게. 오늘 이후·중복제거·정렬. 테스트: tests/test_app_bookings.py
+  function mergeBookings(serverB, localB, ts){
+    function norm(x){ var m=String(x||'').match(/(\d{4})-(\d{1,2})-(\d{1,2})/); return m?(m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[3]).slice(-2)):String(x||''); }
+    var out=[], seen={};
+    (serverB||[]).concat(localB||[]).forEach(function(b){
+      if(!b||!b.date) return;
+      var d=norm(b.date);
+      if(ts && d<ts) return;                                  // 오늘 이후만
+      var k=(b.name||'')+'|'+d+'|'+(b.time||'');
+      if(seen[k]) return; seen[k]=1;
+      out.push({name:b.name, service:b.service, time:b.time, date:d, id:b.id});
+    });
+    out.sort(function(a,b){ return (a.date+(a.time||''))<(b.date+(b.time||''))?-1:1; });
+    return out;
+  }
+  // </mergeBookings>
   function derive(){
     var ts=META.today||todayStr(), t=parseD(ts)||new Date(); var rel=resolveRel(CUSTS);
     var care=[]; CUSTS.forEach(function(c){ alertsFor(c,t).forEach(function(a){ care.push({id:c.id,name:c.name,kind:a.kind,label:a.label,why:a.why,prefer:c.prefer||[],draft:draftFor(a.kind,c,t)}); }); });
@@ -1042,7 +1060,7 @@
       // 교차판매: 빌드가 실어준 값(파이썬 단일 소스) 우선, 없으면(수기 추가 고객 등) JS 폴백
       card.crosssell=('crosssell' in c)?(c.crosssell||null):crosssellFor(card); return card; });
     DATA={slug:SLUG,designer:META.designer,salon:META.salon,today:ts,exposure:META.exposure,stats:META.stats,
-          instagram:META.instagram,thresholds:META.thresholds,bookings:upcoming(CUSTS,ts),care:care,clients:clients};
+          instagram:META.instagram,thresholds:META.thresholds,bookings:mergeBookings(META.bookings,upcoming(CUSTS,ts),ts),care:care,clients:clients};
   }
   function refresh(){ derive(); renderAll(); }
 
@@ -1230,7 +1248,7 @@
     // 미리보기는 데이터 기준일(snapshot)에 고정 → 주기 신호가 결정적으로 재현됨. 운영은 기기 오늘.
     META.today=(preview && base && base.today)? base.today : todayStr();
     if(base){ META.designer=base.designer||''; META.salon=base.salon||''; META.exposure=base.exposure||null; META.stats=base.stats||null;
-      META.instagram=base.instagram||null; META.thresholds=base.thresholds||null;
+      META.instagram=base.instagram||null; META.thresholds=base.thresholds||null; META.bookings=base.bookings||null;
       if(base.config){ CONFIG = base.config; } }     // 업종 카피 단일 소스 주입
     var local=preview?null:lsLoad();
     var seed=(base&&base.seed)?base.seed:null;

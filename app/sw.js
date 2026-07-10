@@ -1,5 +1,5 @@
 // 살롱 컨시어지 PWA — 최소 오프라인 셸 캐시
-const CACHE = 'concierge-app-v1';
+const CACHE = 'concierge-app-v2';
 const ASSETS = ['./index.html', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', (e) => {
