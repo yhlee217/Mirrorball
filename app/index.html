@@ -260,11 +260,71 @@
   .care .nm{font-family:var(--myeongjo);font-weight:700;}
   .sig{font-family:var(--myeongjo);font-weight:700;}
   .tag{font-family:var(--sans);}   /* VIP·신호 칩 영문은 또렷하게 */
+
+  /* ── 통합 진입 레이어: 스플래시+잠금을 한 크림 표면에서 처리. boot()가 데이터 페인트 후 fade-out ── */
+  #entry{position:fixed;inset:0;z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;text-align:center;background:linear-gradient(180deg,#FCFAF6 0%,#F4F1EC 100%);}
+  #entry.out{opacity:0;transform:scale(.99);pointer-events:none;transition:opacity .45s ease,transform .45s ease;}
+  #entry .brand{display:flex;flex-direction:column;align-items:center;gap:15px;animation:rise .5s ease both;}
+  #entry .mark{width:66px;height:66px;filter:drop-shadow(0 6px 16px rgba(110,91,71,.22));animation:breathe 3.6s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-2px) scale(1.015);}}
+  #entry .eyebrow{font-family:var(--myeongjo);font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);opacity:.85;}
+  #entry .word{font-family:var(--myeongjo);font-weight:700;font-size:23px;color:var(--ink);margin-top:-4px;letter-spacing:.5px;}
+  #entry .status{margin-top:30px;width:100%;max-width:300px;min-height:126px;position:relative;animation:rise .5s ease .06s both;}
+  #entry .loading,#entry .prompt{position:absolute;left:0;right:0;top:0;display:flex;flex-direction:column;align-items:center;}
+  #entry .loading{opacity:1;transition:opacity .22s ease;}
+  #entry .prompt{opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .32s ease,transform .32s ease;}
+  #entry .status.show-prompt .loading{opacity:0;pointer-events:none;}
+  #entry .status.show-prompt .prompt{opacity:1;transform:none;pointer-events:auto;}
+  #entry .loader{width:132px;height:3px;border-radius:3px;background:var(--soft);overflow:hidden;position:relative;}
+  #entry .loader::before{content:"";position:absolute;top:0;left:-42%;height:100%;width:42%;border-radius:3px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sweep 1.25s ease-in-out infinite;}
+  @keyframes sweep{0%{left:-42%;}100%{left:100%;}}
+  #entry .loading .msg{font-size:13px;color:var(--muted);margin-top:14px;letter-spacing:.3px;}
+  #entry .plabel{font-size:13px;color:var(--muted);margin-bottom:12px;}
+  #entry .prompt input[type=password]{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:13px;
+    background:var(--paper);color:var(--ink);font-size:16px;font-family:inherit;text-align:center;letter-spacing:2px;
+    transition:border-color .2s ease,box-shadow .2s ease;}
+  #entry .prompt input[type=password]::placeholder{letter-spacing:normal;color:var(--muted);opacity:.7;}
+  #entry .prompt input[type=password]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,91,71,.12);}
+  #entry .err{color:var(--rose);font-size:12px;min-height:16px;margin:9px 0 3px;font-weight:600;}
+  #entry .rem{display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;color:var(--muted);margin-bottom:15px;}
+  #entry .rem input{accent-color:var(--accent);width:15px;height:15px;}
+  #entry .open{width:100%;padding:13px;border:0;border-radius:13px;background:var(--accent);color:#fff;font-size:15.5px;font-weight:800;font-family:inherit;cursor:pointer;transition:background .2s ease,transform .1s ease;}
+  #entry .open:hover{background:var(--accent-d);}
+  #entry .open:active{transform:scale(.985);}
+  #entry .shake{animation:shake .45s cubic-bezier(.36,.07,.19,.97);}
+  @keyframes shake{10%,90%{transform:translateX(-2px);}20%,80%{transform:translateX(3px);}30%,50%,70%{transform:translateX(-6px);}40%,60%{transform:translateX(6px);}}
 </style>
 </head>
 <body>
-<!-- 부팅 스플래시: 첫 진입 시 데이터 로딩 지연 동안 '미설정 홈' 플래시를 가림(암호 게이트/실데이터가 준비되면 boot 이 제거) -->
-<div id="bootSplash" style="position:fixed;inset:0;z-index:99998;background:#faf7f2;color:#2b2b2b;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',Roboto,sans-serif"><div style="text-align:center"><div style="font-size:22px;font-weight:800;letter-spacing:.01em">살롱 컨시어지</div><div style="margin-top:10px;font-size:13px;opacity:.5">불러오는 중…</div></div></div>
+<!-- 통합 진입 레이어: 데이터 로딩·비번 잠금해제를 한 크림 표면에서 처리. boot()가 준비되면 fade-out(미설정 홈 플래시 차단) -->
+<div id="entry">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="512" height="512" rx="112" fill="#6E5B47"/>
+      <rect x="56" y="56" width="400" height="400" rx="80" fill="none" stroke="#FCFAF6" stroke-opacity="0.28" stroke-width="6"/>
+      <text x="256" y="342" text-anchor="middle" font-family="'Nanum Myeongjo',Georgia,serif" font-size="300" font-weight="700" fill="#FCFAF6">H</text>
+    </svg>
+    <div>
+      <div class="eyebrow">Concierge</div>
+      <div class="word">살롱 컨시어지</div>
+    </div>
+  </div>
+  <div class="status" id="entryStatus">
+    <div class="loading">
+      <div class="loader"></div>
+      <div class="msg" id="entryMsg">불러오는 중</div>
+    </div>
+    <div class="prompt" id="entryPrompt">
+      <div class="plabel">이 페이지는 잠겨 있어요</div>
+      <input type="password" id="mbpw" placeholder="비밀번호" autocomplete="current-password">
+      <div class="err" id="mberr"></div>
+      <label class="rem"><input type="checkbox" id="mbrem" checked> 이 기기에서 기억</label>
+      <button class="open" id="mbgo">열기</button>
+    </div>
+  </div>
+</div>
 <div class="app">
 
   <div class="bar" id="bar">
@@ -1367,7 +1427,7 @@
     else if(seed){ CUSTS = mergeCustomers(seed, local); lsSave(); }            // 이후: 최신 빌드(거래) + 로컬 편집(수동) 병합
     else { CUSTS = local; }                                                    // 빌드 없음(오프라인) → 로컬 유지
     refresh();
-    var _sp=document.getElementById('bootSplash'); if(_sp) _sp.style.display='none';   // 준비 완료 → 스플래시 제거
+    hideEntry();   // 준비 완료(데이터 페인트 끝) → 진입 레이어 페이드아웃
   }
   // <appcrypto>
   // 배포 데이터가 암호문 봉투면 비밀번호로 복호화(build_app_site 가 --plain 아니면 암호화).
@@ -1385,45 +1445,50 @@
     return new TextDecoder().decode(pt);              // 틀린 비번이면 예외(reject)
   }
   // </appcrypto>
-  // 비밀번호 잠금 UI — 저장된 비번 자동 시도 → 실패/없으면 입력. 성공 시 평문 텍스트로 resolve.
+  // ── 진입 레이어 제어: 스플래시+잠금 공용 크림 표면. boot()가 데이터 페인트 후 fade-out ──
+  function hideEntry(){
+    var el=document.getElementById('entry'); if(!el||el._gone) return; el._gone=true;
+    el.classList.add('out');
+    setTimeout(function(){ el.style.display='none'; }, 520);   // reduced-motion이면 전환이 즉시 → 그대로 숨김
+  }
+  // 비밀번호 잠금 — 진입 레이어의 상태 영역(로딩↔입력)에서 처리. 성공 시 평문 텍스트로 resolve.
+  // 저장된 비번은 로더 뒤에서 자동 시도(검은 화면·플래시 없음). APP_PW·mb_pw_{slug}·봉투 로직 보존.
   function unlockGate(env, slug){
     var KEY='mb_pw_'+slug;
     return new Promise(function(resolve){
-      var ov=document.createElement('div');
-      ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#0b0b0f;color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;font-family:inherit';
-      document.body.appendChild(ov);
-      function done(t){ try{document.body.removeChild(ov);}catch(e){} resolve(t); }
+      var statusEl=document.getElementById('entryStatus');
+      var promptEl=document.getElementById('entryPrompt');
+      var inp=document.getElementById('mbpw'), err=document.getElementById('mberr'),
+          go=document.getElementById('mbgo'), rem=document.getElementById('mbrem');
       function attempt(pw, remember, onFail){
         decryptEnvelope(env, pw).then(function(t){
-          APP_PW=pw;                                    // 소개 발행 인증용(세션)
+          APP_PW=pw;                                   // 소개 발행 인증용(세션)
           if(remember){ try{ localStorage.setItem(KEY, pw); }catch(e){} }
-          done(t);
+          resolve(t);                                  // 성공 → boot()가 진입 레이어를 페이드아웃
         }).catch(function(){ if(onFail) onFail(); });
       }
       function showPrompt(msg){
-        ov.innerHTML='<div style="width:100%;max-width:340px;text-align:center">'
-          +'<div style="font-size:40px;margin-bottom:8px">🔒</div>'
-          +'<div style="font-size:18px;font-weight:700;margin-bottom:4px">살롱 컨시어지</div>'
-          +'<div style="font-size:13px;opacity:.6;margin-bottom:20px">비밀번호를 입력하세요</div>'
-          +'<input id="mbpw" type="password" autocomplete="current-password" style="width:100%;padding:13px 14px;border-radius:12px;border:1px solid #333;background:#16161c;color:#fff;font-size:16px;box-sizing:border-box" placeholder="비밀번호">'
-          +'<div id="mberr" style="color:#ff6b6b;font-size:12px;min-height:16px;margin:8px 0">'+(msg||'')+'</div>'
-          +'<label style="display:flex;align-items:center;gap:8px;justify-content:center;font-size:13px;opacity:.75;margin-bottom:16px"><input id="mbrem" type="checkbox" checked> 이 기기에서 기억</label>'
-          +'<button id="mbgo" style="width:100%;padding:13px;border:0;border-radius:12px;background:#6c5ce7;color:#fff;font-size:16px;font-weight:700">열기</button></div>';
-        var inp=ov.querySelector('#mbpw'), err=ov.querySelector('#mberr'), go=ov.querySelector('#mbgo'), rem=ov.querySelector('#mbrem');
-        function submit(){
-          if(!inp.value) return;
-          go.disabled=true; err.textContent='확인 중…';
-          attempt(inp.value, rem.checked, function(){ go.disabled=false; err.textContent='비밀번호가 맞지 않아요'; inp.value=''; inp.focus(); });
-        }
-        go.onclick=submit;
-        inp.onkeydown=function(e){ if(e.key==='Enter') submit(); };
-        setTimeout(function(){ inp.focus(); }, 80);
+        if(err) err.textContent=msg||'';
+        if(statusEl) statusEl.classList.add('show-prompt');   // 로더 → 입력칸 크로스페이드
+        setTimeout(function(){ if(inp) inp.focus(); }, 140);
       }
+      function submit(){
+        if(!inp||!inp.value) return;
+        if(go) go.disabled=true; if(err) err.textContent='확인 중…';
+        attempt(inp.value, rem?rem.checked:false, function(){
+          if(go) go.disabled=false; if(err) err.textContent='비밀번호가 맞지 않아요';
+          if(promptEl){ promptEl.classList.remove('shake'); void promptEl.offsetWidth; promptEl.classList.add('shake'); }
+          inp.value=''; inp.focus();
+        });
+      }
+      if(go) go.onclick=submit;
+      if(inp) inp.onkeydown=function(e){ if(e.key==='Enter') submit(); };
       var saved=null; try{ saved=localStorage.getItem(KEY); }catch(e){}
-      if(saved){
-        ov.innerHTML='<div style="text-align:center;opacity:.7"><div style="font-size:34px">🔒</div><div style="margin-top:10px;font-size:14px">잠금 해제 중…</div></div>';
+      if(saved){                                       // 자동 시도 — 로딩 상태 유지(플래시 없음)
         attempt(saved, false, function(){ try{localStorage.removeItem(KEY);}catch(e){} showPrompt('저장된 비밀번호가 더 이상 맞지 않아요'); });
-      } else { showPrompt(''); }
+      } else {
+        showPrompt('');
+      }
     });
   }
   (function start(){
