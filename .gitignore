@@ -13,6 +13,7 @@ secrets/*
 !secrets/stores.example.yaml
 !secrets/naver.example.yaml
 !secrets/instagram.example.yaml
+!secrets/deploy.env.example
 content/
 __pycache__/
 *.pyc

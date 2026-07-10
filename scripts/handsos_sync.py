@@ -68,6 +68,21 @@ def date_range_value(days: int, today: date | None = None) -> tuple[str, str]:
     return "", ""
 
 
+def apply_run_opts(stores: list[dict], days: int | None = None,
+                   no_reserve: bool = False) -> list[dict]:
+    """런타임 옵션(--days/--no-reserve)을 매장 설정에 주입 — 백필/증분·예약토글 공용(테스트 가능).
+
+    days: 수집 기간(오늘 기준 N일 전~오늘)을 report.date_range_days 로 덮어씀(백필=365, 배치=1).
+          None 이면 손대지 않음(핸드SOS 화면 기본 기간=이번 달 유지).
+    no_reserve: 예약 수집을 끔(결제만) — 10분 배치의 로그인 절약용. report 의 다른 키는 보존."""
+    for s in stores:
+        if days is not None:
+            s.setdefault("report", {})["date_range_days"] = days
+        if no_reserve:
+            s["collect_reservations"] = False
+    return stores
+
+
 def notify(cfg: dict, text: str) -> None:
     """실패/요약 알림(선택). webhook_url 있으면 POST, 없으면 stderr."""
     url = (cfg or {}).get("notify_url")
@@ -729,6 +744,11 @@ def main() -> int:
     ap.add_argument("--debug", action="store_true", help="표 확인용 일시정지(셀렉터 점검)")
     ap.add_argument("--no-build", action="store_true")
     ap.add_argument("--deploy", action="store_true")
+    ap.add_argument("--days", type=int, default=None,
+                    help="수집 기간(오늘 기준 N일 전~오늘). 1년 백필=365, 10분 배치=1. "
+                         "미지정=핸드SOS 화면 기본(이번 달). 핸드SOS 단일조회 한도 400일.")
+    ap.add_argument("--no-reserve", action="store_true",
+                    help="예약(다가오는 예약) 수집 건너뜀 — 결제만(10분 배치의 로그인 절약)")
     ap.add_argument("--all-designers", action="store_true",
                     help="stores.yaml 편집 없이 매장 전체를 담당별로 분리 저장(하예원=hayewoni 유지)")
     ap.add_argument("--healthcheck", action="store_true",
@@ -751,6 +771,7 @@ def main() -> int:
     if args.all_designers:                     # 편집 없이 전원 추출(런타임 토글)
         for s in stores:
             s["all_designers"] = True
+    apply_run_opts(stores, days=args.days, no_reserve=args.no_reserve)   # --days/--no-reserve 주입
 
     results, failed = [], []
     for s in stores:
