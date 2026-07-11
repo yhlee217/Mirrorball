@@ -1,0 +1,93 @@
+<svg viewBox="0 0 760 752" xmlns="http://www.w3.org/2000/svg" role="img" font-family="ui-sans-serif,-apple-system,'Apple SD Gothic Neo',Roboto,sans-serif">
+  <title>Mirrorball v2 멀티테넌트 서비스 아키텍처</title>
+  <desc>디자이너와 손님이 Vercel의 Next.js 앱에 접속하고, 앱은 Supabase(Postgres·RLS·Auth·Vault·pg_cron)와 통신하며, Fly.io 수집 워커가 HandSOS를 크롤링해 PII를 암호화하여 Supabase에 저장한다.</desc>
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#a89f90"/>
+    </marker>
+    <marker id="aha" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#6E5B47"/>
+    </marker>
+    <style>
+      .h{fill:#1c1a17;font-weight:700;}
+      .title{fill:#1c1a17;font-weight:800;}
+      .s{fill:#6b655c;}
+      .accent{fill:#6E5B47;font-weight:700;}
+      .box{fill:#fbfaf7;stroke:#d9d2c6;stroke-width:1.5;}
+      .core{fill:#f2efe9;stroke:#d9d2c6;stroke-width:1.5;}
+      .accentbox{fill:#fbfaf7;stroke:#6E5B47;stroke-width:2.2;}
+      .ext{fill:none;stroke:#c9c2b6;stroke-width:1.5;stroke-dasharray:6 4;}
+      .flow{stroke:#a89f90;stroke-width:1.6;fill:none;}
+      .flowa{stroke:#6E5B47;stroke-width:1.9;fill:none;}
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="760" height="752" fill="#ffffff"/>
+
+  <text x="40" y="34" class="title" font-size="20">Mirrorball 서비스 아키텍처 · v2</text>
+  <text x="40" y="55" class="s" font-size="12.5">파일럿 · 서버 대행 크롤링 · 하이브리드 PII 암호화 · 매니지드 BaaS</text>
+
+  <!-- Tier 1: users -->
+  <rect class="box" x="40" y="78" width="320" height="56" rx="10"/>
+  <text x="200" y="103" text-anchor="middle" class="h" font-size="15">디자이너</text>
+  <text x="200" y="122" text-anchor="middle" class="s" font-size="12">폰 · PC · 로그인/CRM</text>
+
+  <rect class="box" x="400" y="78" width="320" height="56" rx="10"/>
+  <text x="560" y="103" text-anchor="middle" class="h" font-size="15">손님</text>
+  <text x="560" y="122" text-anchor="middle" class="s" font-size="12">공개 소개 페이지</text>
+
+  <line x1="200" y1="134" x2="200" y2="166" class="flow" marker-end="url(#ah)"/>
+  <line x1="560" y1="134" x2="560" y2="166" class="flow" marker-end="url(#ah)"/>
+
+  <!-- Tier 2: app -->
+  <rect class="box" x="40" y="168" width="680" height="66" rx="10"/>
+  <text x="380" y="196" text-anchor="middle" class="h" font-size="15.5">Next.js PWA + API · Vercel</text>
+  <text x="380" y="217" text-anchor="middle" class="s" font-size="12">로그인 · CRM · 공개 소개 · 인증 API</text>
+
+  <line x1="380" y1="234" x2="380" y2="284" class="flow" marker-start="url(#ah)" marker-end="url(#ah)"/>
+  <text x="392" y="263" class="s" font-size="11.5">RLS 조회 · 쓰기</text>
+
+  <!-- Tier 3: Supabase core -->
+  <rect class="core" x="40" y="286" width="680" height="168" rx="12"/>
+  <text x="58" y="311" class="h" font-size="14.5">Supabase — BaaS 코어</text>
+  <text x="702" y="311" text-anchor="end" class="s" font-size="11.5">매니지드</text>
+
+  <rect class="box" x="50" y="328" width="151" height="104" rx="9"/>
+  <text x="125.5" y="374" text-anchor="middle" class="h" font-size="13.5">Postgres · RLS</text>
+  <text x="125.5" y="395" text-anchor="middle" class="s" font-size="11.5">테넌트 격리</text>
+
+  <rect class="box" x="213" y="328" width="151" height="104" rx="9"/>
+  <text x="288.5" y="374" text-anchor="middle" class="h" font-size="13.5">Auth</text>
+  <text x="288.5" y="395" text-anchor="middle" class="s" font-size="11.5">디자이너 계정</text>
+
+  <rect class="box" x="376" y="328" width="151" height="104" rx="9"/>
+  <text x="451.5" y="374" text-anchor="middle" class="h" font-size="13.5">Vault 🔒</text>
+  <text x="451.5" y="395" text-anchor="middle" class="s" font-size="11.5">키 · POS 자격증명</text>
+
+  <rect class="box" x="539" y="328" width="151" height="104" rx="9"/>
+  <text x="614.5" y="374" text-anchor="middle" class="h" font-size="13.5">pg_cron</text>
+  <text x="614.5" y="395" text-anchor="middle" class="s" font-size="11.5">수집 스케줄</text>
+
+  <!-- Supabase <-> worker -->
+  <line x1="312" y1="456" x2="312" y2="506" class="flow" marker-end="url(#ah)"/>
+  <text x="302" y="486" text-anchor="end" class="s" font-size="11.5">수집 잡 enqueue</text>
+  <line x1="452" y1="506" x2="452" y2="456" class="flowa" marker-end="url(#aha)"/>
+  <text x="462" y="486" class="s" font-size="11.5">upsert · 🔒 PII 암호화</text>
+
+  <!-- Tier 4: worker -->
+  <rect class="accentbox" x="40" y="508" width="680" height="66" rx="10"/>
+  <text x="380" y="536" text-anchor="middle" class="h" font-size="15">수집 워커 · Fly.io + Playwright</text>
+  <text x="380" y="557" text-anchor="middle" class="s" font-size="12">세션 재사용 · 정규화 · 델타</text>
+
+  <line x1="380" y1="574" x2="380" y2="615" class="flow" marker-end="url(#ah)"/>
+  <text x="392" y="599" class="s" font-size="11.5">크롤링 · 로그인/스크레이프</text>
+
+  <!-- Tier 5: external -->
+  <rect class="ext" x="230" y="617" width="300" height="54" rx="10"/>
+  <text x="380" y="640" text-anchor="middle" class="h" font-size="14">HandSOS · POS</text>
+  <text x="380" y="659" text-anchor="middle" class="s" font-size="11.5">외부 시스템</text>
+
+  <!-- legend -->
+  <text x="40" y="702" class="s" font-size="11.5">🔒 테넌트별 PII 암호화 저장(저장·백업 보호)   ·   ┈ 파선 = 외부 시스템</text>
+  <text x="40" y="722" class="accent" font-size="11.5">강조 테두리 = 유일한 비-BaaS 조각(수집 워커)</text>
+</svg>
