@@ -7,7 +7,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 PY="$ROOT/.venv/bin/python"
 SLUG="${MIRRORBALL_SLUG:-hayewoni}"
 ts() { date '+%F %T'; }
@@ -35,11 +35,12 @@ fi
 
 # 3) 자동 배포 — NETLIFY_AUTH_TOKEN 은 netlify-cli 가 환경변수에서 읽는다.
 if [ -n "${NETLIFY_AUTH_TOKEN:-}" ] && [ -n "${NETLIFY_SITE_ID:-}" ]; then
+  echo "[$(ts)] deploy 시작 · netlify=$(command -v netlify || echo NOT_FOUND) · PATH=$PATH" >> "$ROOT/_raw/deploy.log"
   if netlify deploy --dir "dist_app_site/$SLUG" --prod --site "$NETLIFY_SITE_ID" \
-       --message "batch $(ts)" >/dev/null 2>&1; then
+       --message "batch $(ts)" >> "$ROOT/_raw/deploy.log" 2>&1; then
     echo "[$(ts)] OK 배포 완료 (site=$NETLIFY_SITE_ID)"
   else
-    echo "[$(ts)] X 배포 실패 — netlify-cli 설치/토큰/사이트ID 확인"
+    echo "[$(ts)] X 배포 실패 — 자세한 원인은 _raw/deploy.log 참고"
     exit 1
   fi
 else
