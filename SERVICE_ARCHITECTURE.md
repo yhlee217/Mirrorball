@@ -180,10 +180,11 @@ P3까지 v1과 병행 운영해 리스크를 낮춘다.
 ## 13. 로드맵 · 다음 액션
 
 - [x] **HandSOS 공식 연동/API 확인 완료(2026-07-11)** → 공개 API 없음. 스크래핑 유지 · 예약은 네이버 대체 검토 · 제휴 병행
-- [ ] **P0 스캐폴딩 진행 중** — `supabase/migrations/0001_init.sql`(스키마·RLS·하이브리드 PII)
-- [ ] P0 스캐폴딩: Supabase 스키마 + RLS + 키 계층 초안 코드
-- [ ] P1 스파이크: 홈 화면 1개를 Next.js로 포팅해 개념 검증
-- [ ] `customers` PII vs 운영 컬럼 경계 확정
+- [x] **P0 완료** — `supabase/migrations/0001_init.sql`(9테이블·RLS 9정책, Postgres 파서 검증) + `supabase/README.md`
+- [x] **P1 완료** — `web/`(Next.js 14 + Supabase Auth 매직링크 + RLS 스코프 홈, 빌드 검증 통과)
+- [ ] **P2 (다음)** — 수집 워커(Fly.io + Playwright): `scrape_handsos`/`import_handsos` 이식, 세션 재사용
+- [ ] **P3** — hayewoni `records.yaml` → 스키마 임포트(PII 암호화) + 홈에 이름 복호화 연결
+- [ ] `customers` PII vs 운영 컬럼 경계 최종 확정(하이브리드 키 계층 구현 시)
 
 ---
 
