@@ -498,6 +498,7 @@
       tab('s-clients'); paintClientViews(); renderClients(); return; }
     var cf=e.target.closest('[data-clearfocus]'); if(cf){ clientFocus=null; renderClients(); return; }
     var g=e.target.closest('[data-go]'); if(g){go(g.getAttribute('data-go'));return;}
+    var cpy=e.target.closest('[data-copy]'); if(cpy){ copyText(decodeURIComponent(cpy.getAttribute('data-copy')||'')); return; }
     var c=e.target.closest('[data-client]'); if(c){openClient(c.getAttribute('data-client'));return;}
     var t=e.target.closest('[data-toast]'); if(t){toast(t.getAttribute('data-toast'));return;}
   });
@@ -514,6 +515,17 @@
   }
 
   function toast(msg){ toastEl.textContent=msg; toastEl.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(function(){toastEl.classList.remove('show');},1900); }
+  // 추천 문구 → 클립보드 복사(카톡 등에 붙여넣기). HTTPS면 clipboard API, 아니면 execCommand 폴백.
+  function copyText(t){
+    if(!t){ toast('복사할 문구가 없어요'); return; }
+    function ok(){ toast('문구 복사됨 · 카톡에 붙여넣기'); }
+    function fb(){ try{ var ta=document.createElement('textarea'); ta.value=t; ta.setAttribute('readonly','');
+      ta.style.cssText='position:fixed;left:-9999px;top:0'; document.body.appendChild(ta); ta.select();
+      try{ta.setSelectionRange(0,t.length);}catch(_){}
+      var okc=document.execCommand('copy'); document.body.removeChild(ta); okc?ok():toast('복사 실패 — 문구를 길게 눌러 복사하세요');
+    }catch(e){ toast('복사 실패 — 문구를 길게 눌러 복사하세요'); } }
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(ok,fb); } else { fb(); } }catch(e){ fb(); }
+  }
 
   // ── empty state ──
   function empty(ic,title,desc){
@@ -572,12 +584,13 @@
     if(!care.length){ box.innerHTML=empty('🔔','오늘 챙길 고객이 없어요','생일·리터치 시기가 된 단골이 생기면\n여기에서 알려드려요'); return; }
     var cls={bday:'t-bday',atrisk:'t-risk',revisit:'t-revisit',season:'t-season'};
     box.innerHTML=care.map(function(c,i){
-      var draft=c.draft? '<div class="draft"><div class="lab">추천 문구 (직접 보내기)</div>'+esc(c.draft)+'</div>'
+      var cx=c.draft?encodeURIComponent(c.draft):'';
+      var draft=c.draft? '<div class="draft" data-copy="'+cx+'" style="cursor:pointer" title="탭하면 복사"><div class="lab">추천 문구 · 탭하면 복사</div>'+esc(c.draft)+'</div>'
         : '<div class="draft"><div class="lab">추천 문구</div><span style="color:var(--muted)">내 말투로 곧 채워드려요</span></div>';
       return '<div class="care reveal" style="animation-delay:'+(i*0.06)+'s">'+
         '<div class="hd"><span class="tag '+(cls[c.kind]||'t-season')+'">'+esc(c.label)+'</span><span class="nm">'+esc(c.name)+' 님</span></div>'+
         '<div class="why">'+esc(c.why)+'</div>'+draft+
-        '<div class="row2"><button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기">카톡으로 직접</button>'+
+        '<div class="row2"><button class="btn" data-copy="'+cx+'"'+(c.draft?'':' disabled style="opacity:.5"')+'>📋 문구 복사</button>'+
         (c.id?'<button class="btn ghost" data-client="'+esc(c.id)+'">고객 보기</button>':'<button class="btn ghost" data-toast="문구 수정">문구 수정</button>')+'</div></div>';
     }).join('');
   }
@@ -668,7 +681,7 @@
     return '<div class="care reveal" style="border-left:3px solid '+sg.color+'">'+
       '<div class="hd"><span class="tag" style="background:'+sg.color+';color:#fff">'+sg.label+'</span><span class="nm" style="font-size:12.5px;color:var(--muted)">재방문 신호</span></div>'+
       '<div class="why">'+esc(why)+'</div>'+
-      (draft?'<div class="draft"><div class="lab">추천 문구 (직접 보내기)</div>'+esc(draft)+'</div><div class="row2" style="margin-top:8px"><button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기">카톡으로 직접</button></div>':'')+
+      (draft?'<div class="draft" data-copy="'+encodeURIComponent(draft)+'" style="cursor:pointer" title="탭하면 복사"><div class="lab">추천 문구 · 탭하면 복사</div>'+esc(draft)+'</div><div class="row2" style="margin-top:8px"><button class="btn" data-copy="'+encodeURIComponent(draft)+'">📋 문구 복사</button></div>':'')+
       '</div>';
   }
 
@@ -702,7 +715,7 @@
       '</div>'+
       signalCard(c)+
       (c.booking?'<div class="care reveal"><div class="why" style="margin:0 0 4px">다가오는 예약</div><div style="font-weight:800">'+esc(c.booking.date||'')+' '+esc(c.booking.time||'')+' · '+esc(c.booking.service||'')+'</div></div>':'')+
-      (c.crosssell?'<div class="card reveal" style="padding:13px 15px;border:1px solid var(--sage);background:#F3F7F1"><div class="ch" style="padding:0 0 5px;color:var(--sage)">💡 추천 · '+esc(c.crosssell.label)+'</div><div style="font-size:13px;line-height:1.6;color:var(--ink)">'+esc(c.crosssell.copy)+'</div><div class="row2" style="margin-top:9px"><button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기" style="flex:1">카톡으로 직접</button></div></div>':'')+
+      (c.crosssell?'<div class="card reveal" style="padding:13px 15px;border:1px solid var(--sage);background:#F3F7F1"><div class="ch" style="padding:0 0 5px;color:var(--sage)">💡 추천 · '+esc(c.crosssell.label)+'</div><div data-copy="'+encodeURIComponent(c.crosssell.copy||'')+'" style="cursor:pointer;font-size:13px;line-height:1.6;color:var(--ink)" title="탭하면 복사">'+esc(c.crosssell.copy)+'</div><div class="row2" style="margin-top:9px"><button class="btn" data-copy="'+encodeURIComponent(c.crosssell.copy||'')+'" style="flex:1">📋 문구 복사</button></div></div>':'')+
       (c.memo?'<div class="card reveal" style="padding:12px 15px"><div class="ch" style="padding:0 0 5px">상담 메모</div><div style="font-size:13.5px;line-height:1.6;color:var(--ink);white-space:pre-wrap">'+esc(c.memo)+'</div></div>':'')+
       '<div class="kv reveal">'+
         (prefer?'<div class="r"><div class="k">취향</div><div class="pills">'+prefer+'</div></div>':'')+
@@ -717,7 +730,7 @@
         '<div class="card reveal" style="padding:13px 15px"><div class="ch" style="padding:0 0 6px">시술 후 관리 안내 (보내기 좋아요)</div>'+
         '<ul style="margin:0;padding-left:18px;font-size:13px;color:var(--ink);line-height:1.7">'+
         c.aftercare.map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+'</ul>'+
-        '<button class="btn ghost" data-toast="관리 안내를 카톡으로 보내기" style="margin-top:10px">관리 안내 보내기</button></div>'
+        '<button class="btn ghost" data-copy="'+encodeURIComponent(c.aftercare.join('\n'))+'" style="margin-top:10px">📋 관리 안내 복사</button></div>'
       ):'')+
       '<button class="btn" data-toast="'+esc(c.name)+'님 — 카톡으로 직접 보내기" style="margin-top:4px">추천 문구 보내기</button>';
     go('s-client');
