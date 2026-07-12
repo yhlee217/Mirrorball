@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import LogoutButton from './logout-button';
 
 type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; name?: string };
 type Care = { id: string; name: string; state: string; visit_count: number; last_visit: string | null };
@@ -32,7 +31,7 @@ export default function HomeView({
     <main className="wrap">
       <div className="bar">
         <div className="ttl">컨시어지</div>
-        <LogoutButton />
+        <Link href="/settings" className="linkbtn">⚙ 설정</Link>
       </div>
       <div className="body">
         <div className="hello">

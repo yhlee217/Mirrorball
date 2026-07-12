@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { isVip as isVipS, type TenantSettings } from '@/lib/settings';
 
 type Row = {
   id: string;
@@ -17,10 +18,9 @@ type Row = {
 
 const DAY = 86400000;
 const daysSince = (d: string | null) => (d ? Math.floor((Date.now() - new Date(d).getTime()) / DAY) : Infinity);
-const isVip = (r: Row) => r.total_won >= 1000000 || r.visit_count >= 10;
 const won = (n: number) => (n >= 10000 ? Math.round(n / 10000) + '만' : String(n));
 
-export default function CustomersList({ rows }: { rows: Row[] }) {
+export default function CustomersList({ rows, settings }: { rows: Row[]; settings: TenantSettings }) {
   const [q, setQ] = useState('');
   const [chips, setChips] = useState<Set<string>>(new Set());
   const [visitF, setVisitF] = useState('');
@@ -28,6 +28,10 @@ export default function CustomersList({ rows }: { rows: Row[] }) {
   const [recF, setRecF] = useState('');
   const [svcF, setSvcF] = useState('');
   const [sort, setSort] = useState('recent');
+
+  const vip = (r: Row) => isVipS(r, settings);
+  const manH = Math.round(settings.revenue_high / 10000);
+  const manM = Math.round(settings.revenue_mid / 10000);
 
   const toggle = (k: string) =>
     setChips((s) => {
@@ -44,15 +48,15 @@ export default function CustomersList({ rows }: { rows: Row[] }) {
     if (chips.has('overdue')) f = f.filter((r) => r.state === 'overdue');
     if (chips.has('due')) f = f.filter((r) => r.state === 'due');
     if (chips.has('new')) f = f.filter((r) => r.state === 'new');
-    if (chips.has('vip')) f = f.filter(isVip);
+    if (chips.has('vip')) f = f.filter((r) => isVipS(r, settings));
     if (chips.has('booking')) f = f.filter((r) => r.hasBooking);
     if (chips.has('nophone')) f = f.filter((r) => !r.hasPhone);
     if (visitF === 'reg') f = f.filter((r) => r.visit_count >= 10);
     else if (visitF === 'rep') f = f.filter((r) => r.visit_count >= 3 && r.visit_count <= 9);
     else if (visitF === 'new') f = f.filter((r) => r.visit_count <= 2);
-    if (revF === '100') f = f.filter((r) => r.total_won >= 1000000);
-    else if (revF === '50') f = f.filter((r) => r.total_won >= 500000 && r.total_won < 1000000);
-    else if (revF === 'lo') f = f.filter((r) => r.total_won < 500000);
+    if (revF === '100') f = f.filter((r) => r.total_won >= settings.revenue_high);
+    else if (revF === '50') f = f.filter((r) => r.total_won >= settings.revenue_mid && r.total_won < settings.revenue_high);
+    else if (revF === 'lo') f = f.filter((r) => r.total_won < settings.revenue_mid);
     if (recF === '1m') f = f.filter((r) => daysSince(r.last_visit) <= 30);
     else if (recF === '3m') f = f.filter((r) => daysSince(r.last_visit) <= 90);
     else if (recF === '6m') f = f.filter((r) => daysSince(r.last_visit) <= 180);
@@ -69,7 +73,7 @@ export default function CustomersList({ rows }: { rows: Row[] }) {
       return (b.last_visit || '').localeCompare(a.last_visit || ''); // recent
     });
     return arr;
-  }, [rows, q, chips, visitF, revF, recF, svcF, sort]);
+  }, [rows, q, chips, visitF, revF, recF, svcF, sort, settings]);
 
   const Chip = ({ k, label }: { k: string; label: string }) => (
     <button type="button" className={'fchip' + (chips.has(k) ? ' on' : '')} onClick={() => toggle(k)}>
@@ -99,9 +103,11 @@ export default function CustomersList({ rows }: { rows: Row[] }) {
         </select>
         <select value={revF} onChange={(e) => setRevF(e.target.value)}>
           <option value="">매출 전체</option>
-          <option value="100">100만+</option>
-          <option value="50">50~100만</option>
-          <option value="lo">50만 미만</option>
+          <option value="100">{manH}만+</option>
+          <option value="50">
+            {manM}~{manH}만
+          </option>
+          <option value="lo">{manM}만 미만</option>
         </select>
         <select value={recF} onChange={(e) => setRecF(e.target.value)}>
           <option value="">방문시기 전체</option>
@@ -135,7 +141,7 @@ export default function CustomersList({ rows }: { rows: Row[] }) {
               <div className="av">{r.name.charAt(0)}</div>
               <div className="bd">
                 <div className="nm">
-                  {r.name} 님{isVip(r) ? <span className="tag-vip">VIP</span> : null}
+                  {r.name} 님{vip(r) ? <span className="tag-vip">VIP</span> : null}
                 </div>
                 <div className="sub">
                   {r.visit_count}회 · {won(r.total_won)}원{r.last_visit ? ' · 마지막 ' + r.last_visit : ''}

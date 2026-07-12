@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows } from '@/lib/customers';
+import { mergeSettings, isLapsed } from '@/lib/settings';
 import AlertsList from './alerts-list';
 
 type Cust = {
@@ -28,13 +29,15 @@ export default async function AlertsPage() {
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
   const [{ data: tenant }, customers] = await Promise.all([
-    supabase.from('tenants').select('dek_wrapped').eq('id', tenantId).maybeSingle(),
+    supabase.from('tenants').select('dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select('id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count').in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
   ]);
 
+  const tRow = tenant as { dek_wrapped: string | null; settings: unknown } | null;
+  const settings = mergeSettings(tRow?.settings);
   let dek: Uint8Array | null = null;
-  const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
+  const dw = tRow?.dek_wrapped ?? null;
   if (dw) {
     try {
       dek = await unwrapDek(dw);
@@ -52,13 +55,8 @@ export default async function AlertsPage() {
     }
   };
 
-  const DAY = 86400000;
-  const isLapsed = (c: Cust) => {
-    const days = c.last_visit ? Math.floor((Date.now() - new Date(c.last_visit).getTime()) / DAY) : Infinity;
-    return days > 365 || (days > 180 && c.visit_count < 3); // 1년+ 무조건 이탈 / 6개월+ & 3회 미만(홈과 동일)
-  };
   const base = ((customers as Cust[]) ?? [])
-    .filter((c) => !isLapsed(c))
+    .filter((c) => !isLapsed(c, settings))
     .sort((a, b) => (a.revisit_state === 'overdue' ? 0 : 1) - (b.revisit_state === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count)
     .slice(0, 50);
   const names = await Promise.all(base.map((c) => nameFrom(c.pii_enc)));

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows } from '@/lib/customers';
+import { mergeSettings, isVip, isLapsed } from '@/lib/settings';
 import HomeView from './home-view';
 import OnboardButton from './onboard-button';
 
@@ -41,13 +42,14 @@ export default async function Page() {
 
   const tenantId = (mem as { tenant_id: string }).tenant_id;
   const [{ data: tenant }, { data: bookings }, customers] = await Promise.all([
-    supabase.from('tenants').select('salon_name,designer_name,dek_wrapped').eq('id', tenantId).maybeSingle(),
+    supabase.from('tenants').select('salon_name,designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     supabase.from('bookings').select('id,date,time,service,customer_id,pii_enc').order('date').limit(20),
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select('id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit').order('id').range(from, to)),
   ]);
 
-  const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null } | null;
+  const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null; settings: unknown } | null;
+  const settings = mergeSettings(t?.settings);
   const bk = (bookings as Booking[]) ?? [];
   const cust = (customers as Cust[]) ?? [];
 
@@ -69,26 +71,22 @@ export default async function Page() {
     }
   };
 
-  // 6개월(180일) 넘게 미방문 + 총 3회 미만 = 이탈로 간주 → 홈 '챙길 고객'·신호에서 제외
-  const DAY = 86400000;
-  const isLapsed = (c: Cust) => {
-    const days = c.last_visit ? Math.floor((Date.now() - new Date(c.last_visit).getTime()) / DAY) : Infinity;
-    return days > 365 || (days > 180 && c.visit_count < 3); // 1년+ 무조건 이탈 / 6개월+ & 3회 미만
-  };
+  // 이탈 판정은 설정(판정 기준)을 따른다 → 홈 '챙길 고객'·신호에서 제외
+  const lapsed = (c: Cust) => isLapsed(c, settings);
 
   const signals = { overdue: 0, due: 0, new: 0, vip: 0 };
   for (const c of cust) {
     if (c.revisit_state === 'overdue' || c.revisit_state === 'due') {
-      if (!isLapsed(c)) (signals as Record<string, number>)[c.revisit_state]++;
+      if (!lapsed(c)) (signals as Record<string, number>)[c.revisit_state]++;
     } else if (c.revisit_state === 'new') {
       signals.new++;
     }
-    if ((c.total_won || 0) >= 1000000 || c.visit_count >= 10) signals.vip++; // 필터와 동일 기준(tier 미사용)
+    if (isVip(c, settings)) signals.vip++;
   }
 
   const rank: Record<string, number> = { overdue: 0, due: 1 };
   const careBase = cust
-    .filter((c) => (c.revisit_state === 'overdue' || c.revisit_state === 'due') && !isLapsed(c))
+    .filter((c) => (c.revisit_state === 'overdue' || c.revisit_state === 'due') && !lapsed(c))
     .sort((a, b) => rank[a.revisit_state as string] - rank[b.revisit_state as string] || b.visit_count - a.visit_count)
     .slice(0, 20);
   const careNames = await Promise.all(careBase.map((c) => nameFrom(c.pii_enc)));
@@ -100,7 +98,10 @@ export default async function Page() {
     last_visit: c.last_visit,
   }));
 
-  const bkNamed = await Promise.all(bk.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })));
+  const bkCutoff = new Date(Date.now() + settings.booking_days_ahead * 86400000).toISOString().slice(0, 10);
+  const bkNamed = await Promise.all(
+    bk.filter((b) => (b.date || '') <= bkCutoff).map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })),
+  );
   const totalRevenue = cust.reduce((s, c) => s + (c.total_won || 0), 0);
 
   return (

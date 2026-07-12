@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows } from '@/lib/customers';
+import { mergeSettings } from '@/lib/settings';
 import CustomersList from './customers-list';
 
 type Cust = {
@@ -40,7 +41,7 @@ export default async function CustomersPage() {
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
   const [{ data: tenant }, customers, bookings, txs] = await Promise.all([
-    supabase.from('tenants').select('dek_wrapped').eq('id', tenantId).maybeSingle(),
+    supabase.from('tenants').select('dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
       supabase
         .from('customers')
@@ -53,8 +54,10 @@ export default async function CustomersPage() {
       supabase.from('transactions').select('customer_id,service').order('id').range(from, to)),
   ]);
 
+  const tRow = tenant as { dek_wrapped: string | null; settings: unknown } | null;
+  const settings = mergeSettings(tRow?.settings);
   let dek: Uint8Array | null = null;
-  const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
+  const dw = tRow?.dek_wrapped ?? null;
   if (dw) {
     try {
       dek = await unwrapDek(dw);
@@ -113,7 +116,7 @@ export default async function CustomersPage() {
         <div className="ttl" style={{ marginLeft: 10 }}>고객 {rows.length}명</div>
       </div>
       <div className="body">
-        <CustomersList rows={rows} />
+        <CustomersList rows={rows} settings={settings} />
       </div>
     </main>
   );
