@@ -166,4 +166,23 @@ for (let i = 0; i < txRows.length; i += 500) {
 }
 console.log(`시술 이력 ${txRows.length}건 임포트`);
 
+// 6) 공개 소개 프로필
+const prof = data.profile || {};
+{
+  const { error } = await admin.from('profiles').upsert(
+    {
+      tenant_id: tenantId,
+      tagline: prof.tagline || null,
+      bio: Array.isArray(prof.about) ? prof.about.join('\n\n') : prof.about || null,
+      services: prof.specialties || [],
+      faq: prof.faq || [],
+      location: (prof.location && prof.location.address) || null,
+      published: true,
+    },
+    { onConflict: 'tenant_id' },
+  );
+  if (error) console.error('profile:', error.message);
+  else console.log('소개 프로필 임포트');
+}
+
 console.log('완료. 앱에서', ownerEmail, '로 로그인하면 실데이터가 보입니다.');
