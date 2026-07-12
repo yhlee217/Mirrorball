@@ -22,6 +22,7 @@ export default function HomeView({
 }) {
   const careCount = signals.overdue + signals.due;
   const nameOf = (b: Booking) => b.name || '고객';
+  const monthsAgo = (d: string | null) => (d ? Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000)) : null);
 
   return (
     <main className="wrap">
@@ -39,8 +40,14 @@ export default function HomeView({
         </div>
 
         <div className="chips">
-          <div className="chip"><div className="nnum">{careCount}</div><div className="l">챙길 고객</div></div>
-          <div className="chip"><div className="nnum">{bookings.length}</div><div className="l">다가오는 예약</div></div>
+          <Link href="/alerts" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="nnum">{careCount}</div>
+            <div className="l">챙길 고객 ›</div>
+          </Link>
+          <a href="#bookings" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="nnum">{bookings.length}</div>
+            <div className="l">다가오는 예약 ›</div>
+          </a>
           <Link href="/customers" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="nnum">{totalCustomers}</div>
             <div className="l">전체 고객 ›</div>
@@ -56,27 +63,7 @@ export default function HomeView({
 
         <Link href="/stats" className="statlink"><span>📊 기록 · 통계</span><span className="arr">›</span></Link>
 
-        <div className="card">
-          <div className="ch">오늘 챙길 고객</div>
-          {care.length ? (
-            care.map((c) => (
-              <Link key={c.id} href={`/customer/${c.id}`} className="li li-link">
-                <div className="av">{c.name.charAt(0)}</div>
-                <div className="bd">
-                  <div className="nm">{c.name} 님</div>
-                  <div className="sub">
-                    {c.visit_count}회{c.last_visit ? ' · 마지막 ' + c.last_visit : ''}
-                  </div>
-                </div>
-                <div className="rt">{STATE_LABEL[c.state] ?? ''}</div>
-              </Link>
-            ))
-          ) : (
-            <div className="empty">지금 챙길 고객이 없어요</div>
-          )}
-        </div>
-
-        <div className="card">
+        <div className="card" id="bookings" style={{ scrollMarginTop: 12 }}>
           <div className="ch">다가오는 예약</div>
           {bookings.length ? (
             bookings.map((b) => {
@@ -85,7 +72,7 @@ export default function HomeView({
                 <>
                   <div className="av">{label.charAt(0)}</div>
                   <div className="bd">
-                    <div className="nm">{label} 님</div>
+                    <div className="nm">{label} 님{!b.customer_id ? <span className="tag-new">신규</span> : null}</div>
                     <div className="sub">
                       {b.service ?? ''}
                       {b.time ? ' · ' + b.time : ''}
@@ -106,6 +93,29 @@ export default function HomeView({
             })
           ) : (
             <div className="empty">다가오는 예약이 없어요</div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="ch">오늘 챙길 고객</div>
+          {care.length ? (
+            care.map((c) => (
+              <Link key={c.id} href={`/customer/${c.id}`} className="li li-link">
+                <div className="av">{c.name.charAt(0)}</div>
+                <div className="bd">
+                  <div className="nm">{c.name} 님</div>
+                  <div className="sub">
+                    {c.visit_count}회{c.last_visit ? ' · 마지막 ' + c.last_visit : ''}
+                  </div>
+                </div>
+                <div className="rt">
+                  {STATE_LABEL[c.state] ?? ''}
+                  {c.state === 'overdue' && c.last_visit ? ` (${monthsAgo(c.last_visit)}개월 미방문)` : ''}
+                </div>
+              </Link>
+            ))
+          ) : (
+            <div className="empty">지금 챙길 고객이 없어요</div>
           )}
         </div>
 

@@ -52,7 +52,13 @@ export default async function AlertsPage() {
     }
   };
 
+  const DAY = 86400000;
+  const isLapsed = (c: Cust) => {
+    const days = c.last_visit ? Math.floor((Date.now() - new Date(c.last_visit).getTime()) / DAY) : Infinity;
+    return days > 365 || (days > 180 && c.visit_count < 3); // 1년+ 무조건 이탈 / 6개월+ & 3회 미만(홈과 동일)
+  };
   const base = ((customers as Cust[]) ?? [])
+    .filter((c) => !isLapsed(c))
     .sort((a, b) => (a.revisit_state === 'overdue' ? 0 : 1) - (b.revisit_state === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count)
     .slice(0, 50);
   const names = await Promise.all(base.map((c) => nameFrom(c.pii_enc)));

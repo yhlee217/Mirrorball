@@ -68,15 +68,26 @@ export default async function Page() {
     }
   };
 
+  // 6개월(180일) 넘게 미방문 + 총 3회 미만 = 이탈로 간주 → 홈 '챙길 고객'·신호에서 제외
+  const DAY = 86400000;
+  const isLapsed = (c: Cust) => {
+    const days = c.last_visit ? Math.floor((Date.now() - new Date(c.last_visit).getTime()) / DAY) : Infinity;
+    return days > 365 || (days > 180 && c.visit_count < 3); // 1년+ 무조건 이탈 / 6개월+ & 3회 미만
+  };
+
   const signals = { overdue: 0, due: 0, new: 0, vip: 0 };
   for (const c of cust) {
-    if (c.revisit_state && c.revisit_state in signals) (signals as Record<string, number>)[c.revisit_state]++;
+    if (c.revisit_state === 'overdue' || c.revisit_state === 'due') {
+      if (!isLapsed(c)) (signals as Record<string, number>)[c.revisit_state]++;
+    } else if (c.revisit_state === 'new') {
+      signals.new++;
+    }
     if (c.tier === 'vip') signals.vip++;
   }
 
   const rank: Record<string, number> = { overdue: 0, due: 1 };
   const careBase = cust
-    .filter((c) => c.revisit_state === 'overdue' || c.revisit_state === 'due')
+    .filter((c) => (c.revisit_state === 'overdue' || c.revisit_state === 'due') && !isLapsed(c))
     .sort((a, b) => rank[a.revisit_state as string] - rank[b.revisit_state as string] || b.visit_count - a.visit_count)
     .slice(0, 20);
   const careNames = await Promise.all(careBase.map((c) => nameFrom(c.pii_enc)));
