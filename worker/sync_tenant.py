@@ -118,6 +118,7 @@ def sync_tenant(tenant: dict) -> dict:
             "service": b.get("service"),
             "source": "handsos",
             "ext_id": b["ext_id"],
+            "staff": b.get("staff"),  # 담당 디자이너(화면 필터용)
             "pii_enc": _bpii(b),  # 예약자 이름/전화(매칭 안 돼도 표시용)
         }
         for b in data.get("bookings", [])

@@ -18,7 +18,7 @@ type Cust = {
   pii_enc: string | null;
   last_visit: string | null;
 };
-type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; pii_enc: string | null; name?: string };
+type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; pii_enc: string | null; staff: string | null; name?: string };
 
 export default async function Page() {
   const supabase = supabaseServer();
@@ -43,7 +43,12 @@ export default async function Page() {
   const tenantId = (mem as { tenant_id: string }).tenant_id;
   const [{ data: tenant }, { data: bookings }, customers] = await Promise.all([
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
-    supabase.from('bookings').select('id,date,time,service,customer_id,pii_enc').order('date').limit(20),
+    supabase
+      .from('bookings')
+      .select('id,date,time,service,customer_id,pii_enc,staff')
+      .order('date', { ascending: true })
+      .order('time', { ascending: true, nullsFirst: false })
+      .limit(200),
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select('id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit').order('id').range(from, to)),
   ]);
@@ -98,10 +103,13 @@ export default async function Page() {
     last_visit: c.last_visit,
   }));
 
+  // 예약은 전 디자이너 저장 → 이 화면은 이 테넌트의 디자이너(담당) 것만. booking_days_ahead 기간 내.
+  const designerName = t?.designer_name ?? '';
   const bkCutoff = new Date(Date.now() + settings.booking_days_ahead * 86400000).toISOString().slice(0, 10);
-  const bkNamed = await Promise.all(
-    bk.filter((b) => (b.date || '') <= bkCutoff).map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })),
-  );
+  const bkVisible = bk
+    .filter((b) => (b.date || '') <= bkCutoff && (!designerName || (b.staff ?? '').includes(designerName)))
+    .slice(0, 20);
+  const bkNamed = await Promise.all(bkVisible.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })));
   const totalRevenue = cust.reduce((s, c) => s + (c.total_won || 0), 0);
 
   return (

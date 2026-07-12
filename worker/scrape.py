@@ -110,17 +110,30 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         seq[key] += 1
         transactions.append({"ext_id": f"{t['customer_ext']}-{t['date']}-{i}", **t})
 
+    # 예약은 전 디자이너 수집(담당은 staff 로 저장) → 화면에서 디자이너별로 필터.
     bookings = []
-    for i, b in enumerate(reserve_rows or []):
+    idx = 0
+    for b in reserve_rows or []:
+        if b.get("status") and "예약중" not in str(b.get("status")):  # 취소·노쇼·완료 제외
+            continue
+        d = _norm_date(b.get("날짜") or b.get("date"))
+        if not d or d < today:  # 오늘 이후(다가오는 예약)만
+            continue
+        bstaff = (b.get("staff") or "").strip() or None
+        if not bstaff and b.get("detail"):  # 상세셀 앞머리 '하예원.' → 담당 추출(폴백)
+            m = re.match(r"\s*([^.\s]+)\s*\.", str(b.get("detail")))
+            bstaff = m.group(1) if m else None
         bookings.append({
-            "ext_id": f"B{i}",
+            "ext_id": f"B{idx}",
             "customer_ext": (b.get("고객번호") or b.get("custno") or b.get("customer_ext")),
             "name": (b.get("name") or b.get("고객명") or "").strip() or None,     # 예약자 이름(연결·표시용)
             "phone": re.sub(r"\D", "", str(b.get("phone") or b.get("전화번호") or "")) or None,
-            "date": _norm_date(b.get("날짜") or b.get("date")),
+            "staff": bstaff,                                                       # 담당 디자이너(화면 필터용)
+            "date": d,
             "time": b.get("시간") or b.get("time"),
             "service": b.get("메뉴") or b.get("service"),
         })
+        idx += 1
 
     return {"customers": customers, "transactions": transactions, "bookings": bookings}
 
