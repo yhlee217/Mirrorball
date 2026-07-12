@@ -4,12 +4,12 @@ type Booking = { id: string; date: string; time: string | null; service: string 
 type Customer = { id: string; revisit_state: string | null; tier: string | null; visit_count: number };
 
 export default function HomeView({
-  salon,
+  designer,
   bookings,
   customers,
   nameById,
 }: {
-  salon: string;
+  designer: string;
   bookings: Booking[];
   customers: Customer[];
   nameById: Record<string, string>;
@@ -31,7 +31,7 @@ export default function HomeView({
       <div className="body">
         <div className="hello">
           <div className="e">For the Designer</div>
-          <h2>{salon}님, 안녕하세요 👋</h2>
+          <h2>{designer}님, 안녕하세요 👋</h2>
           <div className="s">
             다가오는 예약 {bookings.length} · 챙길 고객 {care} · 고객 {customers.length}명
           </div>

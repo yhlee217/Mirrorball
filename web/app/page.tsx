@@ -33,12 +33,12 @@ export default async function Page() {
 
   const tenantId = (mem as { tenant_id: string }).tenant_id;
   const [{ data: tenant }, { data: bookings }, { data: customers }] = await Promise.all([
-    supabase.from('tenants').select('salon_name,slug,dek_wrapped').eq('id', tenantId).maybeSingle(),
+    supabase.from('tenants').select('salon_name,slug,dek_wrapped,designer_name').eq('id', tenantId).maybeSingle(),
     supabase.from('bookings').select('id,date,time,service,customer_id').order('date').limit(20),
     supabase.from('customers').select('id,revisit_state,tier,visit_count'),
   ]);
 
-  const t = tenant as { salon_name: string; dek_wrapped: string | null } | null;
+  const t = tenant as { salon_name: string; dek_wrapped: string | null; designer_name: string | null } | null;
   const bk =
     (bookings as { id: string; date: string; time: string | null; service: string | null; customer_id: string | null }[]) ?? [];
 
@@ -66,7 +66,7 @@ export default async function Page() {
 
   return (
     <HomeView
-      salon={t?.salon_name ?? '디자이너'}
+      designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
       bookings={bk}
       customers={(customers as never[]) ?? []}
       nameById={nameById}

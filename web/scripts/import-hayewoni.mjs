@@ -65,7 +65,7 @@ if (t) {
   dek = crypto.randomBytes(32);
   const { data: nt, error: ne } = await admin
     .from('tenants')
-    .insert({ slug: 'hayewoni', salon_name: data.salon || '살롱', dek_wrapped: seal(KEK, dek) })
+    .insert({ slug: 'hayewoni', salon_name: data.salon || '살롱', designer_name: data.designer || null, dek_wrapped: seal(KEK, dek) })
     .select('id')
     .single();
   if (ne) { console.error('tenant:', ne.message); process.exit(1); }
