@@ -19,7 +19,14 @@ HANDSOS_ID=<아이디> HANDSOS_PW=<비번> node --env-file=.env.local scripts/se
 ```
 > ⚠ 디자이너의 **명시적 동의 + 위탁 약관**을 전제로만. ToS 저촉 리스크 인지.
 
-## 배포 (Fly.io)
+## 배포 A — GitHub Actions (무료 · 권장)
+`.github/workflows/collect.yml` 이 크론(KST 영업시간 30분마다)으로 `SYNC_ALL=1 python worker/run.py` 실행 → 자격증명 등록된 전 테넌트 수집. 서버·비용 없음.
+1. 리포 **Settings → Secrets and variables → Actions** 에 시크릿 3개: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MIRRORBALL_KEK`(web/.env.local 과 동일 값).
+2. 스케줄 트리거는 **기본 브랜치**의 워크플로만 동작 → 이 파일이 기본 브랜치에 있어야 함(claude 브랜치면 머지/기본브랜치 변경).
+3. **Actions 탭 → collect → Run workflow** 로 수동 테스트.
+
+## 배포 B — Fly.io (유료 · 선택)
+> Fly는 무료 티어가 없어짐(종량제 ~$5/월). 무료로는 A(GitHub Actions) 권장.
 ```bash
 cd /path/to/Mirrorball          # 빌드 컨텍스트는 리포 루트
 fly launch --no-deploy --copy-config --dockerfile worker/Dockerfile

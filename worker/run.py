@@ -33,5 +33,40 @@ def main() -> None:
             traceback.print_exc()
 
 
+def sync_all() -> None:
+    """자격증명 등록된 전 테넌트를 큐 없이 즉시 동기화(무료 GitHub Actions/cron용)."""
+    tenants = supa.list_credentialed_tenants()
+    if not tenants:
+        print("자격증명 등록된 테넌트 없음")
+        return
+    for t in tenants:
+        try:
+            stats = sync_tenant(t)
+            print("OK", t.get("slug"), stats)
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+
+
+def loop() -> None:
+    import os
+    import time
+
+    interval = int(os.environ.get("POLL_SECONDS", "300"))
+    print(f"워커 폴링 시작 · 간격 {interval}s")
+    while True:
+        try:
+            main()
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+        time.sleep(interval)
+
+
 if __name__ == "__main__":
-    main()
+    import os
+
+    if os.environ.get("SYNC_ALL"):
+        sync_all()      # 전 테넌트 1회(무료 GitHub Actions)
+    elif os.environ.get("RUN_ONCE"):
+        main()          # queued 잡 1회
+    else:
+        loop()          # 상시 폴링

@@ -1,0 +1,22 @@
+# Fly/Docker 빌드 컨텍스트 축소 + PII·비밀 업로드 방지
+.git
+.venv
+venv
+node_modules
+web/node_modules
+web/.next
+web/out
+dist_app_site
+dist_app
+_raw
+runs
+content
+**/__pycache__
+*.log
+*.pyc
+.pytest_cache
+
+# PII·비밀은 빌더에 올리지 않음(워커 이미지엔 불필요)
+clients
+secrets
+web/.env.local

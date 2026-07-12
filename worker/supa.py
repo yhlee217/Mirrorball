@@ -71,6 +71,19 @@ def update_job(job_id: str, **fields):
         r.raise_for_status()
 
 
+def list_credentialed_tenants() -> list:
+    """pos_credentials 가 등록된 테넌트들(임베드 조인). SYNC_ALL 용."""
+    rows = _get("/pos_credentials", {"select": "tenant_id,tenants(id,slug,dek_wrapped)"})
+    out = []
+    for r in rows:
+        t = r.get("tenants")
+        if isinstance(t, list):
+            t = t[0] if t else None
+        if t:
+            out.append(t)
+    return out
+
+
 def get_customer_extmap(tenant_id: str) -> dict:
     rows = _get("/customers", {"tenant_id": f"eq.{tenant_id}", "select": "id,ext_id"})
     return {r["ext_id"]: r["id"] for r in rows if r.get("ext_id")}
