@@ -66,6 +66,14 @@ body{background:var(--bg);color:var(--ink);
 .kv .r{display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line);font-size:14px}
 .kv .k{color:var(--muted);font-size:12px}
 .search{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:var(--paper);color:var(--ink);margin-bottom:10px}
+
+/* 고객 필터 */
+.fchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px}
+.fchip{font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;border:1px solid var(--line);background:var(--paper);color:var(--muted);cursor:pointer;font-family:inherit}
+.fchip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.fsel{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.fsel select{font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);font-family:inherit}
+.tag-vip{display:inline-block;font-size:9.5px;font-weight:800;color:var(--gold);background:#F2EAD8;border-radius:20px;padding:1px 7px;margin-left:6px;vertical-align:middle}
 .sec-h{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin:2px 2px 8px}
 
 /* 통계 링크 + 통계 화면 */

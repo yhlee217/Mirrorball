@@ -8,7 +8,25 @@ import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows } from '@/lib/customers';
 import CustomersList from './customers-list';
 
-type Cust = { id: string; pii_enc: string | null; visit_count: number; revisit_state: string | null; last_visit: string | null };
+type Cust = {
+  id: string;
+  pii_enc: string | null;
+  visit_count: number;
+  revisit_state: string | null;
+  last_visit: string | null;
+  first_visit: string | null;
+  total_won: number;
+};
+
+// 시술명 → 대분류(필터용). 매칭 안 되면 제외.
+function svcCat(s: string | null): string | null {
+  if (!s) return null;
+  if (/펌|매직|볼륨|셋팅|디지털|웨이브/.test(s)) return '펌';
+  if (/염색|컬러|뿌리|새치|이노아|탈색|블리치|하이라이트|톤다운|톤업/.test(s)) return '염색';
+  if (/클리닉|트리트|케어|앰플|두피|스켈프/.test(s)) return '클리닉';
+  if (/컷|커트/.test(s)) return '컷';
+  return null;
+}
 
 export default async function CustomersPage() {
   const supabase = supabaseServer();
@@ -21,10 +39,18 @@ export default async function CustomersPage() {
   if (!mem) redirect('/');
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
-  const [{ data: tenant }, customers] = await Promise.all([
+  const [{ data: tenant }, customers, bookings, txs] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select('id,pii_enc,visit_count,revisit_state,last_visit').order('id').range(from, to)),
+      supabase
+        .from('customers')
+        .select('id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won')
+        .order('id')
+        .range(from, to)),
+    fetchAllRows<{ customer_id: string | null }>((from, to) =>
+      supabase.from('bookings').select('customer_id').order('id').range(from, to)),
+    fetchAllRows<{ customer_id: string | null; service: string | null }>((from, to) =>
+      supabase.from('transactions').select('customer_id,service').order('id').range(from, to)),
   ]);
 
   let dek: Uint8Array | null = null;
@@ -37,25 +63,47 @@ export default async function CustomersPage() {
     }
   }
 
-  const list = ((customers as Cust[]) ?? []).sort((a, b) => b.visit_count - a.visit_count);
-  const names = await Promise.all(
+  const bookingSet = new Set(
+    (bookings as { customer_id: string | null }[]).map((b) => b.customer_id).filter(Boolean) as string[],
+  );
+  const svcMap = new Map<string, Set<string>>();
+  for (const t of txs as { customer_id: string | null; service: string | null }[]) {
+    if (!t.customer_id) continue;
+    const cat = svcCat(t.service);
+    if (!cat) continue;
+    if (!svcMap.has(t.customer_id)) svcMap.set(t.customer_id, new Set());
+    svcMap.get(t.customer_id)!.add(cat);
+  }
+
+  const list = (customers as Cust[]) ?? [];
+  const decoded = await Promise.all(
     list.map(async (c) => {
-      if (!dek || !c.pii_enc) return '고객';
-      try {
-        const p = await decryptPII(c.pii_enc, dek);
-        return typeof p.name === 'string' ? p.name : '고객';
-      } catch {
-        return '고객';
+      let name = '고객';
+      let hasPhone = false;
+      if (dek && c.pii_enc) {
+        try {
+          const p = await decryptPII(c.pii_enc, dek);
+          if (typeof p.name === 'string' && p.name) name = p.name;
+          hasPhone = !!p.phone;
+        } catch {
+          /* noop */
+        }
       }
+      return { name, hasPhone };
     }),
   );
 
   const rows = list.map((c, i) => ({
     id: c.id,
-    name: names[i],
+    name: decoded[i].name,
     visit_count: c.visit_count,
-    state: c.revisit_state,
+    total_won: c.total_won || 0,
     last_visit: c.last_visit,
+    first_visit: c.first_visit,
+    state: c.revisit_state,
+    hasBooking: bookingSet.has(c.id),
+    hasPhone: decoded[i].hasPhone,
+    services: Array.from(svcMap.get(c.id) ?? []),
   }));
 
   return (
