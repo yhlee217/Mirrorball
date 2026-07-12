@@ -13,6 +13,22 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
+def _preflight() -> None:
+    """필수 시크릿 확인 — 없으면 트레이스백 대신 원인 한 줄로 즉시 종료."""
+    import os
+
+    url_ok = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
+    missing = ([] if url_ok else ["SUPABASE_URL"]) + [
+        k for k in ("SUPABASE_SERVICE_ROLE_KEY", "MIRRORBALL_KEK") if not os.environ.get(k)
+    ]
+    if missing:
+        raise SystemExit(
+            "❌ 필수 시크릿 미설정: " + ", ".join(missing)
+            + "\n   GitHub 리포 → Settings → Secrets and variables → Actions 에 등록하세요."
+            + "\n   값은 web/.env.local 의 같은 키에서 복사(SUPABASE_URL = NEXT_PUBLIC_SUPABASE_URL)."
+        )
+
+
 def main() -> None:
     jobs = supa.claim_jobs(limit=5)
     if not jobs:
@@ -35,16 +51,24 @@ def main() -> None:
 
 def sync_all() -> None:
     """자격증명 등록된 전 테넌트를 큐 없이 즉시 동기화(무료 GitHub Actions/cron용)."""
-    tenants = supa.list_credentialed_tenants()
+    try:
+        tenants = supa.list_credentialed_tenants()
+    except Exception as exc:  # noqa: BLE001
+        raise SystemExit(f"❌ Supabase 접근 실패(시크릿 값·네트워크 확인): {exc}")
     if not tenants:
-        print("자격증명 등록된 테넌트 없음")
+        print("자격증명 등록된 테넌트 없음 — 정상 종료(수집 대상 없음)")
         return
+    ok = 0
     for t in tenants:
         try:
             stats = sync_tenant(t)
             print("OK", t.get("slug"), stats)
+            ok += 1
         except Exception:  # noqa: BLE001
             traceback.print_exc()
+    if ok == 0:
+        raise SystemExit(f"❌ 전 테넌트 수집 실패({len(tenants)}개) — 위 traceback 참고")
+    print(f"완료: {ok}/{len(tenants)} 성공")
 
 
 def loop() -> None:
@@ -64,6 +88,7 @@ def loop() -> None:
 if __name__ == "__main__":
     import os
 
+    _preflight()
     if os.environ.get("SYNC_ALL"):
         sync_all()      # 전 테넌트 1회(무료 GitHub Actions)
     elif os.environ.get("RUN_ONCE"):

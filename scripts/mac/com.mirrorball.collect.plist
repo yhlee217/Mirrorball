@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Mirrorball v2 수집 (macOS launchd). 30분마다 run_mac.sh 호출(영업시간 게이트는 스크립트 내부).
+  국내 IP 필요 → 반드시 이 맥에서 실행(GitHub 해외러너는 HandSOS 차단).
+  설치:  cp scripts/mac/com.mirrorball.collect.plist ~/Library/LaunchAgents/
+         launchctl load ~/Library/LaunchAgents/com.mirrorball.collect.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.mirrorball.collect</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/eyonghwi/Desktop/Dev/Mirrorball/worker/run_mac.sh</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/eyonghwi/Desktop/Dev/Mirrorball</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartInterval</key><integer>1800</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/eyonghwi/Desktop/Dev/Mirrorball/runs/collect.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/eyonghwi/Desktop/Dev/Mirrorball/runs/collect.err.log</string>
+</dict>
+</plist>

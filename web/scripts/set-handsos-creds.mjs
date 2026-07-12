@@ -34,7 +34,7 @@ if (!tenant) {
   console.error('tenant 없음:', slug);
   process.exit(1);
 }
-const enc = seal(KEK, Buffer.from(JSON.stringify({ id: hid, pw: hpw }), 'utf8'));
+const enc = seal(KEK, Buffer.from(JSON.stringify({ company: hcompany, id: hid, pw: hpw }), 'utf8'));
 const { error } = await admin
   .from('pos_credentials')
   .upsert({ tenant_id: tenant.id, provider: 'handsos', enc_blob: enc, status: 'ok' }, { onConflict: 'tenant_id' });

@@ -25,8 +25,13 @@ def sync_tenant(tenant: dict) -> dict:
     cust_rows = []
     for c in data.get("customers", []):
         c = dict(c)
-        pii = {k: c.pop(k) for k in _PII_FIELDS if c.get(k) is not None}
-        # PII 아닌 잔여 키 제거 방지: pop 은 위에서 처리, 나머지는 스키마 컬럼
+        # PII 필드(name/birthday/phone)는 값 유무와 무관하게 항상 행에서 제거 —
+        # customers 엔 평문 PII 컬럼이 없고(pii_enc 로 암호화), None 이 남으면 400(PGRST204).
+        pii = {}
+        for k in _PII_FIELDS:
+            v = c.pop(k, None)
+            if v is not None:
+                pii[k] = v
         cust_rows.append({**c, "tenant_id": tid, "pii_enc": mc.encrypt_pii(pii, dek), "pii_kid": "v1"})
     supa.upsert("customers", cust_rows, "tenant_id,ext_id")
 

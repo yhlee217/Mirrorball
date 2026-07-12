@@ -23,10 +23,16 @@ def _headers(extra: dict | None = None) -> dict:
     return h
 
 
+def _check(r) -> None:
+    """4xx/5xx 시 PostgREST 응답 본문을 그대로 노출(원인 즉시 파악)."""
+    if r.status_code >= 400:
+        raise RuntimeError(f"Supabase {r.status_code}: {r.text[:500]}")
+
+
 def _get(path: str, params: dict):
     with httpx.Client(timeout=30) as c:
         r = c.get(_base() + path, params=params, headers=_headers())
-        r.raise_for_status()
+        _check(r)
         return r.json()
 
 
@@ -62,13 +68,13 @@ def upsert(table: str, rows: list, on_conflict: str):
             headers=_headers({"Prefer": "resolution=merge-duplicates,return=minimal"}),
             json=rows,
         )
-        r.raise_for_status()
+        _check(r)
 
 
 def update_job(job_id: str, **fields):
     with httpx.Client(timeout=30) as c:
         r = c.patch(_base() + "/sync_jobs", params={"id": f"eq.{job_id}"}, headers=_headers(), json=fields)
-        r.raise_for_status()
+        _check(r)
 
 
 def list_credentialed_tenants() -> list:
@@ -92,7 +98,7 @@ def get_customer_extmap(tenant_id: str) -> dict:
 def delete(table: str, tenant_id: str):
     with httpx.Client(timeout=30) as c:
         r = c.delete(_base() + f"/{table}", params={"tenant_id": f"eq.{tenant_id}"}, headers=_headers())
-        r.raise_for_status()
+        _check(r)
 
 
 def insert(table: str, rows: list):
@@ -100,4 +106,4 @@ def insert(table: str, rows: list):
         return
     with httpx.Client(timeout=60) as c:
         r = c.post(_base() + f"/{table}", headers=_headers({"Prefer": "return=minimal"}), json=rows)
-        r.raise_for_status()
+        _check(r)
