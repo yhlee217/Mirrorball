@@ -94,3 +94,21 @@ body{background:var(--bg);color:var(--ink);
 .fld input,.fld textarea,.card input,.card textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:16px;font-family:inherit;background:var(--paper);color:var(--ink);margin-bottom:6px}
 .fld textarea,.card textarea{resize:vertical;line-height:1.5}
 .del{border:none;background:var(--soft);color:var(--rose);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.pub-link{display:inline-block;color:var(--accent);font-weight:700;font-size:13px;text-decoration:none;margin:0 0 14px}
+
+/* 공개 소개 페이지(손님용) */
+.pub{max-width:640px;margin:0 auto;padding:40px 22px 70px;background:var(--paper);min-height:100vh}
+.pub-hd{text-align:center;padding:16px 0 24px;border-bottom:1px solid var(--line);margin-bottom:26px}
+.pub-name{font-family:Georgia,'Nanum Myeongjo',serif;font-size:30px;font-weight:700;color:var(--ink)}
+.pub-tag{font-size:15px;color:var(--muted);margin-top:10px;line-height:1.6}
+.pub-sec{margin-bottom:26px}
+.pub-sec h3{font-size:13px;font-weight:800;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin:0 0 12px}
+.pub-bio{font-size:15px;line-height:1.8;color:var(--ink);white-space:pre-line;margin:0}
+.pub-svc{padding:12px 0;border-bottom:1px solid var(--line)}
+.pub-svc-n{font-weight:700;font-size:15px}
+.pub-svc-d{font-size:13.5px;color:var(--muted);margin-top:4px;line-height:1.6}
+.pub-faq{padding:12px 0;border-bottom:1px solid var(--line)}
+.pub-q{font-weight:700;font-size:14px}
+.pub-a{font-size:13.5px;color:var(--muted);margin-top:5px;line-height:1.6}
+.pub-loc{font-size:14.5px;color:var(--ink);line-height:1.6}
+.pub-foot{text-align:center;color:var(--muted);font-size:11px;letter-spacing:1px;margin-top:38px;opacity:.55}

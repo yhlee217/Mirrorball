@@ -15,11 +15,11 @@ export default async function ProfilePage() {
   if (!mem) redirect('/');
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
-  const { data: prof } = await supabase
-    .from('profiles')
-    .select('tagline,bio,location,services,faq')
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
+  const [{ data: tenant }, { data: prof }] = await Promise.all([
+    supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle(),
+    supabase.from('profiles').select('tagline,bio,location,services,faq').eq('tenant_id', tenantId).maybeSingle(),
+  ]);
+  const slug = (tenant as { slug: string } | null)?.slug ?? null;
 
   const p = (prof as {
     tagline: string | null;
@@ -44,6 +44,9 @@ export default async function ProfilePage() {
       </div>
       <div className="body">
         <div className="sec-h">손님에게 보이는 공개 소개 · 저장하면 반영</div>
+        {slug && (
+          <a href={`/p/${slug}`} target="_blank" rel="noopener" className="pub-link">공개 페이지 미리보기 ↗</a>
+        )}
         <ProfileEdit initial={initial} />
       </div>
     </main>

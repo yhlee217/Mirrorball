@@ -31,7 +31,7 @@ export default function ProfileEdit({ initial }: { initial: P }) {
       ok = false;
     }
     setSaving(false);
-    setMsg(ok ? '저장됐어요 · 공개 페이지에 반영돼요' : '저장 실패');
+    setMsg(ok ? '저장됐어요' : '저장 실패');
     setTimeout(() => setMsg(''), 2200);
   }
 

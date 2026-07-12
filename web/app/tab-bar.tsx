@@ -11,7 +11,7 @@ const TABS = [
 
 export default function TabBar() {
   const p = usePathname() || '/';
-  if (p.startsWith('/login') || p.startsWith('/auth')) return null;
+  if (p.startsWith('/login') || p.startsWith('/auth') || p.startsWith('/p/')) return null;
   return (
     <nav className="tabbar">
       {TABS.map((t) => (
