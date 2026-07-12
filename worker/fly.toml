@@ -1,0 +1,14 @@
+app = "mirrorball-worker"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "worker/Dockerfile"
+
+# 비밀은 저장소에 두지 말고 fly secrets 로 주입:
+#   fly secrets set SUPABASE_URL=https://<ref>.supabase.co \
+#                   SUPABASE_SERVICE_ROLE_KEY=<secret> \
+#                   MIRRORBALL_KEK=<base64-kek>   # web/.env.local 과 동일 KEK
+#
+# 스케줄(cron): pg_cron 이 sync_jobs 에 잡을 넣고, 이 머신을 주기 실행
+#   fly machine run . --schedule=hourly     (또는 원하는 주기)
+# 상시 폴링을 원하면 run.py 를 루프로 감싸 [processes] 로 띄우면 됨.
