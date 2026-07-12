@@ -115,6 +115,8 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         bookings.append({
             "ext_id": f"B{i}",
             "customer_ext": (b.get("고객번호") or b.get("custno") or b.get("customer_ext")),
+            "name": (b.get("name") or b.get("고객명") or "").strip() or None,     # 예약자 이름(연결·표시용)
+            "phone": re.sub(r"\D", "", str(b.get("phone") or b.get("전화번호") or "")) or None,
             "date": _norm_date(b.get("날짜") or b.get("date")),
             "time": b.get("시간") or b.get("time"),
             "service": b.get("메뉴") or b.get("service"),

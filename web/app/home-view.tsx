@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import LogoutButton from './logout-button';
 
-type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null };
+type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; name?: string };
 type Care = { id: string; name: string; state: string; visit_count: number; last_visit: string | null };
 type Signals = { overdue: number; due: number; new: number; vip: number };
 
@@ -13,17 +13,15 @@ export default function HomeView({
   signals,
   care,
   bookings,
-  nameById,
 }: {
   designer: string;
   totalCustomers: number;
   signals: Signals;
   care: Care[];
   bookings: Booking[];
-  nameById: Record<string, string>;
 }) {
   const careCount = signals.overdue + signals.due;
-  const nameOf = (b: Booking) => (b.customer_id && nameById[b.customer_id]) || '고객';
+  const nameOf = (b: Booking) => b.name || '고객';
 
   return (
     <main className="wrap">

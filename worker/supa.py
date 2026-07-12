@@ -120,3 +120,14 @@ def insert(table: str, rows: list):
     with httpx.Client(timeout=60) as c:
         r = c.post(_base() + f"/{table}", headers=_headers({"Prefer": "return=minimal"}), json=rows)
         _check(r)
+
+
+def delete_stale(table: str, tenant_id: str, ext_ids: list) -> None:
+    """현재 수집분(ext_ids) 에 없는 행만 삭제. ext_ids 비면 tenant 전체 삭제.
+    업서트 후 호출해 delete-먼저 방식의 '삽입 실패 시 전멸' 사고를 방지."""
+    params = {"tenant_id": f"eq.{tenant_id}"}
+    if ext_ids:
+        params["ext_id"] = "not.in.(" + ",".join(f'"{e}"' for e in ext_ids) + ")"
+    with httpx.Client(timeout=30) as c:
+        r = c.delete(_base() + f"/{table}", params=params, headers=_headers())
+        _check(r)

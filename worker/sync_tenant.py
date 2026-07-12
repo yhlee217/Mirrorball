@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from datetime import date
 
@@ -79,21 +80,52 @@ def sync_tenant(tenant: dict) -> dict:
     supa.upsert("transactions", tx, "tenant_id,ext_id")
 
     # 3) 예약: 전량 새로고침(중복·스테일 방지)
+    # 예약행엔 고객번호가 없어 전화(→이름) 로 고객 매칭. 전화/이름 맵 구성(PII 복호화).
+    by_phone: dict = {}
+    by_name: dict = {}
+    for c in supa.select_all("customers", tid, "id,pii_enc"):
+        if not c.get("pii_enc"):
+            continue
+        try:
+            p = mc.decrypt_pii(c["pii_enc"], dek)
+        except Exception:
+            continue
+        ph = re.sub(r"\D", "", str(p.get("phone") or ""))
+        if ph:
+            by_phone.setdefault(ph, c["id"])
+        nm = (p.get("name") or "").strip()
+        if nm:
+            by_name.setdefault(nm, c["id"])
+
+    def _match(b: dict):
+        return (
+            extmap.get(b.get("customer_ext"))
+            or (b.get("phone") and by_phone.get(b["phone"]))
+            or (b.get("name") and by_name.get(b["name"]))
+            or None
+        )
+
+    def _bpii(b: dict):
+        pii = {k: b[k] for k in ("name", "phone") if b.get(k)}
+        return mc.encrypt_pii(pii, dek) if pii else None
+
     bk = [
         {
             "tenant_id": tid,
-            "customer_id": extmap.get(b.get("customer_ext")),
+            "customer_id": _match(b),
             "date": b["date"],
             "time": b.get("time"),
             "service": b.get("service"),
             "source": "handsos",
             "ext_id": b["ext_id"],
+            "pii_enc": _bpii(b),  # 예약자 이름/전화(매칭 안 돼도 표시용)
         }
         for b in data.get("bookings", [])
         if b.get("date")
     ]
-    supa.delete("bookings", tid)
-    supa.insert("bookings", bk)
+    # 업서트 후 스테일 정리 — delete 를 먼저 하지 않아 insert/스키마 문제 시에도 예약이 비지 않음.
+    supa.upsert("bookings", bk, "tenant_id,ext_id")
+    supa.delete_stale("bookings", tid, [b["ext_id"] for b in bk])
 
     # TODO: 갱신된 session_cookie 를 pos_credentials 에 암호화 저장(재로그인 회피)
 

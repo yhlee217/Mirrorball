@@ -16,7 +16,7 @@ type Cust = {
   pii_enc: string | null;
   last_visit: string | null;
 };
-type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null };
+type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; pii_enc: string | null; name?: string };
 
 export default async function Page() {
   const supabase = supabaseServer();
@@ -41,7 +41,7 @@ export default async function Page() {
   const tenantId = (mem as { tenant_id: string }).tenant_id;
   const [{ data: tenant }, { data: bookings }, customers] = await Promise.all([
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped').eq('id', tenantId).maybeSingle(),
-    supabase.from('bookings').select('id,date,time,service,customer_id').order('date').limit(20),
+    supabase.from('bookings').select('id,date,time,service,customer_id,pii_enc').order('date').limit(20),
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select('id,revisit_state,tier,visit_count,pii_enc,last_visit').order('id').range(from, to)),
   ]);
@@ -88,15 +88,7 @@ export default async function Page() {
     last_visit: c.last_visit,
   }));
 
-  const nameById: Record<string, string> = {};
-  await Promise.all(
-    bk
-      .filter((b) => b.customer_id)
-      .map(async (b) => {
-        const c = cust.find((x) => x.id === b.customer_id);
-        if (c) nameById[b.customer_id as string] = await nameFrom(c.pii_enc);
-      }),
-  );
+  const bkNamed = await Promise.all(bk.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })));
 
   return (
     <HomeView
@@ -104,8 +96,7 @@ export default async function Page() {
       totalCustomers={cust.length}
       signals={signals}
       care={care}
-      bookings={bk}
-      nameById={nameById}
+      bookings={bkNamed}
     />
   );
 }
