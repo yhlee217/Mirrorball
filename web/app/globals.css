@@ -63,3 +63,5 @@ body{background:var(--bg);color:var(--ink);
 .kv{margin:6px 0 12px}
 .kv .r{display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line);font-size:14px}
 .kv .k{color:var(--muted);font-size:12px}
+.search{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:var(--paper);color:var(--ink);margin-bottom:10px}
+.sec-h{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin:2px 2px 8px}

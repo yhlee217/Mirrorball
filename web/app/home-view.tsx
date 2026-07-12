@@ -43,7 +43,10 @@ export default function HomeView({
         <div className="chips">
           <div className="chip"><div className="nnum">{careCount}</div><div className="l">챙길 고객</div></div>
           <div className="chip"><div className="nnum">{bookings.length}</div><div className="l">다가오는 예약</div></div>
-          <div className="chip"><div className="nnum">{totalCustomers}</div><div className="l">전체 고객</div></div>
+          <Link href="/customers" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="nnum">{totalCustomers}</div>
+            <div className="l">전체 고객 ›</div>
+          </Link>
         </div>
 
         <div className="hsig">
