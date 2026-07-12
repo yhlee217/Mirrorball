@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import { redirect } from 'next/navigation';
@@ -33,40 +34,42 @@ export default async function AlertsPage() {
       .in('revisit_state', ['overdue', 'due']),
   ]);
 
-  let dek: Buffer | null = null;
+  let dek: Uint8Array | null = null;
   const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
   if (dw) {
     try {
-      dek = unwrapDek(dw);
+      dek = await unwrapDek(dw);
     } catch {
       dek = null;
     }
   }
-  const nameFrom = (pii: string | null): string => {
+  const nameFrom = async (pii: string | null): Promise<string> => {
     if (!dek || !pii) return '고객';
     try {
-      const p = decryptPII(pii, dek);
+      const p = await decryptPII(pii, dek);
       return typeof p.name === 'string' ? p.name : '고객';
     } catch {
       return '고객';
     }
   };
 
-  const items = ((customers as Cust[]) ?? [])
+  const base = ((customers as Cust[]) ?? [])
     .sort((a, b) => (a.revisit_state === 'overdue' ? 0 : 1) - (b.revisit_state === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count)
-    .slice(0, 50)
-    .map((c) => {
-      const name = nameFrom(c.pii_enc);
-      const why =
-        c.revisit_state === 'overdue'
-          ? `마지막 방문 ${c.last_visit ?? '-'} · 평소 주기(${c.revisit_cycle_days ?? '-'}일)를 지났어요`
-          : `재방문 시기예요 · 마지막 방문 ${c.last_visit ?? '-'}`;
-      const draft =
-        c.revisit_state === 'overdue'
-          ? `${name}님, 오랜만이에요! 잘 지내셨어요? 슬슬 컨디션 체크 겸 한번 뵙고 싶어요. 편하신 때 편하게 연락 주세요 😊`
-          : `${name}님, 지난 시술 이제 관리해주실 시기예요. 편하신 시간에 예약 도와드릴게요!`;
-      return { id: c.id, name, state: c.revisit_state as string, why, draft };
-    });
+    .slice(0, 50);
+  const names = await Promise.all(base.map((c) => nameFrom(c.pii_enc)));
+
+  const items = base.map((c, i) => {
+    const name = names[i];
+    const why =
+      c.revisit_state === 'overdue'
+        ? `마지막 방문 ${c.last_visit ?? '-'} · 평소 주기(${c.revisit_cycle_days ?? '-'}일)를 지났어요`
+        : `재방문 시기예요 · 마지막 방문 ${c.last_visit ?? '-'}`;
+    const draft =
+      c.revisit_state === 'overdue'
+        ? `${name}님, 오랜만이에요! 잘 지내셨어요? 슬슬 컨디션 체크 겸 한번 뵙고 싶어요. 편하신 때 편하게 연락 주세요 😊`
+        : `${name}님, 지난 시술 이제 관리해주실 시기예요. 편하신 시간에 예약 도와드릴게요!`;
+    return { id: c.id, name, state: c.revisit_state as string, why, draft };
+  });
 
   return (
     <main className="wrap">

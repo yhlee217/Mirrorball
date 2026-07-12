@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import { redirect } from 'next/navigation';
@@ -47,54 +48,53 @@ export default async function Page() {
   const bk = (bookings as Booking[]) ?? [];
   const cust = (customers as Cust[]) ?? [];
 
-  // 테넌트 DEK 언랩(이름 복호화용)
-  let dek: Buffer | null = null;
+  let dek: Uint8Array | null = null;
   if (t?.dek_wrapped) {
     try {
-      dek = unwrapDek(t.dek_wrapped);
+      dek = await unwrapDek(t.dek_wrapped);
     } catch {
       dek = null;
     }
   }
-  const nameFrom = (pii: string | null): string => {
+  const nameFrom = async (pii: string | null): Promise<string> => {
     if (!dek || !pii) return '고객';
     try {
-      const p = decryptPII(pii, dek);
+      const p = await decryptPII(pii, dek);
       return typeof p.name === 'string' ? p.name : '고객';
     } catch {
       return '고객';
     }
   };
 
-  // 신호 집계
   const signals = { overdue: 0, due: 0, new: 0, vip: 0 };
   for (const c of cust) {
     if (c.revisit_state && c.revisit_state in signals) (signals as Record<string, number>)[c.revisit_state]++;
     if (c.tier === 'vip') signals.vip++;
   }
 
-  // 오늘 챙길 고객: 이탈위험 → 재방문도래 순, 최대 20, 이름 복호화
   const rank: Record<string, number> = { overdue: 0, due: 1 };
-  const care = cust
+  const careBase = cust
     .filter((c) => c.revisit_state === 'overdue' || c.revisit_state === 'due')
     .sort((a, b) => rank[a.revisit_state as string] - rank[b.revisit_state as string] || b.visit_count - a.visit_count)
-    .slice(0, 20)
-    .map((c) => ({
-      id: c.id,
-      name: nameFrom(c.pii_enc),
-      state: c.revisit_state as string,
-      visit_count: c.visit_count,
-      last_visit: c.last_visit,
-    }));
+    .slice(0, 20);
+  const careNames = await Promise.all(careBase.map((c) => nameFrom(c.pii_enc)));
+  const care = careBase.map((c, i) => ({
+    id: c.id,
+    name: careNames[i],
+    state: c.revisit_state as string,
+    visit_count: c.visit_count,
+    last_visit: c.last_visit,
+  }));
 
-  // 예약 고객 이름
   const nameById: Record<string, string> = {};
-  for (const b of bk) {
-    if (b.customer_id) {
-      const c = cust.find((x) => x.id === b.customer_id);
-      if (c) nameById[b.customer_id] = nameFrom(c.pii_enc);
-    }
-  }
+  await Promise.all(
+    bk
+      .filter((b) => b.customer_id)
+      .map(async (b) => {
+        const c = cust.find((x) => x.id === b.customer_id);
+        if (c) nameById[b.customer_id as string] = await nameFrom(c.pii_enc);
+      }),
+  );
 
   return (
     <HomeView

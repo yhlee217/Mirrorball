@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
@@ -27,28 +28,36 @@ export default async function CustomersPage() {
       .order('visit_count', { ascending: false }),
   ]);
 
-  let dek: Buffer | null = null;
+  let dek: Uint8Array | null = null;
   const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
   if (dw) {
     try {
-      dek = unwrapDek(dw);
+      dek = await unwrapDek(dw);
     } catch {
       dek = null;
     }
   }
 
-  const rows = ((customers as Cust[]) ?? []).map((c) => {
-    let name = '고객';
-    if (dek && c.pii_enc) {
+  const list = (customers as Cust[]) ?? [];
+  const names = await Promise.all(
+    list.map(async (c) => {
+      if (!dek || !c.pii_enc) return '고객';
       try {
-        const p = decryptPII(c.pii_enc, dek);
-        if (typeof p.name === 'string') name = p.name;
+        const p = await decryptPII(c.pii_enc, dek);
+        return typeof p.name === 'string' ? p.name : '고객';
       } catch {
-        // 폴백
+        return '고객';
       }
-    }
-    return { id: c.id, name, visit_count: c.visit_count, state: c.revisit_state, last_visit: c.last_visit };
-  });
+    }),
+  );
+
+  const rows = list.map((c, i) => ({
+    id: c.id,
+    name: names[i],
+    visit_count: c.visit_count,
+    state: c.revisit_state,
+    last_visit: c.last_visit,
+  }));
 
   return (
     <main className="wrap">

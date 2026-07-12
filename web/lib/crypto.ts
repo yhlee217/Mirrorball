@@ -1,46 +1,63 @@
-import crypto from 'node:crypto';
+// 하이브리드 암호화(엣지 호환 · Web Crypto). node:crypto 대신 crypto.subtle 사용 → Cloudflare Workers/엣지 동작.
+// 봉투 형식: base64( iv(12) || ciphertext || GCM태그(16) ) — Node/Python 버전과 동일(상호운용).
 
-// 하이브리드 암호화(서버 전용). 봉투 형식: base64( iv(12) || ciphertext || tag(16) ).
-// KEK(마스터, env) → 테넌트별 DEK(랜덤 32B, KEK로 래핑해 tenants.dek_wrapped 저장) → PII 필드 암호화.
-// app_crypto.py(AES-256-GCM) 와 동일 원리라 파이썬/노드 상호운용.
+function b64encode(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
 
-function kek(): Buffer {
+function b64decode(b64: string): Uint8Array {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+function kekBytes(): Uint8Array {
   const b64 = process.env.MIRRORBALL_KEK;
   if (!b64) throw new Error('MIRRORBALL_KEK 미설정');
-  const k = Buffer.from(b64, 'base64');
+  const k = b64decode(b64);
   if (k.length !== 32) throw new Error('MIRRORBALL_KEK 는 base64(32 bytes) 여야 함');
   return k;
 }
 
-function seal(key: Buffer, plaintext: Buffer): string {
-  const iv = crypto.randomBytes(12);
-  const c = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const ct = Buffer.concat([c.update(plaintext), c.final()]);
-  return Buffer.concat([iv, ct, c.getAuthTag()]).toString('base64');
+async function importKey(raw: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
-function open(key: Buffer, blobB64: string): Buffer {
-  const raw = Buffer.from(blobB64, 'base64');
+async function seal(rawKey: Uint8Array, plaintext: Uint8Array): Promise<string> {
+  const key = await importKey(rawKey);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext));
+  const out = new Uint8Array(iv.length + ct.length);
+  out.set(iv, 0);
+  out.set(ct, iv.length);
+  return b64encode(out);
+}
+
+async function open(rawKey: Uint8Array, blobB64: string): Promise<Uint8Array> {
+  const raw = b64decode(blobB64);
   const iv = raw.subarray(0, 12);
-  const tag = raw.subarray(raw.length - 16);
-  const ct = raw.subarray(12, raw.length - 16);
-  const d = crypto.createDecipheriv('aes-256-gcm', key, iv);
-  d.setAuthTag(tag);
-  return Buffer.concat([d.update(ct), d.final()]);
+  const ct = raw.subarray(12);
+  const key = await importKey(rawKey);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return new Uint8Array(pt);
 }
 
-export function generateDek(): Buffer {
-  return crypto.randomBytes(32);
+export async function generateDek(): Promise<Uint8Array> {
+  return crypto.getRandomValues(new Uint8Array(32));
 }
-export function wrapDek(dek: Buffer): string {
-  return seal(kek(), dek);
+export async function wrapDek(dek: Uint8Array): Promise<string> {
+  return seal(kekBytes(), dek);
 }
-export function unwrapDek(wrappedB64: string): Buffer {
-  return open(kek(), wrappedB64);
+export async function unwrapDek(wrappedB64: string): Promise<Uint8Array> {
+  return open(kekBytes(), wrappedB64);
 }
-export function encryptPII(obj: unknown, dek: Buffer): string {
-  return seal(dek, Buffer.from(JSON.stringify(obj), 'utf8'));
+export async function encryptPII(obj: unknown, dek: Uint8Array): Promise<string> {
+  return seal(dek, new TextEncoder().encode(JSON.stringify(obj)));
 }
-export function decryptPII(blobB64: string, dek: Buffer): Record<string, unknown> {
-  return JSON.parse(open(dek, blobB64).toString('utf8'));
+export async function decryptPII(blobB64: string, dek: Uint8Array): Promise<Record<string, unknown>> {
+  const pt = await open(dek, blobB64);
+  return JSON.parse(new TextDecoder().decode(pt));
 }

@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
@@ -31,7 +32,6 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  // RLS 로 내 테넌트의 고객만 조회됨(아니면 null → 404)
   const { data: c } = await supabase
     .from('customers')
     .select('id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state')
@@ -40,16 +40,16 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   if (!c) notFound();
   const cust = c as Cust;
 
-  // 이름 복호화
   let name = '고객';
   const { data: tenant } = await supabase.from('tenants').select('dek_wrapped').eq('id', cust.tenant_id).maybeSingle();
   const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
   if (dw && cust.pii_enc) {
     try {
-      const p = decryptPII(cust.pii_enc, unwrapDek(dw));
+      const dek = await unwrapDek(dw);
+      const p = await decryptPII(cust.pii_enc, dek);
       if (typeof p.name === 'string') name = p.name;
     } catch {
-      // 폴백: '고객'
+      // 폴백
     }
   }
 
@@ -78,12 +78,8 @@ export default async function CustomerPage({ params }: { params: { id: string } 
         </div>
 
         <div className="kv">
-          {cust.first_visit && (
-            <div className="r"><span className="k">첫 방문</span><span>{cust.first_visit}</span></div>
-          )}
-          {cust.last_visit && (
-            <div className="r"><span className="k">마지막 방문</span><span>{cust.last_visit}</span></div>
-          )}
+          {cust.first_visit && <div className="r"><span className="k">첫 방문</span><span>{cust.first_visit}</span></div>}
+          {cust.last_visit && <div className="r"><span className="k">마지막 방문</span><span>{cust.last_visit}</span></div>}
           {cust.revisit_state && (
             <div className="r"><span className="k">신호</span><span>{SIGNAL[cust.revisit_state] ?? cust.revisit_state}</span></div>
           )}
@@ -94,9 +90,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           {history.length ? (
             history.map((h) => (
               <div className="li" key={h.id}>
-                <div className="bd">
-                  <div className="nm" style={{ fontWeight: 600 }}>{h.service ?? '시술'}</div>
-                </div>
+                <div className="bd"><div className="nm" style={{ fontWeight: 600 }}>{h.service ?? '시술'}</div></div>
                 <div className="rt">{h.date}</div>
               </div>
             ))
