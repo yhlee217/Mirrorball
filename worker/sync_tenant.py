@@ -17,32 +17,53 @@ def sync_tenant(tenant: dict) -> dict:
     if not cred_row:
         raise RuntimeError("pos_credentials 없음 — 자격증명 미등록")
     creds = mc.kek_decrypt_json(cred_row["enc_blob"])
+    creds.setdefault("slug", tenant.get("slug"))
 
     data = scrape_tenant(creds, cred_row.get("session_cookie"))
 
-    # 고객: PII 암호화(pii_enc), 운영지표 평문
+    # 1) 고객: PII 암호화, 운영지표 평문
     cust_rows = []
     for c in data.get("customers", []):
         c = dict(c)
-        pii = {k: c.pop(k) for k in _PII_FIELDS if k in c}
+        pii = {k: c.pop(k) for k in _PII_FIELDS if c.get(k) is not None}
+        # PII 아닌 잔여 키 제거 방지: pop 은 위에서 처리, 나머지는 스키마 컬럼
         cust_rows.append({**c, "tenant_id": tid, "pii_enc": mc.encrypt_pii(pii, dek), "pii_kid": "v1"})
     supa.upsert("customers", cust_rows, "tenant_id,ext_id")
 
-    supa.upsert(
-        "transactions",
-        [{**t, "tenant_id": tid} for t in data.get("transactions", [])],
-        "tenant_id,ext_id",
-    )
-    supa.upsert(
-        "bookings",
-        [{**b, "tenant_id": tid} for b in data.get("bookings", [])],
-        "tenant_id,ext_id",
-    )
+    # 2) ext_id → customer_id 매핑(거래·예약 연결)
+    extmap = supa.get_customer_extmap(tid)
+
+    tx = [
+        {
+            "tenant_id": tid,
+            "customer_id": extmap.get(t.get("customer_ext")),
+            "date": t["date"],
+            "service": t.get("service"),
+            "amount_won": t.get("amount_won", 0),
+            "ext_id": t["ext_id"],
+        }
+        for t in data.get("transactions", [])
+        if t.get("date")
+    ]
+    supa.upsert("transactions", tx, "tenant_id,ext_id")
+
+    # 3) 예약: 전량 새로고침(중복·스테일 방지)
+    bk = [
+        {
+            "tenant_id": tid,
+            "customer_id": extmap.get(b.get("customer_ext")),
+            "date": b["date"],
+            "time": b.get("time"),
+            "service": b.get("service"),
+            "source": "handsos",
+            "ext_id": b["ext_id"],
+        }
+        for b in data.get("bookings", [])
+        if b.get("date")
+    ]
+    supa.delete("bookings", tid)
+    supa.insert("bookings", bk)
 
     # TODO: 갱신된 session_cookie 를 pos_credentials 에 암호화 저장(재로그인 회피)
 
-    return {
-        "customers": len(cust_rows),
-        "transactions": len(data.get("transactions", [])),
-        "bookings": len(data.get("bookings", [])),
-    }
+    return {"customers": len(cust_rows), "transactions": len(tx), "bookings": len(bk)}

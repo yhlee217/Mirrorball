@@ -69,3 +69,22 @@ def update_job(job_id: str, **fields):
     with httpx.Client(timeout=30) as c:
         r = c.patch(_base() + "/sync_jobs", params={"id": f"eq.{job_id}"}, headers=_headers(), json=fields)
         r.raise_for_status()
+
+
+def get_customer_extmap(tenant_id: str) -> dict:
+    rows = _get("/customers", {"tenant_id": f"eq.{tenant_id}", "select": "id,ext_id"})
+    return {r["ext_id"]: r["id"] for r in rows if r.get("ext_id")}
+
+
+def delete(table: str, tenant_id: str):
+    with httpx.Client(timeout=30) as c:
+        r = c.delete(_base() + f"/{table}", params={"tenant_id": f"eq.{tenant_id}"}, headers=_headers())
+        r.raise_for_status()
+
+
+def insert(table: str, rows: list):
+    if not rows:
+        return
+    with httpx.Client(timeout=60) as c:
+        r = c.post(_base() + f"/{table}", headers=_headers({"Prefer": "return=minimal"}), json=rows)
+        r.raise_for_status()

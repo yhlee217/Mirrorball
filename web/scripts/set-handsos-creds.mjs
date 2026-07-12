@@ -8,11 +8,12 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const kekB64 = process.env.MIRRORBALL_KEK;
 const slug = process.argv[2];
+const hcompany = process.env.HANDSOS_COMPANY || '';
 const hid = process.env.HANDSOS_ID;
 const hpw = process.env.HANDSOS_PW;
 
 if (!url || !svc || !kekB64 || !slug || !hid || !hpw) {
-  console.error('사용법: HANDSOS_ID=<id> HANDSOS_PW=<pw> node --env-file=.env.local scripts/set-handsos-creds.mjs <slug>');
+  console.error('사용법: HANDSOS_COMPANY=<회사코드> HANDSOS_ID=<id> HANDSOS_PW=<pw> node --env-file=.env.local scripts/set-handsos-creds.mjs <slug>');
   process.exit(1);
 }
 const KEK = Buffer.from(kekB64, 'base64');

@@ -6,8 +6,9 @@ COPY worker/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY worker/ ./worker/
-# 스크레이프 통합 시 v1 모듈도 함께 복사(README §스크레이프 통합):
-#   COPY scrape_handsos.py import_handsos.py handsos_reserve.py ./
-#   COPY scripts/handsos_selectors.yaml ./scripts/
+# v1 스크레이프 재사용(scrape.py 가 import) — 브라우저 자동화·셀렉터·예약 파서
+COPY scripts/handsos_sync.py scripts/handsos_harvest.js scripts/handsos_selectors.yaml ./scripts/
+COPY handsos_reserve.py ./
+# Playwright 브라우저는 베이스 이미지에 포함(mcr playwright/python)
 
 CMD ["python", "worker/run.py"]
