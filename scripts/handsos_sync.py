@@ -312,6 +312,8 @@ def harvest_store(store: dict, headed: bool = False, debug: bool = False) -> dic
                     days = int(report.get("date_range_days", 0))
                     if days > 0:                               # 최근 N일로 기간 설정
                         start, end = date_range_value(days)
+                        if report.get("date_from") and report.get("date_to"):
+                            start, end = report["date_from"], report["date_to"]   # 명시적 창(과거 청크)
                         for sel, val in ((report.get("date_from_sel", "#strDateS"), start),
                                          (report.get("date_to_sel", "#strDateE"), end)):
                             try:

@@ -13,6 +13,7 @@ PII(name/phone)는 평문 반환 → sync_tenant 가 DEK로 암호화.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from collections import defaultdict
@@ -100,12 +101,14 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
             "revisit_cycle_days": cycle, "revisit_state": state,
         })
 
-    seq: dict[str, int] = defaultdict(int)
+    # 안정 키: 고객번호-날짜-당일순번. 수집 창(31일/전체)과 무관하게 같은 방문=같은 키 → 병합 정확.
+    seq: dict = defaultdict(int)
     transactions = []
     for t in raw_tx:
-        i = seq[t["customer_ext"]]
-        seq[t["customer_ext"]] += 1
-        transactions.append({"ext_id": f"{t['customer_ext']}-{i}", **t})
+        key = (t["customer_ext"], t["date"])
+        i = seq[key]
+        seq[key] += 1
+        transactions.append({"ext_id": f"{t['customer_ext']}-{t['date']}-{i}", **t})
 
     bookings = []
     for i, b in enumerate(reserve_rows or []):
@@ -120,6 +123,39 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
     return {"customers": customers, "transactions": transactions, "bookings": bookings}
 
 
+def _harvest_history(hs, store: dict, total_days: int) -> list:
+    """HandSOS 는 1회 조회 최대 365일 → 창을 나눠 과거로 반복 수집·누적."""
+    import time
+    from datetime import date, timedelta
+
+    if total_days <= 365:
+        res = hs.harvest_store(store)
+        if res.get("error") == "login-failed":
+            raise RuntimeError("harvest 실패: login-failed")
+        return res.get("rows") or []
+
+    today = date.today()
+    rows: list = []
+    off = 0
+    while off < total_days:
+        win = min(365, total_days - off)
+        end = today - timedelta(days=off)
+        start = end - timedelta(days=win)
+        s = {**store, "report": {**store["report"], "date_from": str(start), "date_to": str(end), "date_range_days": win}}
+        res = hs.harvest_store(s)
+        if res.get("error") == "login-failed":
+            raise RuntimeError("harvest 실패: login-failed")
+        wr = res.get("rows") or []
+        first = off == 0
+        print(f"  창 {start}~{end}: {len(wr)}행 (누적 {len(rows) + len(wr)})")
+        rows += wr
+        off += win
+        if not wr and not first:   # 첫 창 이후 빈 창 = 더 과거 데이터 없음 → 중단
+            break
+        time.sleep(2)
+    return rows
+
+
 def scrape_tenant(creds: dict, session_cookie: str | None = None) -> dict:
     """v1 harvest_store/harvest_reservations 재사용 → normalize."""
     import handsos_sync as hs  # noqa: 지연 import(playwright 등)
@@ -132,15 +168,15 @@ def scrape_tenant(creds: dict, session_cookie: str | None = None) -> dict:
         "company_code": creds.get("company") or creds.get("company_code") or "",
         "username": creds.get("id"),
         "password": creds.get("pw"),
-        "report": {"date_range_days": int(creds.get("days", 7))},
+        "report": {"date_range_days": min(int(os.environ.get("SYNC_DAYS") or creds.get("days", 7)), 365)},
         "collect_reservations": True,
     }
     hs.apply_overrides(store)  # secrets/{slug}.selectors.yaml 오버라이드(있으면)
 
-    res = hs.harvest_store(store)
-    rows = res.get("rows") or []
+    total_days = int(os.environ.get("SYNC_DAYS") or creds.get("days", 7))
+    rows = _harvest_history(hs, store, total_days)  # 365 초과 시 창 분할 누적
     if not rows:
-        raise RuntimeError(f"harvest 실패: {res.get('error') or '0행'}")
+        raise RuntimeError("harvest 실패: 0행(로그인/기간 확인)")
 
     reserve_rows = []
     try:

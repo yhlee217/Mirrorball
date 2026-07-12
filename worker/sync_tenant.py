@@ -2,11 +2,37 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+from datetime import date
+
 import mirrorball_crypto as mc
 import supa
-from scrape import scrape_tenant
+from scrape import _derive, scrape_tenant
 
 _PII_FIELDS = ("name", "birthday", "phone")
+
+
+def _recompute_aggregates(tid: str) -> int:
+    """전체 거래로 고객 집계 재계산 — 수집 창과 무관하게 방문수·주기·매출 lifetime 정확."""
+    txs = supa.select_all("transactions", tid, "customer_id,date,amount_won")
+    byc: dict = defaultdict(list)
+    for t in txs:
+        if t.get("customer_id") and t.get("date"):
+            byc[t["customer_id"]].append((t["date"], t.get("amount_won") or 0))
+    today = str(date.today())
+    updates = []
+    for cid, items in byc.items():
+        dates = sorted({d for d, _ in items}, reverse=True)
+        cycle, state = _derive(dates, len(dates), today)
+        updates.append({
+            "id": cid, "tenant_id": tid, "visit_count": len(dates),
+            "first_visit": dates[-1] if dates else None,
+            "last_visit": dates[0] if dates else None,
+            "total_won": sum(a for _, a in items),
+            "revisit_cycle_days": cycle, "revisit_state": state,
+        })
+    supa.upsert("customers", updates, "id")
+    return len(updates)
 
 
 def sync_tenant(tenant: dict) -> dict:
@@ -71,4 +97,6 @@ def sync_tenant(tenant: dict) -> dict:
 
     # TODO: 갱신된 session_cookie 를 pos_credentials 에 암호화 저장(재로그인 회피)
 
-    return {"customers": len(cust_rows), "transactions": len(tx), "bookings": len(bk)}
+    recomputed = _recompute_aggregates(tid)
+
+    return {"customers": len(cust_rows), "transactions": len(tx), "bookings": len(bk), "recomputed": recomputed}

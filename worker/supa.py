@@ -95,6 +95,19 @@ def get_customer_extmap(tenant_id: str) -> dict:
     return {r["ext_id"]: r["id"] for r in rows if r.get("ext_id")}
 
 
+def select_all(table: str, tenant_id: str, select: str) -> list:
+    """테넌트의 해당 테이블 전 행(1000 페이지네이션)."""
+    out: list = []
+    off = 0
+    while True:
+        part = _get(f"/{table}", {"tenant_id": f"eq.{tenant_id}", "select": select, "limit": "1000", "offset": str(off)})
+        out += part
+        if len(part) < 1000:
+            break
+        off += 1000
+    return out
+
+
 def delete(table: str, tenant_id: str):
     with httpx.Client(timeout=30) as c:
         r = c.delete(_base() + f"/{table}", params={"tenant_id": f"eq.{tenant_id}"}, headers=_headers())
