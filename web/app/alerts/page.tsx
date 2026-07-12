@@ -1,0 +1,82 @@
+export const dynamic = 'force-dynamic';
+
+import { redirect } from 'next/navigation';
+import { supabaseServer } from '@/lib/supabase/server';
+import { unwrapDek, decryptPII } from '@/lib/crypto';
+import AlertsList from './alerts-list';
+
+type Cust = {
+  id: string;
+  pii_enc: string | null;
+  revisit_state: string | null;
+  revisit_cycle_days: number | null;
+  last_visit: string | null;
+  visit_count: number;
+};
+
+export default async function AlertsPage() {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
+  if (!mem) redirect('/');
+  const tenantId = (mem as { tenant_id: string }).tenant_id;
+
+  const [{ data: tenant }, { data: customers }] = await Promise.all([
+    supabase.from('tenants').select('dek_wrapped').eq('id', tenantId).maybeSingle(),
+    supabase
+      .from('customers')
+      .select('id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count')
+      .in('revisit_state', ['overdue', 'due']),
+  ]);
+
+  let dek: Buffer | null = null;
+  const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
+  if (dw) {
+    try {
+      dek = unwrapDek(dw);
+    } catch {
+      dek = null;
+    }
+  }
+  const nameFrom = (pii: string | null): string => {
+    if (!dek || !pii) return '고객';
+    try {
+      const p = decryptPII(pii, dek);
+      return typeof p.name === 'string' ? p.name : '고객';
+    } catch {
+      return '고객';
+    }
+  };
+
+  const items = ((customers as Cust[]) ?? [])
+    .sort((a, b) => (a.revisit_state === 'overdue' ? 0 : 1) - (b.revisit_state === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count)
+    .slice(0, 50)
+    .map((c) => {
+      const name = nameFrom(c.pii_enc);
+      const why =
+        c.revisit_state === 'overdue'
+          ? `마지막 방문 ${c.last_visit ?? '-'} · 평소 주기(${c.revisit_cycle_days ?? '-'}일)를 지났어요`
+          : `재방문 시기예요 · 마지막 방문 ${c.last_visit ?? '-'}`;
+      const draft =
+        c.revisit_state === 'overdue'
+          ? `${name}님, 오랜만이에요! 잘 지내셨어요? 슬슬 컨디션 체크 겸 한번 뵙고 싶어요. 편하신 때 편하게 연락 주세요 😊`
+          : `${name}님, 지난 시술 이제 관리해주실 시기예요. 편하신 시간에 예약 도와드릴게요!`;
+      return { id: c.id, name, state: c.revisit_state as string, why, draft };
+    });
+
+  return (
+    <main className="wrap">
+      <div className="bar">
+        <div className="ttl">오늘 챙길 고객</div>
+      </div>
+      <div className="body">
+        <div className="sec-h">자동 발송 X · 문구만 복사해서 직접</div>
+        <AlertsList items={items} />
+      </div>
+    </main>
+  );
+}
