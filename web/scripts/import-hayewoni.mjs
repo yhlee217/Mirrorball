@@ -141,4 +141,27 @@ if (bks.length) {
   else console.log(`예약 ${bks.length}건 임포트`);
 }
 
+// 5) 시술 이력(거래)
+const txRows = [];
+for (const c of seed) {
+  const cid = extToId.get(String(c.custno || c.id));
+  if (!cid) continue;
+  (c.history || []).forEach((h, j) => {
+    if (h && h.date) {
+      txRows.push({
+        tenant_id: tenantId,
+        customer_id: cid,
+        date: h.date,
+        service: h.service || null,
+        ext_id: String(c.custno || c.id) + '-' + j,
+      });
+    }
+  });
+}
+for (let i = 0; i < txRows.length; i += 500) {
+  const { error } = await admin.from('transactions').upsert(txRows.slice(i, i + 500), { onConflict: 'tenant_id,ext_id' });
+  if (error) { console.error('transactions:', error.message); break; }
+}
+console.log(`시술 이력 ${txRows.length}건 임포트`);
+
 console.log('완료. 앱에서', ownerEmail, '로 로그인하면 실데이터가 보입니다.');

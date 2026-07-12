@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import LogoutButton from './logout-button';
 
 type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null };
@@ -53,26 +54,38 @@ export default function HomeView({
         <div className="card">
           <div className="ch">다가오는 예약</div>
           {bookings.length ? (
-            bookings.map((b) => (
-              <div className="li" key={b.id}>
-                <div className="av">{nameOf(b).charAt(0)}</div>
-                <div className="bd">
-                  <div className="nm">{nameOf(b)} 님</div>
-                  <div className="sub">
-                    {b.service ?? ''}
-                    {b.time ? ' · ' + b.time : ''}
+            bookings.map((b) => {
+              const label = nameOf(b);
+              const inner = (
+                <>
+                  <div className="av">{label.charAt(0)}</div>
+                  <div className="bd">
+                    <div className="nm">{label} 님</div>
+                    <div className="sub">
+                      {b.service ?? ''}
+                      {b.time ? ' · ' + b.time : ''}
+                    </div>
                   </div>
+                  <div className="rt">{b.date}</div>
+                </>
+              );
+              return b.customer_id ? (
+                <Link key={b.id} href={`/customer/${b.customer_id}`} className="li li-link">
+                  {inner}
+                </Link>
+              ) : (
+                <div className="li" key={b.id}>
+                  {inner}
                 </div>
-                <div className="rt">{b.date}</div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="empty">다가오는 예약이 없어요</div>
           )}
         </div>
 
         <p className="note">
-          고객 이름은 테넌트별 키로 암호화 저장되고, 이 화면에서만 복호화해 표시합니다(하이브리드). 재방문 신호(이탈위험·도래 등)는 파생 로직 포팅 후 채워집니다.
+          고객 이름은 테넌트별 키로 암호화 저장되고, 이 화면에서만 복호화해 표시합니다(하이브리드). 예약을 누르면 고객 카르테로 이동해요.
         </p>
       </div>
     </main>

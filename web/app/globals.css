@@ -51,3 +51,15 @@ body{background:var(--bg);color:var(--ink);
 .loginform button,.primary{padding:13px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:15px;font-weight:800;cursor:pointer}
 .loginform button:disabled,.primary:disabled{opacity:.6}
 .primary{margin-top:16px;width:100%;max-width:260px}
+
+/* 고객 상세 + 네비 */
+.back{display:inline-block;border:none;background:none;color:var(--accent);font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;padding:0}
+.li-link{text-decoration:none;color:inherit;cursor:pointer}
+.li-link:active{background:var(--soft)}
+.chd{display:flex;align-items:center;gap:13px;margin-bottom:10px}
+.chd .cav{width:54px;height:54px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent);font-size:22px;flex-shrink:0}
+.chd h2{margin:0;font-size:20px}
+.chd .s{color:var(--muted);font-size:13px;margin-top:2px}
+.kv{margin:6px 0 12px}
+.kv .r{display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line);font-size:14px}
+.kv .k{color:var(--muted);font-size:12px}
