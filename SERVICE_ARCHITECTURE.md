@@ -183,7 +183,7 @@ P3까지 v1과 병행 운영해 리스크를 낮춘다.
 - [x] **P0 완료** — `supabase/migrations/0001_init.sql`(9테이블·RLS 9정책, Postgres 파서 검증) + `supabase/README.md`
 - [x] **P1 완료** — `web/`(Next.js 14 + Supabase Auth 매직링크 + RLS 스코프 홈, 빌드 검증 통과)
 - [ ] **P2 (다음)** — 수집 워커(Fly.io + Playwright): `scrape_handsos`/`import_handsos` 이식, 세션 재사용
-- [ ] **P3** — hayewoni `records.yaml` → 스키마 임포트(PII 암호화) + 홈에 이름 복호화 연결
+- [~] **P3 코드 완료** — 봉투암호화(`web/lib/crypto.ts`)·임포트(`web/scripts/import-hayewoni.mjs`)·홈 이름 복호화·마이그레이션 `0002_pii_text.sql`. 실행(0002 적용·KEK 설정·임포트)은 사용자 액션.
 - [ ] `customers` PII vs 운영 컬럼 경계 최종 확정(하이브리드 키 계층 구현 시)
 
 ---
