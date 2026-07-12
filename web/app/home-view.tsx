@@ -13,14 +13,18 @@ export default function HomeView({
   signals,
   care,
   bookings,
+  totalRevenue,
 }: {
   designer: string;
   totalCustomers: number;
   signals: Signals;
   care: Care[];
   bookings: Booking[];
+  totalRevenue: number;
 }) {
   const careCount = signals.overdue + signals.due;
+  const won = (n: number) =>
+    n >= 100000000 ? (n / 100000000).toFixed(1) + '억' : n >= 10000 ? Math.round(n / 10000) + '만' : String(n);
   const nameOf = (b: Booking) => b.name || '고객';
   const monthsAgo = (d: string | null) => (d ? Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000)) : null);
 
@@ -48,9 +52,9 @@ export default function HomeView({
             <div className="nnum">{bookings.length}</div>
             <div className="l">다가오는 예약 ›</div>
           </a>
-          <Link href="/customers" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="nnum">{totalCustomers}</div>
-            <div className="l">전체 고객 ›</div>
+          <Link href="/stats" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="nnum">{won(totalRevenue)}</div>
+            <div className="l">기록 · 통계 ›</div>
           </Link>
         </div>
 
@@ -60,8 +64,6 @@ export default function HomeView({
           <div className="hs g"><div className="hn">{signals.new}</div><div className="hl">신규</div></div>
           <div className="hs v"><div className="hn">{signals.vip}</div><div className="hl">VIP</div></div>
         </div>
-
-        <Link href="/stats" className="statlink"><span>📊 기록 · 통계</span><span className="arr">›</span></Link>
 
         <div className="card" id="bookings" style={{ scrollMarginTop: 12 }}>
           <div className="ch">다가오는 예약</div>

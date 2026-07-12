@@ -13,6 +13,7 @@ type Cust = {
   revisit_state: string | null;
   tier: string | null;
   visit_count: number;
+  total_won: number;
   pii_enc: string | null;
   last_visit: string | null;
 };
@@ -43,7 +44,7 @@ export default async function Page() {
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped').eq('id', tenantId).maybeSingle(),
     supabase.from('bookings').select('id,date,time,service,customer_id,pii_enc').order('date').limit(20),
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select('id,revisit_state,tier,visit_count,pii_enc,last_visit').order('id').range(from, to)),
+      supabase.from('customers').select('id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit').order('id').range(from, to)),
   ]);
 
   const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null } | null;
@@ -82,7 +83,7 @@ export default async function Page() {
     } else if (c.revisit_state === 'new') {
       signals.new++;
     }
-    if (c.tier === 'vip') signals.vip++;
+    if ((c.total_won || 0) >= 1000000 || c.visit_count >= 10) signals.vip++; // 필터와 동일 기준(tier 미사용)
   }
 
   const rank: Record<string, number> = { overdue: 0, due: 1 };
@@ -100,11 +101,13 @@ export default async function Page() {
   }));
 
   const bkNamed = await Promise.all(bk.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })));
+  const totalRevenue = cust.reduce((s, c) => s + (c.total_won || 0), 0);
 
   return (
     <HomeView
       designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
       totalCustomers={cust.length}
+      totalRevenue={totalRevenue}
       signals={signals}
       care={care}
       bookings={bkNamed}
