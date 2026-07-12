@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
+import { fetchAllRows } from '@/lib/customers';
 import HomeView from './home-view';
 import OnboardButton from './onboard-button';
 
@@ -38,10 +39,11 @@ export default async function Page() {
   }
 
   const tenantId = (mem as { tenant_id: string }).tenant_id;
-  const [{ data: tenant }, { data: bookings }, { data: customers }] = await Promise.all([
+  const [{ data: tenant }, { data: bookings }, customers] = await Promise.all([
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped').eq('id', tenantId).maybeSingle(),
     supabase.from('bookings').select('id,date,time,service,customer_id').order('date').limit(20),
-    supabase.from('customers').select('id,revisit_state,tier,visit_count,pii_enc,last_visit'),
+    fetchAllRows<Cust>((from, to) =>
+      supabase.from('customers').select('id,revisit_state,tier,visit_count,pii_enc,last_visit').order('id').range(from, to)),
   ]);
 
   const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null } | null;

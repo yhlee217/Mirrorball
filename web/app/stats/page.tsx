@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
+import { fetchAllRows } from '@/lib/customers';
 
 function won(n: number): string {
   if (!n) return '0원';
@@ -23,12 +24,14 @@ export default async function StatsPage() {
   if (!mem) redirect('/');
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
-  const [{ data: customers }, { data: txs }] = await Promise.all([
-    supabase.from('customers').select('total_won,visit_count').eq('tenant_id', tenantId),
-    supabase.from('transactions').select('date,service').eq('tenant_id', tenantId).limit(5000),
+  const [customers, txs] = await Promise.all([
+    fetchAllRows<{ total_won: number; visit_count: number }>((from, to) =>
+      supabase.from('customers').select('total_won,visit_count').eq('tenant_id', tenantId).order('id').range(from, to)),
+    fetchAllRows<{ date: string; service: string | null }>((from, to) =>
+      supabase.from('transactions').select('date,service').eq('tenant_id', tenantId).order('id').range(from, to)),
   ]);
-  const cs = (customers as { total_won: number; visit_count: number }[]) ?? [];
-  const tx = (txs as { date: string; service: string | null }[]) ?? [];
+  const cs = customers;
+  const tx = txs;
 
   const totalRevenue = cs.reduce((s, c) => s + (c.total_won || 0), 0);
   const totalCustomers = cs.length;

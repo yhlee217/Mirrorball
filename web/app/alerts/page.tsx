@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
+import { fetchAllRows } from '@/lib/customers';
 import AlertsList from './alerts-list';
 
 type Cust = {
@@ -26,12 +27,10 @@ export default async function AlertsPage() {
   if (!mem) redirect('/');
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
-  const [{ data: tenant }, { data: customers }] = await Promise.all([
+  const [{ data: tenant }, customers] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped').eq('id', tenantId).maybeSingle(),
-    supabase
-      .from('customers')
-      .select('id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count')
-      .in('revisit_state', ['overdue', 'due']),
+    fetchAllRows<Cust>((from, to) =>
+      supabase.from('customers').select('id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count').in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
   ]);
 
   let dek: Uint8Array | null = null;

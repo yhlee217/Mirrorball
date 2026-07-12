@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
+import { fetchAllRows } from '@/lib/customers';
 import CustomersList from './customers-list';
 
 type Cust = { id: string; pii_enc: string | null; visit_count: number; revisit_state: string | null; last_visit: string | null };
@@ -20,12 +21,10 @@ export default async function CustomersPage() {
   if (!mem) redirect('/');
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
-  const [{ data: tenant }, { data: customers }] = await Promise.all([
+  const [{ data: tenant }, customers] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped').eq('id', tenantId).maybeSingle(),
-    supabase
-      .from('customers')
-      .select('id,pii_enc,visit_count,revisit_state,last_visit')
-      .order('visit_count', { ascending: false }),
+    fetchAllRows<Cust>((from, to) =>
+      supabase.from('customers').select('id,pii_enc,visit_count,revisit_state,last_visit').order('id').range(from, to)),
   ]);
 
   let dek: Uint8Array | null = null;
@@ -38,7 +37,7 @@ export default async function CustomersPage() {
     }
   }
 
-  const list = (customers as Cust[]) ?? [];
+  const list = ((customers as Cust[]) ?? []).sort((a, b) => b.visit_count - a.visit_count);
   const names = await Promise.all(
     list.map(async (c) => {
       if (!dek || !c.pii_enc) return '고객';
