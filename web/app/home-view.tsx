@@ -56,6 +56,8 @@ export default function HomeView({
           <div className="hs v"><div className="hn">{signals.vip}</div><div className="hl">VIP</div></div>
         </div>
 
+        <Link href="/stats" className="statlink"><span>📊 기록 · 통계</span><span className="arr">›</span></Link>
+
         <div className="card">
           <div className="ch">오늘 챙길 고객</div>
           {care.length ? (

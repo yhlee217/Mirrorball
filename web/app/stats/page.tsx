@@ -1,0 +1,107 @@
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { supabaseServer } from '@/lib/supabase/server';
+
+function won(n: number): string {
+  if (!n) return '0원';
+  if (n >= 100000000) return (n / 100000000).toFixed(1) + '억원';
+  if (n >= 10000) return Math.round(n / 10000).toLocaleString() + '만원';
+  return n.toLocaleString() + '원';
+}
+
+export default async function StatsPage() {
+  const supabase = supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
+  if (!mem) redirect('/');
+  const tenantId = (mem as { tenant_id: string }).tenant_id;
+
+  const [{ data: customers }, { data: txs }] = await Promise.all([
+    supabase.from('customers').select('total_won,visit_count').eq('tenant_id', tenantId),
+    supabase.from('transactions').select('date,service').eq('tenant_id', tenantId).limit(5000),
+  ]);
+  const cs = (customers as { total_won: number; visit_count: number }[]) ?? [];
+  const tx = (txs as { date: string; service: string | null }[]) ?? [];
+
+  const totalRevenue = cs.reduce((s, c) => s + (c.total_won || 0), 0);
+  const totalCustomers = cs.length;
+  const totalVisits = tx.length;
+  const avgPer = totalCustomers ? Math.round(totalRevenue / totalCustomers / 10000) : 0;
+
+  const now = new Date();
+  const months: { label: string; key: string; count: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ label: `${d.getMonth() + 1}월`, key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, count: 0 });
+  }
+  const mmap = new Map(months.map((m) => [m.key, m]));
+  for (const t of tx) {
+    if (t.date) {
+      const m = mmap.get(t.date.slice(0, 7));
+      if (m) m.count++;
+    }
+  }
+  const maxCount = Math.max(1, ...months.map((m) => m.count));
+
+  const svc = new Map<string, number>();
+  for (const t of tx) {
+    const s = (t.service || '').trim();
+    if (s) svc.set(s, (svc.get(s) || 0) + 1);
+  }
+  const topSvc = [...svc.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxSvc = Math.max(1, ...topSvc.map(([, n]) => n));
+
+  return (
+    <main className="wrap">
+      <div className="bar">
+        <Link href="/" className="back">‹ 홈</Link>
+        <div className="ttl" style={{ marginLeft: 10 }}>기록 · 통계</div>
+      </div>
+      <div className="body">
+        <div className="stat-grid">
+          <div className="stat"><div className="sn">{won(totalRevenue)}</div><div className="sl">누적 매출</div></div>
+          <div className="stat"><div className="sn">{totalVisits.toLocaleString()}</div><div className="sl">누적 방문(거래)</div></div>
+          <div className="stat"><div className="sn">{totalCustomers.toLocaleString()}</div><div className="sl">전체 고객</div></div>
+          <div className="stat"><div className="sn">{avgPer.toLocaleString()}만원</div><div className="sl">고객당 평균</div></div>
+        </div>
+
+        <div className="card" style={{ padding: '14px 15px' }}>
+          <div className="ch" style={{ padding: 0, marginBottom: 10 }}>월별 방문 추이 (최근 6개월)</div>
+          <div className="bars">
+            {months.map((m) => (
+              <div className="b" key={m.key}>
+                <div className="bv">{m.count}</div>
+                <div className="bar2" style={{ height: `${Math.round((m.count / maxCount) * 80) + 3}px` }} />
+                <div className="bl">{m.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: '14px 15px' }}>
+          <div className="ch" style={{ padding: 0, marginBottom: 10 }}>인기 시술</div>
+          {topSvc.length ? (
+            topSvc.map(([s, n]) => (
+              <div className="svc" key={s}>
+                <div className="svn">{s}</div>
+                <div className="svbar"><div className="svfill" style={{ width: `${Math.round((n / maxSvc) * 100)}%` }} /></div>
+                <div className="svc-c">{n}</div>
+              </div>
+            ))
+          ) : (
+            <div className="empty">시술 데이터가 없어요</div>
+          )}
+        </div>
+
+        <p className="note">거래 {totalVisits.toLocaleString()}건 · 고객 {totalCustomers.toLocaleString()}명 기준. 매출은 고객 누적액 합계.</p>
+      </div>
+    </main>
+  );
+}
