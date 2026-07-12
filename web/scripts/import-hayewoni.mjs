@@ -132,11 +132,13 @@ const bks = (data.bookings || []).map((b, i) => {
     time: b.time || null,
     service: b.service || null,
     source: 'handsos',
-    ext_id: 'B' + (b.id || i),
+    ext_id: 'B' + i, // 인덱스 기반 유니크 키(같은 고객 예약 2건 충돌 방지)
   };
 });
+// 다가오는 예약은 매번 전량 새로고침(중복·스테일 방지)
+await admin.from('bookings').delete().eq('tenant_id', tenantId);
 if (bks.length) {
-  const { error } = await admin.from('bookings').upsert(bks, { onConflict: 'tenant_id,ext_id' });
+  const { error } = await admin.from('bookings').insert(bks);
   if (error) console.error('bookings:', error.message);
   else console.log(`예약 ${bks.length}건 임포트`);
 }

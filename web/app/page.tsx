@@ -6,6 +6,16 @@ import { unwrapDek, decryptPII } from '@/lib/crypto';
 import HomeView from './home-view';
 import OnboardButton from './onboard-button';
 
+type Cust = {
+  id: string;
+  revisit_state: string | null;
+  tier: string | null;
+  visit_count: number;
+  pii_enc: string | null;
+  last_visit: string | null;
+};
+type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null };
+
 export default async function Page() {
   const supabase = supabaseServer();
   const {
@@ -13,12 +23,7 @@ export default async function Page() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: mem } = await supabase
-    .from('memberships')
-    .select('tenant_id')
-    .limit(1)
-    .maybeSingle();
-
+  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
   if (!mem) {
     return (
       <main className="wrap">
@@ -33,42 +38,71 @@ export default async function Page() {
 
   const tenantId = (mem as { tenant_id: string }).tenant_id;
   const [{ data: tenant }, { data: bookings }, { data: customers }] = await Promise.all([
-    supabase.from('tenants').select('salon_name,slug,dek_wrapped,designer_name').eq('id', tenantId).maybeSingle(),
+    supabase.from('tenants').select('salon_name,designer_name,dek_wrapped').eq('id', tenantId).maybeSingle(),
     supabase.from('bookings').select('id,date,time,service,customer_id').order('date').limit(20),
-    supabase.from('customers').select('id,revisit_state,tier,visit_count'),
+    supabase.from('customers').select('id,revisit_state,tier,visit_count,pii_enc,last_visit'),
   ]);
 
-  const t = tenant as { salon_name: string; dek_wrapped: string | null; designer_name: string | null } | null;
-  const bk =
-    (bookings as { id: string; date: string; time: string | null; service: string | null; customer_id: string | null }[]) ?? [];
+  const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null } | null;
+  const bk = (bookings as Booking[]) ?? [];
+  const cust = (customers as Cust[]) ?? [];
 
-  // 예약 고객 이름 복호화(DEK 있고 연결된 고객이 있을 때만)
-  const nameById: Record<string, string> = {};
-  const ids = bk.map((b) => b.customer_id).filter((x): x is string => !!x);
-  if (t?.dek_wrapped && ids.length) {
+  // 테넌트 DEK 언랩(이름 복호화용)
+  let dek: Buffer | null = null;
+  if (t?.dek_wrapped) {
     try {
-      const dek = unwrapDek(t.dek_wrapped);
-      const { data: pii } = await supabase.from('customers').select('id,pii_enc').in('id', ids);
-      for (const row of (pii as { id: string; pii_enc: string | null }[]) ?? []) {
-        if (row.pii_enc) {
-          try {
-            const p = decryptPII(row.pii_enc, dek);
-            if (typeof p.name === 'string') nameById[row.id] = p.name;
-          } catch {
-            // 복호화 실패는 무시(이름만 '고객'으로 폴백)
-          }
-        }
-      }
+      dek = unwrapDek(t.dek_wrapped);
     } catch {
-      // KEK 미설정 등 → 이름 없이 진행
+      dek = null;
+    }
+  }
+  const nameFrom = (pii: string | null): string => {
+    if (!dek || !pii) return '고객';
+    try {
+      const p = decryptPII(pii, dek);
+      return typeof p.name === 'string' ? p.name : '고객';
+    } catch {
+      return '고객';
+    }
+  };
+
+  // 신호 집계
+  const signals = { overdue: 0, due: 0, new: 0, vip: 0 };
+  for (const c of cust) {
+    if (c.revisit_state && c.revisit_state in signals) (signals as Record<string, number>)[c.revisit_state]++;
+    if (c.tier === 'vip') signals.vip++;
+  }
+
+  // 오늘 챙길 고객: 이탈위험 → 재방문도래 순, 최대 20, 이름 복호화
+  const rank: Record<string, number> = { overdue: 0, due: 1 };
+  const care = cust
+    .filter((c) => c.revisit_state === 'overdue' || c.revisit_state === 'due')
+    .sort((a, b) => rank[a.revisit_state as string] - rank[b.revisit_state as string] || b.visit_count - a.visit_count)
+    .slice(0, 20)
+    .map((c) => ({
+      id: c.id,
+      name: nameFrom(c.pii_enc),
+      state: c.revisit_state as string,
+      visit_count: c.visit_count,
+      last_visit: c.last_visit,
+    }));
+
+  // 예약 고객 이름
+  const nameById: Record<string, string> = {};
+  for (const b of bk) {
+    if (b.customer_id) {
+      const c = cust.find((x) => x.id === b.customer_id);
+      if (c) nameById[b.customer_id] = nameFrom(c.pii_enc);
     }
   }
 
   return (
     <HomeView
       designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
+      totalCustomers={cust.length}
+      signals={signals}
+      care={care}
       bookings={bk}
-      customers={(customers as never[]) ?? []}
       nameById={nameById}
     />
   );
