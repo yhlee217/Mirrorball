@@ -91,7 +91,7 @@ def list_credentialed_tenants() -> list:
 
 
 def get_customer_extmap(tenant_id: str) -> dict:
-    rows = _get("/customers", {"tenant_id": f"eq.{tenant_id}", "select": "id,ext_id"})
+    rows = select_all("customers", tenant_id, "id,ext_id")  # 1000행 상한 회피(페이지네이션)
     return {r["ext_id"]: r["id"] for r in rows if r.get("ext_id")}
 
 
