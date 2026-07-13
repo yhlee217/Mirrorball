@@ -9,10 +9,20 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# 거래 ext_id = "{고객번호}-{YYYY}-{MM}-{DD}-{순번}". 고객번호에 '-' 가 있어도 정확히 복원하려면
+# 첫 '-' 로 자르면 안 되고(코드리뷰 M4), 뒤쪽 '-날짜-순번' 패턴만 벗겨야 한다.
+_TX_SUFFIX = re.compile(r"-\d{4}-\d{2}-\d{2}-\d+$")
+
+
+def custno_of(ext_id: str) -> str:
+    """거래 ext_id 에서 고객번호 복원. 뒤의 '-YYYY-MM-DD-순번' 만 제거(고객번호 내부 '-' 보존)."""
+    return _TX_SUFFIX.sub("", ext_id or "")
 
 
 def _load_env() -> None:
@@ -50,7 +60,7 @@ def main() -> int:
     fixes = []
     for x in txs:
         if not x.get("customer_id"):
-            custno = (x.get("ext_id") or "").split("-", 1)[0]  # ext_id = 고객번호-날짜-순번
+            custno = custno_of(x.get("ext_id") or "")   # 뒤의 -날짜-순번만 제거(고객번호 내 '-' 보존)
             cid = extmap.get(custno)
             if cid:
                 fixes.append({

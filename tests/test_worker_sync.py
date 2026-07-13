@@ -109,6 +109,35 @@ def test_normalize_reservations_ok_false_propagates():
     assert out["reservations_ok"] is False
 
 
+# ── M3: 창 분할이 경계일을 겹치지 않아야(이중 집계 방지) ──
+def test_windows_no_boundary_overlap_and_full_cover():
+    from datetime import date as _date, timedelta
+    today = _date(2026, 7, 13)
+    wins = scrape._windows(760, today)      # 365+365+30
+    # 각 창 ≤365일
+    for s, e in wins:
+        assert (e - s).days + 1 <= 365 and s <= e
+    # 경계일 비중복: 모든 창의 날짜 집합이 서로소
+    seen = set()
+    for s, e in wins:
+        d = s
+        while d <= e:
+            assert d not in seen, f"경계일 중복: {d}"
+            seen.add(d)
+            d += timedelta(days=1)
+    # 전체 760일을 빠짐없이 커버(today 포함 과거 760일)
+    assert max(seen) == today
+    assert (today - min(seen)).days + 1 == 760
+
+
+# ── M4: relink 가 고객번호 내부 '-' 를 보존해야 ──
+def test_custno_of_preserves_internal_dash():
+    import relink
+    assert relink.custno_of("100-2026-06-01-0") == "100"
+    assert relink.custno_of("A-1-2026-06-01-3") == "A-1"     # 대시 포함 고객번호
+    assert relink.custno_of("김민지-2026-12-31-12") == "김민지"
+
+
 def _row(custno="100", name="김", date="2026-06-01", svc="컷", won="10,000"):
     return {"고객번호": custno, "고객명": name, "날짜": date, "상세메뉴": svc,
             "결제액": won, "전화번호": "010-1", "담당": None}

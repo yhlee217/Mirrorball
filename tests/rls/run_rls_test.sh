@@ -128,13 +128,47 @@ SQL
 )"
 echo "▶ 합법 조회(공격자 자기 멤버십): $LEGIT 건(기대 1)"
 
+# ── M1: tenants 쓰기 잠금(0008) — 멤버가 자기 테넌트 민감 컬럼을 직접 못 고치게 ──
+tenant_self_update() {   # 공격자가 자기 테넌트 A 의 plan 을 변경 시도 → 변경된 행 수
+$PSQL -t -A <<'SQL'
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-0000000000a1';
+with u as (
+  update tenants set plan='enterprise'
+  where id='aaaaaaaa-0000-0000-0000-00000000000a' returning 1
+) select count(*) from u;
+reset role;
+SQL
+}
+echo
+echo "▶ [0008 適用 前] 멤버가 자기 테넌트 plan 수정 — 성공해야(취약)…"
+M1_BEFORE="$(tenant_self_update 2>&1 | tail -1)"
+echo "   변경 행수: $M1_BEFORE"
+echo "▶ 0008 適用(tenants 쓰기 잠금)…"
+apply "$MIG/0008_tenant_write_lockdown.sql"
+echo "▶ [0008 適用 後] plan 수정 — 0건이어야(차단)…"
+M1_AFTER="$(tenant_self_update 2>&1 | tail -1)"
+echo "   변경 행수: $M1_AFTER"
+# 회귀: 멤버는 여전히 자기 테넌트 '조회'는 가능해야
+T_SEL="$($PSQL -t -A <<'SQL'
+set role authenticated;
+set test.uid = '00000000-0000-0000-0000-0000000000a1';
+select count(*) from tenants;   -- 자기(A) 1건만
+reset role;
+SQL
+)"
+echo "▶ 합법 조회(공격자 자기 테넌트): $T_SEL 건(기대 1)"
+
 echo
 FAIL=0
 [ "$BEFORE" = "ATTACK_INSERTED=t" ]  || { echo "✗ 사전조건 실패: 취약점 재현 안 됨($BEFORE)"; FAIL=1; }
 [ "$AFTER"  = "ATTACK_INSERTED=f" ] || { echo "✗ 수정 실패: 0007 후에도 self-insert 성공($AFTER)"; FAIL=1; }
 [ "$LEGIT" = "1" ]                      || { echo "✗ 회귀: 자기 멤버십 조회 깨짐($LEGIT)"; FAIL=1; }
+[ "$M1_BEFORE" = "1" ] || { echo "✗ M1 사전조건 실패: 테넌트 쓰기 취약 재현 안 됨($M1_BEFORE)"; FAIL=1; }
+[ "$M1_AFTER" = "0" ]  || { echo "✗ M1 수정 실패: 0008 후에도 멤버가 테넌트 수정($M1_AFTER)"; FAIL=1; }
+[ "$T_SEL" = "1" ]     || { echo "✗ M1 회귀: 자기 테넌트 조회 깨짐($T_SEL)"; FAIL=1; }
 if [ "$FAIL" = "0" ]; then
-  echo "✓ PASS — 취약점 존재→0007 이 차단, 합법 조회 유지"
+  echo "✓ PASS — C1(멤버십 self-insert)·M1(tenants 쓰기) 취약점 존재→0007/0008 이 차단, 합법 조회 유지"
 else
   echo "✗ FAIL"; exit 1
 fi

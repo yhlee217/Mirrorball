@@ -17,7 +17,7 @@ import os
 import re
 import sys
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -143,10 +143,24 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
             "reservations_ok": reservations_ok}
 
 
+def _windows(total_days: int, today: date) -> list[tuple[date, date]]:
+    """HandSOS 1회 조회 최대 365일 → 과거로 창 분할. 인접 창이 '경계일을 공유하지 않게' 만든다
+    (코드리뷰 M3: end-win 이면 경계일이 두 창에 겹쳐 그날 거래가 두 번 수집·이중집계됨).
+    각 창은 [end-(win-1), end] 로 win 일을 '포함'하고, 다음 창의 end 는 그 하루 전."""
+    wins: list[tuple[date, date]] = []
+    off = 0
+    while off < total_days:
+        win = min(365, total_days - off)
+        end = today - timedelta(days=off)
+        start = end - timedelta(days=win - 1)   # win 일 포함(경계 중복 없음)
+        wins.append((start, end))
+        off += win
+    return wins
+
+
 def _harvest_history(hs, store: dict, total_days: int) -> list:
     """HandSOS 는 1회 조회 최대 365일 → 창을 나눠 과거로 반복 수집·누적."""
     import time
-    from datetime import date, timedelta
 
     if total_days <= 365:
         res = hs.harvest_store(store)
@@ -154,23 +168,18 @@ def _harvest_history(hs, store: dict, total_days: int) -> list:
             raise RuntimeError("harvest 실패: login-failed")
         return res.get("rows") or []
 
-    today = date.today()
     rows: list = []
-    off = 0
-    while off < total_days:
-        win = min(365, total_days - off)
-        end = today - timedelta(days=off)
-        start = end - timedelta(days=win)
-        s = {**store, "report": {**store["report"], "date_from": str(start), "date_to": str(end), "date_range_days": win}}
+    wins = _windows(total_days, date.today())
+    for i, (start, end) in enumerate(wins):
+        s = {**store, "report": {**store["report"], "date_from": str(start), "date_to": str(end),
+                                 "date_range_days": (end - start).days + 1}}
         res = hs.harvest_store(s)
         if res.get("error") == "login-failed":
             raise RuntimeError("harvest 실패: login-failed")
         wr = res.get("rows") or []
-        first = off == 0
         print(f"  창 {start}~{end}: {len(wr)}행 (누적 {len(rows) + len(wr)})")
         rows += wr
-        off += win
-        if not wr and not first:   # 첫 창 이후 빈 창 = 더 과거 데이터 없음 → 중단
+        if not wr and i > 0:   # 첫 창 이후 빈 창 = 더 과거 데이터 없음 → 중단
             break
         time.sleep(2)
     return rows

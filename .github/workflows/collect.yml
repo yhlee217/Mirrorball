@@ -8,6 +8,13 @@ name: collect
     - cron: '*/30 1-11 * * *'
   workflow_dispatch: {}
 
+# 동시 수집 금지(코드리뷰 M6) — 스케줄과 수동 실행이 겹쳐 같은 테넌트를 동시 수집하면
+# 한 실행의 delete_stale 이 다른 실행이 방금 쓴 예약을 지우는 등 레이스가 난다.
+# 한 번에 하나만 돌게 직렬화(진행 중 실행은 끊지 않음 — 부분수집 방지).
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
 jobs:
   collect:
     runs-on: ubuntu-latest
