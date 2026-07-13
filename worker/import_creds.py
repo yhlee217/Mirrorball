@@ -70,7 +70,9 @@ def main() -> int:
         assert mc.kek_decrypt_json(blob) == creds, "복호화 불일치"
 
         if dry:
-            print(f"[dry-run] {slug}: keys={list(creds)} company={company} id={uid} pw=***({len(pw)}) staff={creds.get('staff')} days={creds.get('days')}")
+            # 자격증명 3요소(회사코드·아이디·비번)는 CI 로그에 남지 않게 전부 마스킹 — 길이만 노출.
+            print(f"[dry-run] {slug}: keys={list(creds)} company=***({len(company)}) id=***({len(uid)}) "
+                  f"pw=***({len(pw)}) staff={creds.get('staff')} days={creds.get('days')}")
         else:
             supa.upsert(
                 "pos_credentials",

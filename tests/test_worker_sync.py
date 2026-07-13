@@ -65,6 +65,15 @@ def test_delete_stale_empty_with_allow_deletes_all(fake_delete):
     assert p["tenant_id"] == "eq.tid-1" and "ext_id" not in p   # ext_id 필터 없음 = 전체
 
 
+def test_delete_guards_empty_tenant(fake_delete):
+    # 빈 tenant_id 로 파괴적 호출 시 전체삭제 대신 에러(defense-in-depth)
+    with pytest.raises(ValueError):
+        supa.delete("bookings", "")
+    with pytest.raises(ValueError):
+        supa.delete_stale("bookings", "", ["B0"])
+    assert fake_delete.calls == []          # 어떤 DELETE 도 나가지 않음
+
+
 def test_delete_stale_nonempty_uses_not_in(fake_delete):
     supa.delete_stale("bookings", "tid-1", ["B0", "B1"])
     assert len(fake_delete.calls) == 1

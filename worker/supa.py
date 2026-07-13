@@ -109,6 +109,8 @@ def select_all(table: str, tenant_id: str, select: str) -> list:
 
 
 def delete(table: str, tenant_id: str):
+    if not tenant_id:                       # 방어: 빈 tenant_id → 전체 삭제 방지(defense-in-depth)
+        raise ValueError("delete: tenant_id 가 필요합니다(전체 삭제 방지)")
     with httpx.Client(timeout=30) as c:
         r = c.delete(_base() + f"/{table}", params={"tenant_id": f"eq.{tenant_id}"}, headers=_headers())
         _check(r)
@@ -134,6 +136,8 @@ def delete_stale(table: str, tenant_id: str, ext_ids: list, *, allow_empty: bool
     date_from/date_to: 삭제를 이 날짜 범위로 한정(코드리뷰 H2). 거래는 수집 창(SYNC_DAYS)
     만 가져오므로, 범위 없이 스테일 정리하면 창 밖 과거 거래를 전량 삭제한다 → 반드시
     '이번에 실제 수집한 날짜 범위' 안에서만 취소·보이드된 행을 정리한다."""
+    if not tenant_id:                       # 방어: 빈 tenant_id → 전체 삭제 방지(defense-in-depth)
+        raise ValueError("delete_stale: tenant_id 가 필요합니다(전체 삭제 방지)")
     if not ext_ids and not allow_empty:
         return  # 방어: 빈 수집분으로 전체삭제 금지(수집 실패와 진짜 0건을 구분 못하므로 보존)
     params: list[tuple[str, str]] = [("tenant_id", f"eq.{tenant_id}")]
