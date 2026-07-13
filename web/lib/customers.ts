@@ -1,5 +1,9 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 
+// 실제 고객만 관리 대상 — 고객번호(숫자) ext_id 를 가진 고객. '손님' 등 미식별 워크인
+// 집계는 이름 기반(비숫자) ext_id 라 관리 화면(홈·알림·목록)에서 제외한다.
+export const isRealCustomer = (extId: string | null | undefined): boolean => /^\d+$/.test(extId ?? '');
+
 /**
  * Supabase/PostgREST 는 요청당 최대 1000행(하드캡)만 반환한다.
  * 1000행이 넘을 수 있는 조회는 range 로 나눠 전부 가져와야 한다

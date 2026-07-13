@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
-import { fetchAllRows } from '@/lib/customers';
+import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import CustomersList from './customers-list';
 
 type Cust = {
   id: string;
+  ext_id: string | null;
   pii_enc: string | null;
   visit_count: number;
   revisit_state: string | null;
@@ -45,7 +46,7 @@ export default async function CustomersPage() {
     fetchAllRows<Cust>((from, to) =>
       supabase
         .from('customers')
-        .select('id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won')
+        .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won')
         .order('id')
         .range(from, to)),
     fetchAllRows<{ customer_id: string | null }>((from, to) =>
@@ -78,7 +79,7 @@ export default async function CustomersPage() {
     svcMap.get(t.customer_id)!.add(cat);
   }
 
-  const list = (customers as Cust[]) ?? [];
+  const list = ((customers as Cust[]) ?? []).filter((c) => isRealCustomer(c.ext_id));
   const decoded = await Promise.all(
     list.map(async (c) => {
       let name = '고객';
