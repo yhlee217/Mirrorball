@@ -114,7 +114,7 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         seq[key] += 1
         transactions.append({"ext_id": f"{t['customer_ext']}-{t['date']}-{i}", **t})
 
-    # 예약은 전 디자이너 수집(담당은 staff 로 저장) → 화면에서 디자이너별로 필터.
+    # 예약도 담당(디자이너)별로 필터 — 각 디자이너 테넌트엔 자기 예약만(멀티테넌트).
     bookings = []
     idx = 0
     for b in reserve_rows or []:
@@ -127,6 +127,8 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         if not bstaff and b.get("detail"):  # 상세셀 앞머리 '하예원.' → 담당 추출(폴백)
             m = re.match(r"\s*([^.\s]+)\s*\.", str(b.get("detail")))
             bstaff = m.group(1) if m else None
+        if staff and staff not in (bstaff or "") and staff not in str(b.get("detail") or ""):
+            continue  # 담당(디자이너) 필터 — 이 디자이너 예약만
         bookings.append({
             "ext_id": f"B{idx}",
             "customer_ext": (b.get("고객번호") or b.get("custno") or b.get("customer_ext")),
@@ -183,6 +185,37 @@ def _harvest_history(hs, store: dict, total_days: int) -> list:
             break
         time.sleep(2)
     return rows
+
+
+def scrape_salon(creds: dict) -> dict:
+    """살롱 로그인 1회로 매출+예약 원본 수확(정규화 전). 담당 분리는 호출측 normalize 에서."""
+    import handsos_sync as hs  # noqa: 지연 import
+
+    total_days = int(os.environ.get("SYNC_DAYS") or creds.get("days", 7))
+    store = {
+        "slug": creds.get("slug") or "salon",
+        "company_code": creds.get("company") or creds.get("company_code") or "",
+        "username": creds.get("id"),
+        "password": creds.get("pw"),
+        "report": {"date_range_days": min(total_days, 365)},
+        "collect_reservations": True,
+    }
+    hs.apply_overrides(store)
+    rows = _harvest_history(hs, store, total_days)
+    if not rows:
+        raise RuntimeError("harvest 실패: 0행(로그인/기간 확인)")
+    reserve_rows = []
+    reservations_ok = True
+    try:
+        rres = hs.harvest_reservations(store) or {}
+        if rres.get("error"):                  # 소프트 실패(예외 없이 error)도 미확정 처리(H1)
+            reservations_ok = False
+        reserve_rows = rres.get("parsed") or []
+    except Exception as exc:                     # 예약 수확 실패 → 예약 보존(스테일 정리 스킵)
+        print(f"  ⚠ 예약 수확 실패({exc}) — 기존 예약 보존")
+        reservations_ok = False
+        reserve_rows = []
+    return {"rows": rows, "reserve_rows": reserve_rows, "reservations_ok": reservations_ok}
 
 
 def scrape_tenant(creds: dict, session_cookie: str | None = None) -> dict:

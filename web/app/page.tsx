@@ -103,12 +103,9 @@ export default async function Page() {
     last_visit: c.last_visit,
   }));
 
-  // 예약은 전 디자이너 저장 → 이 화면은 이 테넌트의 디자이너(담당) 것만. booking_days_ahead 기간 내.
-  const designerName = t?.designer_name ?? '';
+  // 테넌트=한 디자이너라 예약은 이미 그 디자이너 것. booking_days_ahead 기간 내만, date+time 정렬 유지.
   const bkCutoff = new Date(Date.now() + settings.booking_days_ahead * 86400000).toISOString().slice(0, 10);
-  const bkVisible = bk
-    .filter((b) => (b.date || '') <= bkCutoff && (!designerName || (b.staff ?? '').includes(designerName)))
-    .slice(0, 20);
+  const bkVisible = bk.filter((b) => (b.date || '') <= bkCutoff).slice(0, 20);
   const bkNamed = await Promise.all(bkVisible.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })));
   const totalRevenue = cust.reduce((s, c) => s + (c.total_won || 0), 0);
 

@@ -42,6 +42,8 @@ body{background:var(--bg);color:var(--ink);
 .tag-new{display:inline-block;font-size:9.5px;font-weight:800;color:var(--sage);background:#E7EFE5;border-radius:20px;padding:1px 7px;margin-left:6px;vertical-align:middle}
 .li .bd{flex:1;min-width:0}
 .empty{padding:20px 15px;color:var(--muted);font-size:13px;text-align:center}
+.sk{background:linear-gradient(90deg,var(--soft) 25%,#E6DFD4 37%,var(--soft) 63%);background-size:400% 100%;animation:shimmer 1.4s ease infinite;border-radius:13px}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
 .note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
 
 .entry{max-width:340px;margin:0 auto;padding:80px 24px;text-align:center}
@@ -65,6 +67,21 @@ body{background:var(--bg);color:var(--ink);
 .kv{margin:6px 0 12px}
 .kv .r{display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line);font-size:14px}
 .kv .k{color:var(--muted);font-size:12px}
+
+/* 고객 카르테 강화 */
+.signal-card{border-radius:13px;padding:12px 14px;margin-bottom:13px}
+.signal-card.x{background:#F3E6E2}
+.signal-card.d{background:#F2EAD8}
+.signal-card .sig-t{font-weight:800;font-size:14px;color:var(--rose)}
+.signal-card.d .sig-t{color:var(--gold)}
+.signal-card .sig-w{font-size:12.5px;color:var(--muted);margin-top:3px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tagx{background:var(--soft);color:var(--accent-d);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer}
+.tagr{background:var(--soft);color:var(--accent-d);border-radius:20px;padding:4px 10px;font-size:12px}
+.tagr b{color:var(--accent);font-weight:800}
+.tagin{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:15px;background:var(--paper);color:var(--ink);font-family:inherit}
+.tagsug{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.sug{font-size:11.5px;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:20px;padding:3px 9px;cursor:pointer;font-family:inherit}
 .search{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:var(--paper);color:var(--ink);margin-bottom:10px}
 
 /* 고객 필터 */
@@ -94,6 +111,11 @@ body{background:var(--bg);color:var(--ink);
 .bars .bv{font-size:10px;color:var(--muted);font-weight:700;margin-bottom:3px}
 .bars .bar2{width:100%;max-width:34px;background:var(--accent);border-radius:5px 5px 0 0;min-height:3px}
 .bars .bl{font-size:10px;color:var(--muted);margin-top:5px}
+.bars .bar2.sage{background:var(--sage)}
+.reten{display:flex;align-items:center;gap:12px}
+.reten-n{font-size:28px;font-weight:800;color:var(--accent-d);flex-shrink:0}
+.reten-b{flex:1;height:10px;background:var(--soft);border-radius:6px;overflow:hidden}
+.reten-fill{height:100%;background:var(--sage);border-radius:6px}
 .svc{display:flex;align-items:center;gap:9px;padding:7px 0}
 .svc .svn{font-size:13px;font-weight:600;flex:0 0 38%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .svc .svbar{flex:1;height:8px;background:var(--soft);border-radius:5px;overflow:hidden}

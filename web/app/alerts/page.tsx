@@ -61,16 +61,41 @@ export default async function AlertsPage() {
     .slice(0, 50);
   const names = await Promise.all(base.map((c) => nameFrom(c.pii_enc)));
 
+  // 개인화용: 각 고객의 마지막 시술
+  const ids = base.map((c) => c.id);
+  const lastSvc = new Map<string, string>();
+  if (ids.length) {
+    const { data: txs } = await supabase
+      .from('transactions')
+      .select('customer_id,date,service')
+      .in('customer_id', ids)
+      .order('date', { ascending: false })
+      .limit(3000);
+    for (const t of (txs as { customer_id: string | null; service: string | null }[]) ?? []) {
+      if (t.customer_id && t.service && !lastSvc.has(t.customer_id)) lastSvc.set(t.customer_id, t.service);
+    }
+  }
+  const monthsOf = (d: string | null) => (d ? Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000)) : null);
+
   const items = base.map((c, i) => {
     const name = names[i];
+    const m = monthsOf(c.last_visit);
+    const svc = lastSvc.get(c.id);
+    const loyal = c.visit_count >= settings.vip_visits;
     const why =
       c.revisit_state === 'overdue'
-        ? `마지막 방문 ${c.last_visit ?? '-'} · 평소 주기(${c.revisit_cycle_days ?? '-'}일)를 지났어요`
-        : `재방문 시기예요 · 마지막 방문 ${c.last_visit ?? '-'}`;
-    const draft =
-      c.revisit_state === 'overdue'
-        ? `${name}님, 오랜만이에요! 잘 지내셨어요? 슬슬 컨디션 체크 겸 한번 뵙고 싶어요. 편하신 때 편하게 연락 주세요 😊`
-        : `${name}님, 지난 시술 이제 관리해주실 시기예요. 편하신 시간에 예약 도와드릴게요!`;
+        ? `마지막 방문 ${c.last_visit ?? '-'}${m ? ` · ${m}개월 미방문` : ''} · 평소 ${c.revisit_cycle_days ?? '-'}일 주기`
+        : `재방문 시기 · 마지막 방문 ${c.last_visit ?? '-'}${c.revisit_cycle_days ? ` · 주기 ${c.revisit_cycle_days}일` : ''}`;
+    let draft: string;
+    if (c.revisit_state === 'overdue') {
+      const open = loyal
+        ? `${name}님, 오랜만이에요! 벌써 ${m}개월 됐네요. 늘 찾아주셔서 감사해요 🙏`
+        : `${name}님, ${m ? m + '개월 만이에요' : '오랜만이에요'}! 잘 지내셨어요? 😊`;
+      const mid = svc ? ` 지난 ${svc} 이제 슬슬 관리할 시기라 생각나서 연락드려요.` : ` 슬슬 컨디션 체크 겸 한번 뵙고 싶어서요.`;
+      draft = `${open}${mid} 편하신 때 편하게 연락 주세요!`;
+    } else {
+      draft = `${name}님, ${svc ? '지난 ' + svc : '지난 시술'} 이제 관리해주실 시기예요${c.revisit_cycle_days ? ` (평소 ${c.revisit_cycle_days}일 주기)` : ''}. 편하신 시간에 예약 도와드릴게요!`;
+    }
     return { id: c.id, name, state: c.revisit_state as string, why, draft };
   });
 

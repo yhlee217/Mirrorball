@@ -6,7 +6,7 @@ import datetime as dt
 import traceback
 
 import supa
-from sync_tenant import sync_tenant
+from sync_tenant import sync_salon
 
 
 def _now() -> str:
@@ -41,7 +41,7 @@ def main() -> None:
             tenant = supa.get_tenant(job["tenant_id"])
             if not tenant:
                 raise RuntimeError("tenant 없음")
-            stats = sync_tenant(tenant)
+            stats = sync_salon(tenant)
             supa.update_job(job["id"], status="ok", finished_at=_now(), stats=stats)
             print("OK", job["tenant_id"], stats)
         except Exception as exc:  # noqa: BLE001
@@ -61,7 +61,7 @@ def sync_all() -> None:
     ok = 0
     for t in tenants:
         try:
-            stats = sync_tenant(t)
+            stats = sync_salon(t)
             print("OK", t.get("slug"), stats)
             ok += 1
         except Exception:  # noqa: BLE001

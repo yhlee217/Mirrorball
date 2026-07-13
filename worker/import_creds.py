@@ -64,6 +64,8 @@ def main() -> int:
         days = (s.get("report") or {}).get("date_range_days")
         if days is not None:
             creds["days"] = int(days)
+        if s.get("designers"):  # 멀티테넌트: 담당→디자이너 매핑을 자격증명에 포함
+            creds["designers"] = s["designers"]
 
         blob = mc.kek_encrypt_json(creds)
         # 라운드트립 자기검증(암호문이 실제로 복호화되는지)

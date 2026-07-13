@@ -1,14 +1,16 @@
-"""한 테넌트 동기화: 자격증명 복호화 → 스크레이프 → PII 암호화 → Supabase 업서트."""
+"""살롱 1회 수집 → 담당(디자이너)별로 각 테넌트에 분리 업서트(멀티테넌트)."""
 
 from __future__ import annotations
 
 import re
+import traceback
 from collections import defaultdict
 from datetime import date
 
 import mirrorball_crypto as mc
+import scrape
 import supa
-from scrape import _derive, scrape_tenant
+from scrape import _derive
 
 _PII_FIELDS = ("name", "birthday", "phone")
 
@@ -36,24 +38,16 @@ def _recompute_aggregates(tid: str) -> int:
     return len(updates)
 
 
-def sync_tenant(tenant: dict) -> dict:
+def _sync_one(tenant: dict, rows: list, reserve_rows: list, staff, reservations_ok: bool = True) -> dict:
+    """살롱 원본을 이 디자이너(staff)로 필터·정규화해 이 테넌트에 업서트(각자 DEK)."""
     tid = tenant["id"]
     dek = mc.unwrap_dek(tenant["dek_wrapped"])
+    data = scrape.normalize(rows, reserve_rows, staff, reservations_ok=reservations_ok)
 
-    cred_row = supa.get_credentials(tid)
-    if not cred_row:
-        raise RuntimeError("pos_credentials 없음 — 자격증명 미등록")
-    creds = mc.kek_decrypt_json(cred_row["enc_blob"])
-    creds.setdefault("slug", tenant.get("slug"))
-
-    data = scrape_tenant(creds, cred_row.get("session_cookie"))
-
-    # 1) 고객: PII 암호화, 운영지표 평문
+    # 1) 고객: PII 암호화, 운영지표 평문. PII 필드는 항상 행에서 제거(없는 컬럼 400 방지).
     cust_rows = []
     for c in data.get("customers", []):
         c = dict(c)
-        # PII 필드(name/birthday/phone)는 값 유무와 무관하게 항상 행에서 제거 —
-        # customers 엔 평문 PII 컬럼이 없고(pii_enc 로 암호화), None 이 남으면 400(PGRST204).
         pii = {}
         for k in _PII_FIELDS:
             v = c.pop(k, None)
@@ -62,9 +56,8 @@ def sync_tenant(tenant: dict) -> dict:
         cust_rows.append({**c, "tenant_id": tid, "pii_enc": mc.encrypt_pii(pii, dek), "pii_kid": "v1"})
     supa.upsert("customers", cust_rows, "tenant_id,ext_id")
 
-    # 2) ext_id → customer_id 매핑(거래·예약 연결)
+    # 2) ext_id → customer_id
     extmap = supa.get_customer_extmap(tid)
-
     tx = [
         {
             "tenant_id": tid,
@@ -86,8 +79,7 @@ def sync_tenant(tenant: dict) -> dict:
         supa.delete_stale("transactions", tid, [t["ext_id"] for t in tx],
                           date_from=tx_dates[0], date_to=tx_dates[-1])
 
-    # 3) 예약: 전량 새로고침(중복·스테일 방지)
-    # 예약행엔 고객번호가 없어 전화(→이름) 로 고객 매칭. 전화/이름 맵 구성(PII 복호화).
+    # 3) 예약: 전화(→이름)로 고객 매칭. 전화/이름 맵(이 테넌트 고객 PII 복호화).
     by_phone: dict = {}
     by_name: dict = {}
     for c in supa.select_all("customers", tid, "id,pii_enc"):
@@ -125,8 +117,8 @@ def sync_tenant(tenant: dict) -> dict:
             "service": b.get("service"),
             "source": "handsos",
             "ext_id": b["ext_id"],
-            "staff": b.get("staff"),  # 담당 디자이너(화면 필터용)
-            "pii_enc": _bpii(b),  # 예약자 이름/전화(매칭 안 돼도 표시용)
+            "staff": b.get("staff"),
+            "pii_enc": _bpii(b),
         }
         for b in data.get("bookings", [])
         if b.get("date")
@@ -139,8 +131,39 @@ def sync_tenant(tenant: dict) -> dict:
     if res_ok:
         supa.delete_stale("bookings", tid, [b["ext_id"] for b in bk], allow_empty=True)
 
-    # TODO: 갱신된 session_cookie 를 pos_credentials 에 암호화 저장(재로그인 회피)
-
     recomputed = _recompute_aggregates(tid)
-
     return {"customers": len(cust_rows), "transactions": len(tx), "bookings": len(bk), "recomputed": recomputed}
+
+
+def sync_salon(salon: dict) -> dict:
+    """자격증명 보유 테넌트(살롱) 1회 수집 → designers 매핑대로 각 디자이너 테넌트에 분리 저장.
+    designers 없으면 단일(자기 자신)로 동작(하위호환)."""
+    cred_row = supa.get_credentials(salon["id"])
+    if not cred_row:
+        raise RuntimeError("pos_credentials 없음 — 자격증명 미등록")
+    creds = mc.kek_decrypt_json(cred_row["enc_blob"])
+    creds.setdefault("slug", salon.get("slug"))
+
+    designers = creds.get("designers") or [
+        {"staff": creds.get("staff"), "slug": salon.get("slug"), "name": salon.get("designer_name")}
+    ]
+
+    data = scrape.scrape_salon(creds)  # 살롱 1회 수집(로그인 1번)
+    rows, reserve = data["rows"], data["reserve_rows"]
+    res_ok = bool(data.get("reservations_ok", True))
+
+    out: dict = {}
+    for dz in designers:
+        slug = dz.get("slug")
+        target = supa.get_tenant_by_slug(slug) if slug else None
+        if not target:
+            print(f"  건너뜀(테넌트 없음): {slug} — onboard_designers.py 로 생성 필요")
+            out[slug or "?"] = {"error": "no-tenant"}
+            continue
+        try:
+            out[slug] = _sync_one(target, rows, reserve, dz.get("staff"), res_ok)
+            print(f"  OK {slug}: {out[slug]}")
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            out[slug] = {"error": str(exc)}
+    return out

@@ -124,6 +124,13 @@ def insert(table: str, rows: list):
         _check(r)
 
 
+def patch(table: str, filters: dict, fields: dict) -> None:
+    """조건(filters: PostgREST 쿼리 형식)에 맞는 행 UPDATE."""
+    with httpx.Client(timeout=30) as c:
+        r = c.patch(_base() + f"/{table}", params=filters, headers=_headers(), json=fields)
+        _check(r)
+
+
 def delete_stale(table: str, tenant_id: str, ext_ids: list, *, allow_empty: bool = False,
                  date_from: str | None = None, date_to: str | None = None) -> None:
     """현재 수집분(ext_ids) 에 없는 행만 삭제. 업서트 후 호출해 '삽입 실패 시 전멸' 방지.
