@@ -78,6 +78,13 @@ def sync_tenant(tenant: dict) -> dict:
         if t.get("date")
     ]
     supa.upsert("transactions", tx, "tenant_id,ext_id")
+    # 스테일 거래 정리(H2): 취소·보이드로 사라진 옛 행이 남아 매출·집계를 과대계상하지 않도록,
+    # '이번에 실제 수집한 날짜 범위' 안에서만 현재 수집분에 없는 거래를 삭제. 범위 밖(창 밖
+    # 과거 백필분)은 절대 건드리지 않는다 — 증분 수집(SYNC_DAYS)에서 과거 전멸 방지.
+    tx_dates = sorted(t["date"] for t in tx if t.get("date"))
+    if tx_dates:
+        supa.delete_stale("transactions", tid, [t["ext_id"] for t in tx],
+                          date_from=tx_dates[0], date_to=tx_dates[-1])
 
     # 3) 예약: 전량 새로고침(중복·스테일 방지)
     # 예약행엔 고객번호가 없어 전화(→이름) 로 고객 매칭. 전화/이름 맵 구성(PII 복호화).
@@ -125,8 +132,12 @@ def sync_tenant(tenant: dict) -> dict:
         if b.get("date")
     ]
     # 업서트 후 스테일 정리 — delete 를 먼저 하지 않아 insert/스키마 문제 시에도 예약이 비지 않음.
+    # 예약 수확이 실패(reservations_ok=False)했으면 스테일 정리를 건너뛴다 — 빈 수집분으로
+    # 기존 예약을 전량 삭제하는 사고 방지(H1). 정상 수확 시에만 allow_empty(진짜 0건 반영).
+    res_ok = bool(data.get("reservations_ok", False))
     supa.upsert("bookings", bk, "tenant_id,ext_id")
-    supa.delete_stale("bookings", tid, [b["ext_id"] for b in bk])
+    if res_ok:
+        supa.delete_stale("bookings", tid, [b["ext_id"] for b in bk], allow_empty=True)
 
     # TODO: 갱신된 session_cookie 를 pos_credentials 에 암호화 저장(재로그인 회피)
 

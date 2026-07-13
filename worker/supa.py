@@ -122,12 +122,27 @@ def insert(table: str, rows: list):
         _check(r)
 
 
-def delete_stale(table: str, tenant_id: str, ext_ids: list) -> None:
-    """현재 수집분(ext_ids) 에 없는 행만 삭제. ext_ids 비면 tenant 전체 삭제.
-    업서트 후 호출해 delete-먼저 방식의 '삽입 실패 시 전멸' 사고를 방지."""
-    params = {"tenant_id": f"eq.{tenant_id}"}
+def delete_stale(table: str, tenant_id: str, ext_ids: list, *, allow_empty: bool = False,
+                 date_from: str | None = None, date_to: str | None = None) -> None:
+    """현재 수집분(ext_ids) 에 없는 행만 삭제. 업서트 후 호출해 '삽입 실패 시 전멸' 방지.
+
+    ext_ids 가 비면 '테넌트 전체 삭제'가 되는데, 이는 수집 실패로 빈 리스트가 온 경우
+    (예: 예약 페이지 수확 예외) 조용히 전량 삭제하는 사고로 이어진다(코드리뷰 H1).
+    그래서 빈 리스트 전체삭제는 기본 금지하고, '정말 0건임을 확인'한 호출자만
+    allow_empty=True 로 명시해야 실행된다. 아니면 no-op(기존 행 보존).
+
+    date_from/date_to: 삭제를 이 날짜 범위로 한정(코드리뷰 H2). 거래는 수집 창(SYNC_DAYS)
+    만 가져오므로, 범위 없이 스테일 정리하면 창 밖 과거 거래를 전량 삭제한다 → 반드시
+    '이번에 실제 수집한 날짜 범위' 안에서만 취소·보이드된 행을 정리한다."""
+    if not ext_ids and not allow_empty:
+        return  # 방어: 빈 수집분으로 전체삭제 금지(수집 실패와 진짜 0건을 구분 못하므로 보존)
+    params: list[tuple[str, str]] = [("tenant_id", f"eq.{tenant_id}")]
     if ext_ids:
-        params["ext_id"] = "not.in.(" + ",".join(f'"{e}"' for e in ext_ids) + ")"
+        params.append(("ext_id", "not.in.(" + ",".join(f'"{e}"' for e in ext_ids) + ")"))
+    if date_from:
+        params.append(("date", f"gte.{date_from}"))
+    if date_to:
+        params.append(("date", f"lte.{date_to}"))
     with httpx.Client(timeout=30) as c:
         r = c.delete(_base() + f"/{table}", params=params, headers=_headers())
         _check(r)

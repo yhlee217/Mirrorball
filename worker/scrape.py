@@ -66,8 +66,12 @@ def _derive(dates_desc: list[str], visits: int, today: str):
     return cycle, state
 
 
-def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = None) -> dict:
-    """수확 행(한글 9열 dict) + 예약 행 → 스키마. 고객번호로 집계."""
+def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = None,
+              reservations_ok: bool = True) -> dict:
+    """수확 행(한글 9열 dict) + 예약 행 → 스키마. 고객번호로 집계.
+
+    reservations_ok: 예약 수확이 정상 완료됐는지(False 면 예약 delete_stale 을 스킵해
+    수집 실패 시 기존 예약이 전량 삭제되는 사고를 막는다 — 코드리뷰 H1)."""
     custs: dict[str, dict] = {}
     raw_tx: list[dict] = []
     today = str(date.today())
@@ -135,7 +139,8 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         })
         idx += 1
 
-    return {"customers": customers, "transactions": transactions, "bookings": bookings}
+    return {"customers": customers, "transactions": transactions, "bookings": bookings,
+            "reservations_ok": reservations_ok}
 
 
 def _harvest_history(hs, store: dict, total_days: int) -> list:
@@ -194,10 +199,15 @@ def scrape_tenant(creds: dict, session_cookie: str | None = None) -> dict:
         raise RuntimeError("harvest 실패: 0행(로그인/기간 확인)")
 
     reserve_rows = []
+    reservations_ok = True
     try:
         rres = hs.harvest_reservations(store)
+        if rres.get("error"):                 # 소프트 실패(예외 없이 error 반환)도 미확정 처리
+            reservations_ok = False
         reserve_rows = rres.get("parsed") or []
-    except Exception:
+    except Exception as exc:                   # 예약 수확 실패 → 확정 실패로 표시(예약 보존)
+        print(f"  ⚠ 예약 수확 실패({exc}) — 기존 예약 보존(스테일 정리 스킵)")
+        reservations_ok = False
         reserve_rows = []
 
-    return normalize(rows, reserve_rows, staff)
+    return normalize(rows, reserve_rows, staff, reservations_ok=reservations_ok)
