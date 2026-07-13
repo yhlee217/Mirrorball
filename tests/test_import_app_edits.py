@@ -97,3 +97,36 @@ def test_load_app_export_forms(tmp_path):
 def test_uses_pipeline_manual_fields():
     # 파이프라인과 동일한 수동필드 집합을 참조(드리프트 방지)
     assert "birthday" in _MANUAL_FIELDS and "memo" in _MANUAL_FIELDS
+
+
+def test_booking_round_trips_to_carte(tmp_path):
+    # booking(다음 예약)도 수동필드 — 앱 편집이 카르테에 역류해야(코드리뷰 (B)).
+    cd = tmp_path / "clients" / "s"
+    _mk(cd, "c1", {"id": "c1", "name": "A", "custno": "1",
+                   "history": [{"date": "2026-01-01", "service": "컷"}]})
+    app = [{"id": "c1", "name": "A", "booking": {"date": "2026-08-01", "service": "펌"}}]
+    updates, _ = iae.apply_edits(cd, app)
+    assert len(updates) == 1
+    _, merged = updates[0]
+    assert merged["booking"] == {"date": "2026-08-01", "service": "펌"}   # 앱 예약 반영
+    assert merged["history"] == [{"date": "2026-01-01", "service": "컷"}]  # 거래는 유지
+
+
+# ── JS(mergeCustomers) ↔ Python(_MANUAL_FIELDS) 수동필드 집합 파리티 ──
+# 앱이 로컬에서 '보존'하는 필드와 파이프라인이 카르테에 '보존'하는 필드가 어긋나면
+# 편집이 한쪽에서만 살아남는 침묵의 드리프트가 생긴다(booking 이 그랬음). 정확히 등가로 고정.
+def _js_manual_fields() -> set[str]:
+    import re
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent / "app" / "index.html").read_text(encoding="utf-8")
+    m = re.search(r"var\s+MANUAL\s*=\s*\[([^\]]*)\]", src)
+    assert m, "index.html 에서 mergeCustomers 의 MANUAL 배열을 찾지 못함"
+    return set(re.findall(r"['\"]([^'\"]+)['\"]", m.group(1)))
+
+
+def test_js_python_manual_field_parity():
+    js = _js_manual_fields()
+    py = set(_MANUAL_FIELDS)
+    assert js == py, (
+        f"JS↔Python 수동필드 불일치 — JS만: {js - py} · Python만: {py - js}. "
+        "한쪽만 보존하면 편집이 소실됨. 두 목록을 함께 갱신하세요.")

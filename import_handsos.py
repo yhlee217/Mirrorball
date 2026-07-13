@@ -341,7 +341,7 @@ def merge_records(existing: list[dict], new: list[dict]) -> list[dict]:
 
 # 사람이/AI가 채운 필드는 재동기화 때 보존(구조 필드만 거래에서 갱신)
 _MANUAL_FIELDS = ("memo", "prefer", "relations", "referred_by", "referred",
-                  "birthday", "care_cycle_days")
+                  "birthday", "care_cycle_days", "booking")
 
 
 def _preserve_manual(old: dict, new: dict) -> dict:

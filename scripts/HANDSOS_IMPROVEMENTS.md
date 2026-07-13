@@ -57,6 +57,18 @@
 
 **테스트 4**: time/staff/prev 캡처, busiest_hour 부활, 생일 칼럼 흐름, 불일치 감지기.
 
+### 수동필드 드리프트 수정 — `booking` 을 durable 로 (코드리뷰 후속)
+인앱 편집↔카르테 양방향 동기화 리뷰에서 발견: 앱의 `mergeCustomers`(JS)는 `booking`(다음
+예약)을 '보존 수동필드'로 다루는데, 파이프라인 `_MANUAL_FIELDS`(Python)엔 없어 앱↔카르테
+라운드트립·재동기화에서 **예약이 소실**되던 침묵의 드리프트.
+- 히스토리 확인 결과 **의도적 제외 근거 없음**(정의 커밋에 booking 이 이미 있었고, 두 인테이크
+  템플릿·README 에 정식 필드로 문서화, 저자가 JS 쪽엔 일부러 booking 을 넣음). 유일한
+  친-제외 논리('예약은 낡음')는 앱 `upcoming()` 이 과거 날짜를 걸러 무해 → durable 이 정답.
+- 조치: `_MANUAL_FIELDS` 에 `booking` 추가 → JS==Python 완전 일치. 앱 예약이 카르테로 역류하고
+  재동기화에도 유지. `tests/test_import_app_edits.py`:
+  `test_booking_round_trips_to_carte` + **`test_js_python_manual_field_parity`**(두 목록을 집합
+  등가로 고정 — 재발 방지, 브라우저 불필요).
+
 ## ④ 셀렉터 단일화 + 자가치유 자동 루프 + JS 회귀 테스트 ✅
 
 **문제**: 셀렉터 진실 4곳 분산, 치유는 수동 4단계, 브라우저 층·harvest.js 테스트 0개.
