@@ -1,11 +1,10 @@
 name: collect
 
-# 무료 수집 워커 — GitHub Actions 크론(서버·비용 없음).
-# KST 영업시간 10~20시 = UTC 1~11시, 30분마다. 수동 실행도 가능(workflow_dispatch).
-# ⚠ 스케줄 트리거는 리포 '기본 브랜치'에 있는 워크플로만 동작 → 이 파일이 기본 브랜치에 있어야 함.
+# ⚠ HandSOS 는 국내 IP 만 허용 → GitHub Actions 러너(해외 IP)에서는 로그인 페이지 goto 가
+# 타임아웃되어 수집이 구조적으로 불가능하다. 실제 수집은 매장 PC(맥 launchd, com.mirrorball.collect,
+# 국내 IP)가 담당한다. 그래서 30분마다 실패하던 자동 스케줄(cron)을 제거한다(반복 실패 알림 방지).
+# workflow_dispatch 만 남겨 디버그/수동 실행 여지는 둔다(단, 해외 IP 라 수집 자체는 여전히 실패).
 "on":
-  schedule:
-    - cron: '*/30 1-11 * * *'
   workflow_dispatch: {}
 
 # 동시 수집 금지(코드리뷰 M6) — 스케줄과 수동 실행이 겹쳐 같은 테넌트를 동시 수집하면
