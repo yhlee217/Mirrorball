@@ -96,18 +96,25 @@ export default async function CustomerPage({ params }: { params: { id: string } 
 
   // 가족: 같은 tenant 내 동일 family_ext_id. 담당(디자이너)이 다른 가족원은 다른 tenant 라
   // 여기 안 보인다(멀티테넌트 격리 유지) — 각 디자이너는 '자기 고객인 가족원'만 본다.
-  type FamRow = { id: string; pii_enc: string | null };
-  let familyList: { id: string; name: string }[] = [];
+  type FamRow = { id: string; pii_enc: string | null; visit_count: number; last_visit: string | null; total_won: number };
+  let familyList: { id: string; name: string; visit_count: number; last_visit: string | null; vip: boolean }[] = [];
   if (cust.family_ext_id) {
     const { data: fam } = await supabase
       .from('customers')
-      .select('id,pii_enc')
+      .select('id,pii_enc,visit_count,last_visit,total_won')
       .eq('tenant_id', cust.tenant_id)
       .eq('family_ext_id', cust.family_ext_id)
       .neq('id', cust.id)
+      .order('last_visit', { ascending: false })
       .limit(12);
     familyList = await Promise.all(
-      ((fam as FamRow[]) ?? []).map(async (m) => ({ id: m.id, name: await nameFrom(m.pii_enc) })),
+      ((fam as FamRow[]) ?? []).map(async (m) => ({
+        id: m.id,
+        name: await nameFrom(m.pii_enc),
+        visit_count: m.visit_count,
+        last_visit: m.last_visit,
+        vip: isVip({ total_won: m.total_won, visit_count: m.visit_count }, settings),
+      })),
     );
   }
 
@@ -163,15 +170,24 @@ export default async function CustomerPage({ params }: { params: { id: string } 
         </div>
 
         {familyList.length > 0 && (
-          <div className="card" style={{ padding: '13px 15px' }}>
-            <div className="ch" style={{ padding: 0, marginBottom: 8 }}>가족 · {familyList.length}명</div>
-            <div className="tags">
-              {familyList.map((m) => (
-                <Link key={m.id} href={`/customer/${m.id}`} className="tagr" style={{ textDecoration: 'none', color: 'inherit' }}>
-                  {m.name} 님
-                </Link>
-              ))}
-            </div>
+          <div className="card">
+            <div className="ch">가족 · {familyList.length}명</div>
+            {familyList.map((m) => (
+              <Link key={m.id} href={`/customer/${m.id}`} className="li li-link">
+                <div className="av">{m.name.charAt(0)}</div>
+                <div className="bd">
+                  <div className="nm">
+                    {m.name} 님{m.vip ? <span className="tag-vip">VIP</span> : null}
+                  </div>
+                  <div className="sub">
+                    {m.visit_count}회{m.last_visit ? ' · 최근 ' + m.last_visit : ''}
+                  </div>
+                </div>
+                <span className="rt" style={{ fontSize: 18, color: '#B4B2A9' }} aria-hidden>
+                  ›
+                </span>
+              </Link>
+            ))}
           </div>
         )}
 
