@@ -13,6 +13,7 @@ PII(name/phone)는 평문 반환 → sync_tenant 가 DEK로 암호화.
 
 from __future__ import annotations
 
+import html
 import os
 import re
 import sys
@@ -66,6 +67,22 @@ def _derive(dates_desc: list[str], visits: int, today: str):
     return cycle, state
 
 
+_TAG_RE = re.compile(r"<[a-zA-Z/][^>]*>")
+
+
+def _clean(s) -> str | None:
+    """스크레이프 텍스트 정제 — HTML 엔티티 디코드(&lt;→<, &amp;→&, &nbsp;→공백) + 진짜 HTML
+    태그(<br>, <b>, <span…>) 제거. 각괄호로 감싼 한글 홍보문구(<첫 방문…>)는 태그가 아니므로
+    보존한다 — HTML 태그명은 ASCII 문자/'/'로 시작하므로 한글로 시작하는 각괄호는 미매치."""
+    if not s:
+        return None
+    s = html.unescape(str(s))
+    s = _TAG_RE.sub("", s)
+    s = s.replace("\xa0", " ")
+    s = re.sub(r"\s+", " ", s).strip()
+    return s or None
+
+
 def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = None,
               reservations_ok: bool = True) -> dict:
     """수확 행(한글 9열 dict) + 예약 행 → 스키마. 고객번호로 집계.
@@ -82,10 +99,10 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         ext = (r.get("고객번호") or "").strip() or (r.get("고객명") or "").strip()
         if not ext:
             continue
-        name = (r.get("고객명") or "").strip()
+        name = _clean(r.get("고객명")) or ""
         d = _norm_date(r.get("날짜"))
         won = _won(r.get("결제액"))
-        svc = (r.get("상세메뉴") or "").strip() or None
+        svc = _clean(r.get("상세메뉴"))
         c = custs.setdefault(ext, {"ext_id": ext, "name": name, "phone": (r.get("전화번호") or "").strip() or None, "dates": set(), "total_won": 0})
         if name and not c["name"]:
             c["name"] = name
@@ -132,12 +149,12 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         bookings.append({
             "ext_id": f"B{idx}",
             "customer_ext": (b.get("고객번호") or b.get("custno") or b.get("customer_ext")),
-            "name": (b.get("name") or b.get("고객명") or "").strip() or None,     # 예약자 이름(연결·표시용)
+            "name": _clean(b.get("name") or b.get("고객명")),                       # 예약자 이름(연결·표시용)
             "phone": re.sub(r"\D", "", str(b.get("phone") or b.get("전화번호") or "")) or None,
             "staff": bstaff,                                                       # 담당 디자이너(화면 필터용)
             "date": d,
             "time": b.get("시간") or b.get("time"),
-            "service": b.get("메뉴") or b.get("service"),
+            "service": _clean(b.get("메뉴") or b.get("service")),
         })
         idx += 1
 
