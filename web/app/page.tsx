@@ -109,13 +109,11 @@ export default async function Page() {
   const bkCutoff = new Date(Date.now() + settings.booking_days_ahead * 86400000).toISOString().slice(0, 10);
   const bkVisible = bk.filter((b) => (b.date || '') <= bkCutoff).slice(0, 20);
   const bkNamed = await Promise.all(bkVisible.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })));
-  const totalRevenue = cust.reduce((s, c) => s + (c.total_won || 0), 0);
 
   return (
     <HomeView
       designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
       totalCustomers={cust.length}
-      totalRevenue={totalRevenue}
       signals={signals}
       care={care}
       bookings={bkNamed}

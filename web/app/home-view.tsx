@@ -12,30 +12,25 @@ export default function HomeView({
   signals,
   care,
   bookings,
-  totalRevenue,
 }: {
   designer: string;
   totalCustomers: number;
   signals: Signals;
   care: Care[];
   bookings: Booking[];
-  totalRevenue: number;
 }) {
   const careCount = signals.overdue + signals.due;
-  const won = (n: number) =>
-    n >= 100000000 ? (n / 100000000).toFixed(1) + '억' : n >= 10000 ? Math.round(n / 10000) + '만' : String(n);
   const nameOf = (b: Booking) => b.name || '고객';
   const monthsAgo = (d: string | null) => (d ? Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000)) : null);
 
   return (
     <main className="wrap">
-      <div className="bar">
-        <div className="ttl">컨시어지</div>
-        <Link href="/settings" className="linkbtn">⚙ 설정</Link>
-      </div>
       <div className="body">
         <div className="hello">
-          <div className="e">For the Designer</div>
+          <div className="e">
+            <span>For the Designer</span>
+            <Link href="/settings" className="gear" aria-label="설정" title="설정">⚙</Link>
+          </div>
           <h2>{designer}님, 안녕하세요 👋</h2>
           <div className="s">
             챙길 고객 {careCount} · 다가오는 예약 {bookings.length} · 전체 {totalCustomers}명
@@ -51,8 +46,7 @@ export default function HomeView({
             <div className="nnum">{bookings.length}</div>
             <div className="l">다가오는 예약 ›</div>
           </a>
-          <Link href="/stats" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="nnum">{won(totalRevenue)}</div>
+          <Link href="/stats" className="chip chip-flat" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="l">기록 · 통계 ›</div>
           </Link>
         </div>
