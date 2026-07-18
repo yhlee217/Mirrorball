@@ -479,11 +479,14 @@ def harvest_reservations(store: dict, *, headed: bool = False) -> dict:
                     fr.fill(sel, val)
                 except Exception:
                     pass
+            # '전체보기' = DBProc(65000): 검색(icogSearch)은 기본 페이지 크기로 1페이지만 불러와
+            # 뒷 페이지 예약이 누락된다. DBProc(65000) 은 기간 내 전 행을 한 번에 로드(=전체보기).
+            # JS 실패 시에만 검색 버튼 폴백(그 경우 1페이지라도 확보).
             try:
-                fr.click(reserve.get("search_sel", "a.icogSearch"), timeout=4000)
+                fr.evaluate(reserve.get("search_js", "DBProc(65000)"))
             except Exception:
                 try:
-                    fr.evaluate(reserve.get("search_js", "DBProc()"))
+                    fr.click(reserve.get("search_sel", "a.icogSearch"), timeout=4000)
                 except Exception:
                     pass
             page.wait_for_timeout(int(reserve.get("settle_ms", 1500)) + 1000)

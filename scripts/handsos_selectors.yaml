@@ -24,7 +24,7 @@ reserve:
   frame_name: "mainFrame"
   date_from_sel: "#strDateS"
   date_to_sel: "#strDateE"
-  search_js: "DBProc()"
+  search_js: "DBProc(65000)"
   search_sel: "a.icogSearch"
   days_ahead: 31
 # 치유 프롬프트에서 '관련 HTML 구간'을 찾는 앵커 단어들
