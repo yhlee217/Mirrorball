@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS: TenantSettings = {
   lapsed_soft_visits: 3,
   revenue_mid: 500000,
   revenue_high: 1000000,
-  booking_days_ahead: 14,
+  booking_days_ahead: 31,
 };
 
 const KEYS = Object.keys(DEFAULT_SETTINGS) as (keyof TenantSettings)[];
