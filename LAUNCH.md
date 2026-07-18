@@ -1,0 +1,39 @@
+# Mirrorball 실서비스 런치 계획
+
+현재 상태: 앱(멀티테넌트·핵심 기능·노출 케어) + 수집(맥 launchd, 국내 IP) + 하드닝 1차(H1/H2/M1·RLS 잠금) 완료. **로컬에서 완전 동작**. 남은 건 "실제로 디자이너들이 각자 접속해서 쓰게" 만드는 것.
+
+---
+
+## Phase 0 — 지금 정리 (준비 운동)
+
+- [ ] 미커밋분 커밋·푸시 (노출 케어: `web/app/api/ai`, `web/app/expose`, `web/lib/coach.ts`, `tab-bar`, `wrangler`)
+- [ ] 마이그레이션 전부 적용 확인 (Supabase SQL Editor):
+  - `0005_settings`(판정기준) · `0006_booking_staff`(예약 담당) · `0007_customer_memo`(카르테 메모) · `0008`(tenants 쓰기 잠금, 하드닝)
+- [ ] 맥 수집 정상 확인 (`launchctl list | grep mirrorball`, `runs/collect.out.log`에 최근 OK)
+
+## Phase 1 — 런치 필수 (이게 관문)
+
+- [ ] **배포 (Cloudflare Pages)**: 지금은 로컬만이라 디자이너가 못 씀. 리포 연결 → 빌드(`npx @cloudflare/next-on-pages@1`) → env 4개(URL·ANON·SERVICE_ROLE·KEK) + `NEXT_PUBLIC_SITE_URL` + `nodejs_compat`
+- [ ] **Supabase Auth**: 배포 도메인을 Site URL·Redirect URLs에 추가 (`/auth/callback`, `/auth/confirm`)
+- [ ] **실제 로그인 발송**: 지금은 dev 매직링크(수동). 이메일 발송 켜기 — Supabase 내장(저볼륨 OK) 또는 무료 SMTP(Resend 등). 그 후 디자이너 3명 각자 이메일로 온보딩
+- [ ] **AI 활성화**: Cloudflare Workers AI 바인딩 `AI` 추가 + `@cloudflare/next-on-pages` 런타임 의존성 → '문구 다듬기'가 진짜 LLM으로 (지금은 템플릿 폴백)
+- [ ] **시크릿 로테이션**: 채팅에 노출된 `SUPABASE_SERVICE_ROLE_KEY`(재발급·쉬움) + `MIRRORBALL_KEK`(신규 KEK로 **테넌트 DEK만 재래핑** — PII 재암호화 아님, 스크립트로 가능). 로테이션 후 모든 env(맥·Cloudflare) 갱신
+
+## Phase 2 — 런치 전 권장 (신뢰·법무)
+
+- [ ] **개인정보처리방침 + 이용약관**: 고객 이름·전화 처리 → 한국 PIPA상 필요. 살롱=개인정보 관리자, 우리=수탁(처리)자 구조·위탁 계약·처리 목적/보관기간 명시. 공개 페이지에 링크
+- [ ] **각 디자이너 소개 페이지**: 최주환·이다운 공개 프로필(/p/slug) 채우기 (현재 비어있음)
+- [ ] **수집 실패 알림**: `secrets/stores.yaml`의 `notify_url`(슬랙/디스코드 webhook) → 수집 끊기면 즉시 알림
+- [ ] **커스텀 도메인**(선택): 전문성·신뢰
+
+## Phase 3 — 운영·확장 (런치 후)
+
+- [ ] 에러 모니터링(Sentry 무료 티어), 정기 백업 확인(Supabase)
+- [ ] 세션 쿠키 재사용(매 수집마다 재로그인 회피 — 워커 TODO), 맥 단일장애점 대응(수집 워치독)
+- [ ] '손님' 워크인 데이터 레벨 정리(현재 화면 제외만)
+- [ ] 노출 케어 2탄: 마케팅 할 일 체크리스트 → 인스타 인사이트 → 네이버 플레이스 연동
+- [ ] 결제/구독(수익화 시) — LLM·인프라 비용은 디자이너당 월 몇 센트라 구독료에 흡수
+
+---
+
+### 지금 가장 임팩트: **Phase 1 배포** (이게 되면 디자이너가 실제로 쓰기 시작). 그다음 **법무(개인정보)**가 실서비스의 진짜 관문.
