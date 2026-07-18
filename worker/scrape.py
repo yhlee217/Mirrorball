@@ -83,6 +83,34 @@ def _clean(s) -> str | None:
     return s or None
 
 
+_NPAY = "잔여금 N-Pay로 현장결제할게요"  # 네이버 N-Pay 자동문구(전 예약 반복) — 개별 메모 아님, 제거
+
+
+def _note(detail) -> str | None:
+    """예약 상세셀 → 개별 메모만. 네이버 보일러플레이트(예약건·미결제금액·네이버담당자·예약시술메뉴·
+    N-Pay 자동문구·담당접두)를 제거하고 남는 자유문구(요청·시간변경·취소사유 등)만 반환."""
+    base = _clean(detail)
+    if not base:
+        return None
+    s = " " + base + " "
+    req = re.search(r"요청사항\s*[:：]\s*(.+?)\s*$", s)
+    req_text = req.group(1).strip() if req else ""
+    s = re.sub(r"요청사항\s*[:：].*$", " ", s)
+    s = re.sub(r"네이버\s*예약건", " ", s)
+    s = re.sub(r"미결제금액\s*[:：]\s*[\d,]+\s*원?", " ", s)
+    s = re.sub(r"\[네이버담당자[^\]]*\]", " ", s)
+    s = re.sub(r"예약시술메뉴\s*[:：].*?[\d][\d,]*\s*원", " ", s)  # 서비스+가격(가격 앞 숫자 요구)
+    s = re.sub(r"[가-힣A-Za-z()＋+]+\s*[:：]\s*[\d][\d,]{2,}\s*원", " ", s)  # 남은 '서비스 : 가격원'
+    s = re.sub(r"잔여금\s*N-Pay로\s*현장결제할게요\s*!*", " ", s)  # N-Pay 자동문구(꼬리 ! 포함)
+    s = re.sub(r"-->|상세보기", " ", s)
+    s = re.sub(r"^\s*[^.\s]{1,10}\s*\.\s", " ", s)  # 담당 접두(하예원.)
+    s = re.sub(r"\s+", " ", s).strip()
+    if req_text and _NPAY not in req_text:
+        s = (s + " · " if s else "") + "요청: " + req_text
+    s = s.strip(" ·!.,")
+    return s if (s and re.search(r"[가-힣0-9A-Za-z]", s)) else None
+
+
 def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = None,
               reservations_ok: bool = True) -> dict:
     """수확 행(한글 9열 dict) + 예약 행 → 스키마. 고객번호로 집계.
@@ -103,9 +131,12 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         d = _norm_date(r.get("날짜"))
         won = _won(r.get("결제액"))
         svc = _clean(r.get("상세메뉴"))
-        c = custs.setdefault(ext, {"ext_id": ext, "name": name, "phone": (r.get("전화번호") or "").strip() or None, "dates": set(), "total_won": 0})
+        memo = _clean(r.get("메모"))
+        c = custs.setdefault(ext, {"ext_id": ext, "name": name, "phone": (r.get("전화번호") or "").strip() or None, "dates": set(), "total_won": 0, "memos": set()})
         if name and not c["name"]:
             c["name"] = name
+        if memo:
+            c["memos"].add(memo)
         if d:
             c["dates"].add(d)
         c["total_won"] += won
@@ -120,6 +151,7 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
             "visit_count": len(dates), "first_visit": dates[-1] if dates else None,
             "last_visit": dates[0] if dates else None, "total_won": c["total_won"],
             "revisit_cycle_days": cycle, "revisit_state": state,
+            "pos_note": " · ".join(sorted(c.get("memos") or []))[:1000] or None,
         })
 
     # 안정 키: 고객번호-날짜-당일순번. 수집 창(31일/전체)과 무관하게 같은 방문=같은 키 → 병합 정확.
@@ -155,6 +187,7 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
             "date": d,
             "time": b.get("시간") or b.get("time"),
             "service": _clean(b.get("메뉴") or b.get("service")),
+            "note": _note(b.get("detail")),
         })
         idx += 1
 

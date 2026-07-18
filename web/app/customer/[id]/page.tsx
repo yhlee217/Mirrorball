@@ -21,9 +21,10 @@ type Cust = {
   prefer_tags: string[] | null;
   memo: string | null;
   family_ext_id: string | null;
+  pos_note: string | null;
 };
 type Tx = { id: string; date: string; service: string | null; amount_won: number };
-type Bk = { date: string; time: string | null; service: string | null };
+type Bk = { date: string; time: string | null; service: string | null; note: string | null };
 
 const SIGNAL: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', new: '신규' };
 
@@ -46,7 +47,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id',
+      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,pos_note',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -64,7 +65,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
       .limit(100),
     supabase
       .from('bookings')
-      .select('date,time,service')
+      .select('date,time,service,note')
       .eq('customer_id', cust.id)
       .gte('date', today)
       .order('date', { ascending: true })
@@ -199,6 +200,18 @@ export default async function CustomerPage({ params }: { params: { id: string } 
               {nextBk.time ? ' ' + nextBk.time : ''}
               {nextBk.service ? ' · ' + nextBk.service : ''}
             </div>
+            {nextBk.note ? (
+              <div style={{ fontSize: 13, color: 'var(--accent)', marginTop: 5 }}>“{nextBk.note}”</div>
+            ) : null}
+          </div>
+        )}
+
+        {cust.pos_note && (
+          <div className="card" style={{ padding: '13px 15px' }}>
+            <div className="ch" style={{ padding: 0, marginBottom: 6 }}>
+              매장 메모 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>· HandSOS</span>
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>{cust.pos_note}</div>
           </div>
         )}
 
