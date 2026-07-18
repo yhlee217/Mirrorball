@@ -20,6 +20,7 @@ type Cust = {
   revisit_cycle_days: number | null;
   prefer_tags: string[] | null;
   memo: string | null;
+  family_ext_id: string | null;
 };
 type Tx = { id: string; date: string; service: string | null; amount_won: number };
 type Bk = { date: string; time: string | null; service: string | null };
@@ -45,7 +46,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo',
+      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -74,15 +75,40 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
   const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
 
-  let name = '고객';
-  if (dw && cust.pii_enc) {
+  let dek: Uint8Array | null = null;
+  if (dw) {
     try {
-      const dek = await unwrapDek(dw);
-      const p = await decryptPII(cust.pii_enc, dek);
-      if (typeof p.name === 'string' && p.name) name = p.name;
+      dek = await unwrapDek(dw);
     } catch {
-      /* 폴백 */
+      dek = null;
     }
+  }
+  const nameFrom = async (pii: string | null): Promise<string> => {
+    if (!dek || !pii) return '고객';
+    try {
+      const p = await decryptPII(pii, dek);
+      return typeof p.name === 'string' && p.name ? p.name : '고객';
+    } catch {
+      return '고객';
+    }
+  };
+  const name = await nameFrom(cust.pii_enc);
+
+  // 가족: 같은 tenant 내 동일 family_ext_id. 담당(디자이너)이 다른 가족원은 다른 tenant 라
+  // 여기 안 보인다(멀티테넌트 격리 유지) — 각 디자이너는 '자기 고객인 가족원'만 본다.
+  type FamRow = { id: string; pii_enc: string | null };
+  let familyList: { id: string; name: string }[] = [];
+  if (cust.family_ext_id) {
+    const { data: fam } = await supabase
+      .from('customers')
+      .select('id,pii_enc')
+      .eq('tenant_id', cust.tenant_id)
+      .eq('family_ext_id', cust.family_ext_id)
+      .neq('id', cust.id)
+      .limit(12);
+    familyList = await Promise.all(
+      ((fam as FamRow[]) ?? []).map(async (m) => ({ id: m.id, name: await nameFrom(m.pii_enc) })),
+    );
   }
 
   const history = (tx as Tx[]) ?? [];
@@ -135,6 +161,19 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           <div className="stat"><div className="sn">{won(avg)}</div><div className="sl">객단가</div></div>
           <div className="stat"><div className="sn">{cust.revisit_cycle_days ? cust.revisit_cycle_days + '일' : '-'}</div><div className="sl">재방문 주기</div></div>
         </div>
+
+        {familyList.length > 0 && (
+          <div className="card" style={{ padding: '13px 15px' }}>
+            <div className="ch" style={{ padding: 0, marginBottom: 8 }}>가족 · {familyList.length}명</div>
+            <div className="tags">
+              {familyList.map((m) => (
+                <Link key={m.id} href={`/customer/${m.id}`} className="tagr" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  {m.name} 님
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {nextBk && (
           <div className="card" style={{ padding: '13px 15px' }}>
