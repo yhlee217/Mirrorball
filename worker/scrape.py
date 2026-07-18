@@ -131,7 +131,7 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         d = _norm_date(r.get("날짜"))
         won = _won(r.get("결제액"))
         svc = _clean(r.get("상세메뉴"))
-        memo = _clean(r.get("메모"))
+        memo = _note(r.get("메모"))  # 매출 메모에도 네이버 보일러플레이트가 섞여옴 → 개별 메모만 남김
         c = custs.setdefault(ext, {"ext_id": ext, "name": name, "phone": (r.get("전화번호") or "").strip() or None, "dates": set(), "total_won": 0, "memos": set()})
         if name and not c["name"]:
             c["name"] = name
