@@ -96,11 +96,17 @@ def get_customer_extmap(tenant_id: str) -> dict:
 
 
 def select_all(table: str, tenant_id: str, select: str) -> list:
-    """테넌트의 해당 테이블 전 행(1000 페이지네이션)."""
+    """테넌트의 해당 테이블 전 행(1000 페이지네이션).
+
+    반드시 안정 정렬(order=id)로 페이지를 나눈다. ORDER BY 없이 limit/offset 로 나누면
+    Postgres 가 페이지 간 행 순서를 보장하지 않아 일부 행을 건너뛰거나 중복시킨다
+    (>1000행 테넌트에서 집계 last_visit·방문수 오류, get_customer_extmap 누락→고아 거래).
+    """
     out: list = []
     off = 0
     while True:
-        part = _get(f"/{table}", {"tenant_id": f"eq.{tenant_id}", "select": select, "limit": "1000", "offset": str(off)})
+        part = _get(f"/{table}", {"tenant_id": f"eq.{tenant_id}", "select": select,
+                                  "order": "id", "limit": "1000", "offset": str(off)})
         out += part
         if len(part) < 1000:
             break
