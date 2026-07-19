@@ -107,6 +107,9 @@ body{background:var(--bg);color:var(--ink);
 .seg-b.on{background:var(--paper);color:var(--accent-d)}
 .tip{margin-top:7px;font-size:12.5px;line-height:1.5;color:var(--accent-d);background:var(--soft);border-radius:9px;padding:7px 9px}
 .memo-note{margin-top:7px;font-size:12.5px;line-height:1.5;color:var(--ink);background:#F2EAD8;border-radius:9px;padding:7px 9px}
+.memo-row{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px;line-height:1.5;color:var(--ink)}
+.memo-row:first-of-type{border-top:none;padding-top:0}
+.memo-date{color:var(--muted);font-size:12px;flex-shrink:0;min-width:36px}
 .sec-h{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin:2px 2px 8px}
 
 /* 통계 링크 + 통계 화면 */

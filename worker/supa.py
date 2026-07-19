@@ -58,17 +58,19 @@ def claim_jobs(limit: int = 5):
     )
 
 
-def upsert(table: str, rows: list, on_conflict: str):
+def upsert(table: str, rows: list, on_conflict: str, chunk: int = 2000):
+    """업서트. 전체 백필은 5만행이 넘어 한 요청에 담으면 타임아웃·메모리 위험 → 나눠 보낸다."""
     if not rows:
         return
-    with httpx.Client(timeout=60) as c:
-        r = c.post(
-            _base() + f"/{table}",
-            params={"on_conflict": on_conflict},
-            headers=_headers({"Prefer": "resolution=merge-duplicates,return=minimal"}),
-            json=rows,
-        )
-        _check(r)
+    with httpx.Client(timeout=120) as c:
+        for i in range(0, len(rows), chunk):
+            r = c.post(
+                _base() + f"/{table}",
+                params={"on_conflict": on_conflict},
+                headers=_headers({"Prefer": "resolution=merge-duplicates,return=minimal"}),
+                json=rows[i : i + chunk],
+            )
+            _check(r)
 
 
 def update_job(job_id: str, **fields):
@@ -114,6 +116,49 @@ def select_all(table: str, tenant_id: str, select: str) -> list:
     return out
 
 
+def _range_params(tenant_id: str, date_from: str | None, date_to: str | None) -> dict:
+    """테넌트 + 선택적 날짜범위 필터. gte/lte 는 같은 키를 두 번 써야 해 리스트로 넘긴다."""
+    p: dict = {"tenant_id": f"eq.{tenant_id}"}
+    d = []
+    if date_from:
+        d.append(f"gte.{date_from}")
+    if date_to:
+        d.append(f"lte.{date_to}")
+    if d:
+        p["date"] = d if len(d) > 1 else d[0]
+    return p
+
+
+def _existing_ext_ids(table: str, tenant_id: str, date_from: str | None, date_to: str | None) -> list:
+    """범위 안 기존 ext_id 전부(1000 페이지네이션, 안정 정렬 order=id)."""
+    out: list = []
+    off = 0
+    while True:
+        p = _range_params(tenant_id, date_from, date_to)
+        p.update({"select": "ext_id", "order": "id", "limit": "1000", "offset": str(off)})
+        part = _get(f"/{table}", p)
+        out += [r["ext_id"] for r in part if r.get("ext_id")]
+        if len(part) < 1000:
+            break
+        off += 1000
+    return out
+
+
+def _chunk_by_len(items: list, max_len: int = 3000, max_n: int = 200):
+    """URL 쿼리 길이 한도를 넘지 않도록 개수와 총 길이 양쪽으로 잘라서 내보낸다."""
+    buf: list = []
+    size = 0
+    for it in items:
+        ln = len(str(it)) + 3           # 따옴표 2 + 쉼표 1
+        if buf and (size + ln > max_len or len(buf) >= max_n):
+            yield buf
+            buf, size = [], 0
+        buf.append(it)
+        size += ln
+    if buf:
+        yield buf
+
+
 def delete(table: str, tenant_id: str):
     if not tenant_id:                       # 방어: 빈 tenant_id → 전체 삭제 방지(defense-in-depth)
         raise ValueError("delete: tenant_id 가 필요합니다(전체 삭제 방지)")
@@ -148,18 +193,25 @@ def delete_stale(table: str, tenant_id: str, ext_ids: list, *, allow_empty: bool
 
     date_from/date_to: 삭제를 이 날짜 범위로 한정(코드리뷰 H2). 거래는 수집 창(SYNC_DAYS)
     만 가져오므로, 범위 없이 스테일 정리하면 창 밖 과거 거래를 전량 삭제한다 → 반드시
-    '이번에 실제 수집한 날짜 범위' 안에서만 취소·보이드된 행을 정리한다."""
+    '이번에 실제 수집한 날짜 범위' 안에서만 취소·보이드된 행을 정리한다.
+
+    수집분을 통째로 `ext_id=not.in.(...)` 에 넣으면 URL 이 길이 한도를 넘는다(전체 백필
+    5만행에서 InvalidURL: query too long). 그래서 '보관할 목록'을 URL 에 싣지 않고,
+    범위 안의 기존 ext_id 를 읽어와 로컬에서 차집합을 구한 뒤 '삭제 대상만' 나눠서 지운다.
+    보통 삭제 대상은 0~수십 건이라 요청도 거의 안 나간다."""
     if not tenant_id:                       # 방어: 빈 tenant_id → 전체 삭제 방지(defense-in-depth)
         raise ValueError("delete_stale: tenant_id 가 필요합니다(전체 삭제 방지)")
     if not ext_ids and not allow_empty:
         return  # 방어: 빈 수집분으로 전체삭제 금지(수집 실패와 진짜 0건을 구분 못하므로 보존)
-    params: list[tuple[str, str]] = [("tenant_id", f"eq.{tenant_id}")]
-    if ext_ids:
-        params.append(("ext_id", "not.in.(" + ",".join(f'"{e}"' for e in ext_ids) + ")"))
-    if date_from:
-        params.append(("date", f"gte.{date_from}"))
-    if date_to:
-        params.append(("date", f"lte.{date_to}"))
+
+    keep = {str(e) for e in ext_ids}
+    existing = _existing_ext_ids(table, tenant_id, date_from, date_to)
+    stale = sorted({e for e in existing if e not in keep})
+    if not stale:
+        return
     with httpx.Client(timeout=30) as c:
-        r = c.delete(_base() + f"/{table}", params=params, headers=_headers())
-        _check(r)
+        for part in _chunk_by_len(stale):
+            p = _range_params(tenant_id, date_from, date_to)
+            p["ext_id"] = "in.(" + ",".join(f'"{e}"' for e in part) + ")"
+            r = c.delete(_base() + f"/{table}", params=p, headers=_headers())
+            _check(r)

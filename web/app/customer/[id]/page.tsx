@@ -22,7 +22,6 @@ type Cust = {
   prefer_tags: string[] | null;
   memo: string | null;
   family_ext_id: string | null;
-  pos_note: string | null;
 };
 type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
 type Bk = { date: string; time: string | null; service: string | null; note: string | null };
@@ -48,7 +47,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,pos_note',
+      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -121,6 +120,17 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   }
 
   const history = (tx as Tx[]) ?? [];
+
+  // 매장 메모 — 방문별로 저장돼 있으니 날짜와 함께 한 줄씩 보여준다(합쳐 놓으면 읽기 어렵다).
+  // 같은 문구가 여러 방문에 반복되면 가장 최근 것만.
+  const memoRows: { id: string; date: string; memo: string }[] = [];
+  const seenMemo = new Set<string>();
+  for (const h of history) {
+    if (!h.memo || seenMemo.has(h.memo)) continue;
+    seenMemo.add(h.memo);
+    memoRows.push({ id: h.id, date: h.date, memo: h.memo });
+    if (memoRows.length >= 8) break;
+  }
   const nextBk = ((bk as Bk[]) ?? []).find((b) => isUpcoming(b.date, b.time)) ?? null; // 지난 시간 제외
   const vip = isVip(cust, settings);
   const avg = cust.visit_count ? Math.round(cust.total_won / cust.visit_count) : 0;
@@ -207,12 +217,17 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           </div>
         )}
 
-        {cust.pos_note && (
+        {memoRows.length > 0 && (
           <div className="card" style={{ padding: '13px 15px' }}>
-            <div className="ch" style={{ padding: 0, marginBottom: 6 }}>
+            <div className="ch" style={{ padding: 0, marginBottom: 8 }}>
               매장 메모 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>· HandSOS</span>
             </div>
-            <div style={{ fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>{cust.pos_note}</div>
+            {memoRows.map((m) => (
+              <div className="memo-row" key={m.id}>
+                <span className="memo-date">{m.date.slice(5).replace('-', '.')}</span>
+                <span>{m.memo}</span>
+              </div>
+            ))}
           </div>
         )}
 
