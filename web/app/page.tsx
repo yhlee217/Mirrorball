@@ -6,7 +6,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings, isVip, isLapsed } from '@/lib/settings';
-import { kstDatePlus, isUpcoming } from '@/lib/kst';
+import { kstNow, kstDatePlus, isUpcoming } from '@/lib/kst';
 import HomeView from './home-view';
 import OnboardButton from './onboard-button';
 
@@ -20,7 +20,7 @@ type Cust = {
   pii_enc: string | null;
   last_visit: string | null;
 };
-type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; pii_enc: string | null; staff: string | null; name?: string };
+type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; pii_enc: string | null; staff: string | null; status: string | null; name?: string };
 
 export default async function Page() {
   const supabase = supabaseServer();
@@ -47,7 +47,7 @@ export default async function Page() {
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     supabase
       .from('bookings')
-      .select('id,date,time,service,customer_id,pii_enc,staff')
+      .select('id,date,time,service,customer_id,pii_enc,staff,status')
       .order('date', { ascending: true })
       .order('time', { ascending: true, nullsFirst: false })
       .limit(200),
@@ -113,10 +113,21 @@ export default async function Page() {
   const bkVisible = bk.filter((b) => (b.date || '') <= bkCutoff && isUpcoming(b.date, b.time)).slice(0, 20);
   const bkNamed = await Promise.all(bkVisible.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })));
 
+  // 오늘 다녀가신 분(매출 기준) — 방문 관리 진입점에 표시
+  const { data: todayTx } = await supabase
+    .from('transactions')
+    .select('customer_id')
+    .eq('date', kstNow().date)
+    .limit(500);
+  const todayVisits = new Set(
+    ((todayTx as { customer_id: string | null }[]) ?? []).map((x) => x.customer_id).filter(Boolean),
+  ).size;
+
   return (
     <HomeView
       designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
       totalCustomers={cust.length}
+      todayVisits={todayVisits}
       signals={signals}
       care={care}
       bookings={bkNamed}

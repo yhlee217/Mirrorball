@@ -116,6 +116,7 @@ def _sync_one(tenant: dict, rows: list, reserve_rows: list, staff, reservations_
             "time": b.get("time"),
             "service": b.get("service"),
             "note": b.get("note"),
+            "status": b.get("status"),
             "source": "handsos",
             "ext_id": b["ext_id"],
             "staff": b.get("staff"),

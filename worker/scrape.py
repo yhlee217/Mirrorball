@@ -167,7 +167,10 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
     bookings = []
     idx = 0
     for b in reserve_rows or []:
-        if b.get("status") and "예약중" not in str(b.get("status")):  # 취소·노쇼·완료 제외
+        # 취소·노쇼도 수집해 화면에 '취소됨'으로 보여준다(그 시간이 비었다는 정보가 필요).
+        # 이미 다녀간 '방문완료/입력완료'만 제외 — 다가오는 예약이 아니므로.
+        st = _clean(b.get("status")) or ""
+        if "방문완료" in st or "입력완료" in st:
             continue
         d = _norm_date(b.get("날짜") or b.get("date"))
         if not d or d < today:  # 오늘 이후(다가오는 예약)만
@@ -188,6 +191,7 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
             "time": b.get("시간") or b.get("time"),
             "service": _clean(b.get("메뉴") or b.get("service")),
             "note": _note(b.get("detail")),
+            "status": st or None,
         })
         idx += 1
 

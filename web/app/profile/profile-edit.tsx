@@ -51,6 +51,12 @@ export default function ProfileEdit({ initial }: { initial: P }) {
       </div>
 
       <div className="sec-h">시술 설명</div>
+      <p className="note" style={{ marginTop: -2, marginBottom: 8 }}>
+        손님이 궁금해할 대표 시술 2~3개면 충분해요.
+      </p>
+      {p.services.length === 0 && (
+        <div className="empty" style={{ marginBottom: 8 }}>예: 뿌리볼륨펌 — 뿌리만 살려 자연스럽게, 유지 2개월</div>
+      )}
       {p.services.map((s, i) => (
         <div className="card" style={{ padding: '12px 13px', marginBottom: 8 }} key={i}>
           <input placeholder="시술명" value={s.name} onChange={(e) => spec(i, 'name', e.target.value)} />
@@ -64,7 +70,13 @@ export default function ProfileEdit({ initial }: { initial: P }) {
         + 시술 추가
       </button>
 
-      <div className="sec-h" style={{ marginTop: 16 }}>자주 묻는 질문</div>
+      <div className="sec-h" style={{ marginTop: 18 }}>자주 묻는 질문</div>
+      <p className="note" style={{ marginTop: -2, marginBottom: 8 }}>
+        예약·주차·시술 시간처럼 자주 받는 질문을 적어두면 문의가 줄어요.
+      </p>
+      {p.faq.length === 0 && (
+        <div className="empty" style={{ marginBottom: 8 }}>예: 주차 되나요? — 건물 뒤편에 2시간 무료 주차 가능해요.</div>
+      )}
       {p.faq.map((f, i) => (
         <div className="card" style={{ padding: '12px 13px', marginBottom: 8 }} key={i}>
           <input placeholder="질문" value={f.q} onChange={(e) => faq(i, 'q', e.target.value)} />
@@ -78,8 +90,8 @@ export default function ProfileEdit({ initial }: { initial: P }) {
         + 질문 추가
       </button>
 
-      <div style={{ marginTop: 18 }}>
-        <button className="btn" onClick={save} disabled={saving}>
+      <div style={{ marginTop: 22 }}>
+        <button className="btn" style={{ width: '100%' }} onClick={save} disabled={saving}>
           {saving ? '저장 중…' : '저장'}
         </button>
       </div>

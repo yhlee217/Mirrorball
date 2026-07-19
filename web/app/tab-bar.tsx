@@ -6,7 +6,7 @@ const TABS = [
   { href: '/', label: '홈', icon: '🏠', match: (p: string) => p === '/' },
   { href: '/customers', label: '고객', icon: '👥', match: (p: string) => p.startsWith('/customer') },
   { href: '/alerts', label: '알림', icon: '🔔', match: (p: string) => p.startsWith('/alerts') },
-  { href: '/expose', label: '노출', icon: '📣', match: (p: string) => p.startsWith('/expose') },
+  { href: '/visits', label: '방문', icon: '✅', match: (p: string) => p.startsWith('/visits') },
   { href: '/profile', label: '소개', icon: '📇', match: (p: string) => p.startsWith('/profile') },
 ];
 

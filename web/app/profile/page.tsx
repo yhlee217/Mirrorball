@@ -1,6 +1,7 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import ProfileEdit from './profile-edit';
@@ -40,11 +41,18 @@ export default async function ProfilePage() {
 
   return (
     <main className="wrap">
-      <div className="bar">
-        <div className="ttl">소개 페이지 편집</div>
-      </div>
       <div className="body">
-        <div className="sec-h">손님에게 보이는 공개 소개 · 저장하면 반영</div>
+        <div className="hello">
+          <div className="e">
+            <span>Profile</span>
+          </div>
+          <h2>소개</h2>
+          <div className="s">손님에게 보이는 공개 소개예요. 저장하면 바로 반영됩니다.</div>
+        </div>
+        <div className="seg">
+          <span className="seg-b on">소개 편집</span>
+          <Link href="/profile/content" className="seg-b">콘텐츠 제안</Link>
+        </div>
         {slug && (
           <a href={`/p/${slug}`} target="_blank" rel="noopener" className="pub-link">공개 페이지 미리보기 ↗</a>
         )}

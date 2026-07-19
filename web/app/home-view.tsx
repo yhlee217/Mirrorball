@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; name?: string };
+type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; status: string | null; name?: string };
 type Care = { id: string; name: string; state: string; visit_count: number; last_visit: string | null };
 type Signals = { overdue: number; due: number; new: number; vip: number };
 
@@ -9,18 +9,23 @@ const STATE_LABEL: Record<string, string> = { overdue: '이탈 위험', due: '�
 export default function HomeView({
   designer,
   totalCustomers,
+  todayVisits,
   signals,
   care,
   bookings,
 }: {
   designer: string;
   totalCustomers: number;
+  todayVisits: number;
   signals: Signals;
   care: Care[];
   bookings: Booking[];
 }) {
   const careCount = signals.overdue + signals.due;
   const nameOf = (b: Booking) => b.name || '고객';
+  // 취소·노쇼도 '그 시간이 비었다'는 정보라 목록엔 보여주되, 개수에는 넣지 않는다.
+  const isOff = (b: Booking) => !!b.status && /취소|노쇼/.test(b.status);
+  const activeBk = bookings.filter((b) => !isOff(b)).length;
   const monthsAgo = (d: string | null) => (d ? Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000)) : null);
 
   return (
@@ -33,7 +38,7 @@ export default function HomeView({
           </div>
           <h2>{designer}님, 안녕하세요 👋</h2>
           <div className="s">
-            챙길 고객 {careCount} · 다가오는 예약 {bookings.length} · 전체 {totalCustomers}명
+            챙길 고객 {careCount} · 다가오는 예약 {activeBk} · 전체 {totalCustomers}명
           </div>
         </div>
 
@@ -43,9 +48,13 @@ export default function HomeView({
             <div className="l">챙길 고객 ›</div>
           </Link>
           <a href="#bookings" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="nnum">{bookings.length}</div>
+            <div className="nnum">{activeBk}</div>
             <div className="l">다가오는 예약 ›</div>
           </a>
+          <Link href="/visits" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="nnum">{todayVisits}</div>
+            <div className="l">오늘 방문 ›</div>
+          </Link>
           <Link href="/stats" className="chip chip-flat" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="l">기록 · 통계 ›</div>
           </Link>
@@ -63,11 +72,19 @@ export default function HomeView({
           {bookings.length ? (
             bookings.map((b) => {
               const label = nameOf(b);
+              const off = isOff(b);
               const inner = (
                 <>
                   <div className="av">{label.charAt(0)}</div>
                   <div className="bd">
-                    <div className="nm">{label} 님{!b.customer_id ? <span className="tag-new">신규</span> : null}</div>
+                    <div className="nm" style={off ? { textDecoration: 'line-through' } : undefined}>
+                      {label} 님
+                      {off ? (
+                        <span className="tag-off">{b.status?.includes('노쇼') ? '노쇼' : '취소'}</span>
+                      ) : !b.customer_id ? (
+                        <span className="tag-new">신규</span>
+                      ) : null}
+                    </div>
                     <div className="sub">
                       {b.service ?? ''}
                       {b.time ? ' · ' + b.time : ''}
@@ -76,12 +93,13 @@ export default function HomeView({
                   <div className="rt">{b.date}</div>
                 </>
               );
+              const cls = `li${b.customer_id ? ' li-link' : ''}${off ? ' li-off' : ''}`;
               return b.customer_id ? (
-                <Link key={b.id} href={`/customer/${b.customer_id}`} className="li li-link">
+                <Link key={b.id} href={`/customer/${b.customer_id}`} className={cls}>
                   {inner}
                 </Link>
               ) : (
-                <div className="li" key={b.id}>
+                <div className={cls} key={b.id}>
                   {inner}
                 </div>
               );
