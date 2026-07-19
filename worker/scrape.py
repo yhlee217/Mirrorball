@@ -38,6 +38,14 @@ def _norm_date(v) -> str | None:
     return f"{int(y):04d}-{int(mo):02d}-{int(d):02d}"
 
 
+def _norm_time(v) -> str | None:
+    """'26-07-19 14:30' / '14:30' → '14:30'(HH:MM). 시각이 없으면 None."""
+    if not v:
+        return None
+    m = re.search(r"(\d{1,2}):(\d{2})", str(v))
+    return f"{int(m.group(1)):02d}:{m.group(2)}" if m else None
+
+
 def _won(v) -> int:
     if v is None:
         return 0
@@ -140,7 +148,8 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         if d:
             c["dates"].add(d)
         c["total_won"] += won
-        raw_tx.append({"customer_ext": ext, "date": d, "service": svc, "amount_won": won})
+        raw_tx.append({"customer_ext": ext, "date": d, "time": _norm_time(r.get("시간")),
+                       "service": svc, "amount_won": won})
 
     customers = []
     for ext, c in custs.items():

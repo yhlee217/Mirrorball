@@ -13,7 +13,7 @@ import VisitsList from './visits-list';
 // 방문 관리 — '다녀가신 분'을 챙기는 화면(알림 탭이 '아직 안 오신 분'을 챙기는 것과 짝).
 // 리뷰 요청 문구는 원래 노출 탭에 있었는데, 성격상 고객 관리라 이쪽으로 옮겼다.
 
-type Tx = { customer_id: string | null; date: string; service: string | null; amount_won: number };
+type Tx = { customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number };
 type Cust = { id: string; ext_id: string | null; pii_enc: string | null; visit_count: number };
 
 const DAY = 86400000;
@@ -38,23 +38,29 @@ export default async function VisitsPage() {
     fetchAllRows<Tx>((from, to) =>
       supabase
         .from('transactions')
-        .select('customer_id,date,service,amount_won')
+        .select('customer_id,date,time,service,amount_won')
         .gte('date', since)
         .order('id')
         .range(from, to)),
   ]);
 
   // 같은 날 여러 시술은 한 번의 방문으로 묶는다.
-  const byVisit = new Map<string, { customer_id: string; date: string; services: string[]; amount: number }>();
+  const byVisit = new Map<
+    string,
+    { customer_id: string; date: string; time: string | null; services: string[]; amount: number }
+  >();
   for (const t of txs) {
     if (!t.customer_id || !t.date) continue;
     const k = `${t.customer_id}|${t.date}`;
-    const e = byVisit.get(k) ?? { customer_id: t.customer_id, date: t.date, services: [], amount: 0 };
+    const e = byVisit.get(k) ?? { customer_id: t.customer_id, date: t.date, time: null, services: [], amount: 0 };
     if (t.service) e.services.push(t.service);
     e.amount += t.amount_won || 0;
+    if (t.time && (!e.time || t.time < e.time)) e.time = t.time; // 같은 날 여러 건이면 가장 이른 시각 = 방문 시각
     byVisit.set(k, e);
   }
-  const visits = [...byVisit.values()].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 60);
+  const visits = [...byVisit.values()]
+    .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : (a.time ?? '') < (b.time ?? '') ? 1 : -1))
+    .slice(0, 60);
 
   const ids = [...new Set(visits.map((v) => v.customer_id))];
   const custs: Cust[] = ids.length
@@ -93,7 +99,7 @@ export default async function VisitsPage() {
           id: v.customer_id,
           name,
           date: v.date,
-          time: null as string | null, // 매출 데이터에 시각이 없어 아직 비움(수집 확인 후 연결)
+          time: v.time,
           service: svc,
           amount: v.amount,
           visit_count: c.visit_count,

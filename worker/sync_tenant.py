@@ -63,6 +63,7 @@ def _sync_one(tenant: dict, rows: list, reserve_rows: list, staff, reservations_
             "tenant_id": tid,
             "customer_id": extmap.get(t.get("customer_ext")),
             "date": t["date"],
+            "time": t.get("time"),
             "service": t.get("service"),
             "amount_won": t.get("amount_won", 0),
             "ext_id": t["ext_id"],

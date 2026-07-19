@@ -53,6 +53,8 @@ globalThis.__handsosHarvest = async function (opts) {
 
       const dRaw = cell(HM.날짜);
       const date = (dRaw.match(/\d{2,4}\D\d{1,2}\D\d{1,2}/) || [''])[0];
+      // 날짜 셀에 시각이 함께 온다("26-07-19 14:30") — 방문 시간으로 쓰므로 같이 뽑는다.
+      const time = (dRaw.match(/\b\d{1,2}:\d{2}\b/) || [''])[0];
 
       const ci = tr.querySelector('[id^="strCustomerInfo"]');
       let name = '', phone = '', custno = '', prev = '';
@@ -80,7 +82,7 @@ globalThis.__handsosHarvest = async function (opts) {
       const memo = md ? norm(md.textContent.replace(/상세보기/, '')) : '';
 
       const rec = {
-        날짜: date, 고객명: finalName, 전화번호: phone || '', 고객번호: custno || '',
+        날짜: date, 시간: time, 고객명: finalName, 전화번호: phone || '', 고객번호: custno || '',
         이전방문: prev, 상세메뉴: service, 담당: cell(HM.담당), 결제액: price, 메모: memo,
       };
       const key = [date, finalName, service, price, memo].join('|');
