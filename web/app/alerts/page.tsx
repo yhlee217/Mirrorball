@@ -7,6 +7,7 @@ import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings, isLapsed } from '@/lib/settings';
 import { friendlyService } from '@/lib/service-name';
+import { careFor } from '@/lib/care-cycle';
 import AlertsList from './alerts-list';
 
 type Cust = {
@@ -82,21 +83,32 @@ export default async function AlertsPage() {
   const items = base.map((c, i) => {
     const name = names[i];
     const m = monthsOf(c.last_visit);
-    const svc = friendlyService(lastSvc.get(c.id)); // 고객 문구용(직급·성별 표기 제거)
+    const rawSvc = lastSvc.get(c.id);
+    const svc = friendlyService(rawSvc); // 고객 문구용(직급·성별 표기 제거)
+    const care = careFor(rawSvc); // 시술별 표준 관리주기·표현(분류는 원본 메뉴명으로)
     const loyal = c.visit_count >= settings.vip_visits;
+    const std = care ? ` · ${care.cat} 표준 ${care.days}일` : '';
     const why =
       c.revisit_state === 'overdue'
-        ? `마지막 방문 ${c.last_visit ?? '-'}${m ? ` · ${m}개월 미방문` : ''} · 평소 ${c.revisit_cycle_days ?? '-'}일 주기`
-        : `재방문 시기 · 마지막 방문 ${c.last_visit ?? '-'}${c.revisit_cycle_days ? ` · 주기 ${c.revisit_cycle_days}일` : ''}`;
+        ? `마지막 방문 ${c.last_visit ?? '-'}${m ? ` · ${m}개월 미방문` : ''} · 평소 ${c.revisit_cycle_days ?? '-'}일 주기${std}`
+        : `재방문 시기 · 마지막 방문 ${c.last_visit ?? '-'}${c.revisit_cycle_days ? ` · 주기 ${c.revisit_cycle_days}일` : ''}${std}`;
     let draft: string;
     if (c.revisit_state === 'overdue') {
       const open = loyal
         ? `${name}님, 오랜만이에요! 벌써 ${m}개월 됐네요. 늘 찾아주셔서 감사해요 🙏`
         : `${name}님, ${m ? m + '개월 만이에요' : '오랜만이에요'}! 잘 지내셨어요? 😊`;
-      const mid = svc ? ` 지난 ${svc} 이제 슬슬 관리할 시기라 생각나서 연락드려요.` : ` 슬슬 컨디션 체크 겸 한번 뵙고 싶어서요.`;
+      const mid =
+        care && svc
+          ? ` 지난 ${svc} ${care.phrase} 한번 뵙고 싶어서 연락드려요.`
+          : svc
+            ? ` 지난 ${svc} 이제 슬슬 관리할 시기라 생각나서 연락드려요.`
+            : ` 슬슬 컨디션 체크 겸 한번 뵙고 싶어서요.`;
       draft = `${open}${mid} 편하신 때 편하게 연락 주세요!`;
     } else {
-      draft = `${name}님, ${svc ? '지난 ' + svc : '지난 시술'} 이제 관리해주실 시기예요${c.revisit_cycle_days ? ` (평소 ${c.revisit_cycle_days}일 주기)` : ''}. 편하신 시간에 예약 도와드릴게요!`;
+      draft =
+        care && svc
+          ? `${name}님, 지난 ${svc} ${care.phrase} 연락드려요. 편하신 시간에 예약 도와드릴게요!`
+          : `${name}님, ${svc ? '지난 ' + svc : '지난 시술'} 이제 관리해주실 시기예요${c.revisit_cycle_days ? ` (평소 ${c.revisit_cycle_days}일 주기)` : ''}. 편하신 시간에 예약 도와드릴게요!`;
     }
     return { id: c.id, name, state: c.revisit_state as string, why, draft };
   });
