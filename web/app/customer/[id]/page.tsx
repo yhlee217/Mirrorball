@@ -6,6 +6,7 @@ import { redirect, notFound } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { mergeSettings, isVip } from '@/lib/settings';
+import { kstNow, isUpcoming } from '@/lib/kst';
 import CustomerNote from './customer-note';
 
 type Cust = {
@@ -54,7 +55,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   if (!c) notFound();
   const cust = c as Cust;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = kstNow().date; // KST 기준(엣지는 UTC라 새벽에 하루 밀림)
   const [{ data: tenant }, { data: tx }, { data: bk }] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', cust.tenant_id).maybeSingle(),
     supabase
@@ -70,7 +71,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
       .gte('date', today)
       .order('date', { ascending: true })
       .order('time', { ascending: true, nullsFirst: false })
-      .limit(1),
+      .limit(5),
   ]);
 
   const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
@@ -120,7 +121,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   }
 
   const history = (tx as Tx[]) ?? [];
-  const nextBk = ((bk as Bk[]) ?? [])[0] ?? null;
+  const nextBk = ((bk as Bk[]) ?? []).find((b) => isUpcoming(b.date, b.time)) ?? null; // 지난 시간 제외
   const vip = isVip(cust, settings);
   const avg = cust.visit_count ? Math.round(cust.total_won / cust.visit_count) : 0;
 

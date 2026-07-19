@@ -6,6 +6,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings, isVip, isLapsed } from '@/lib/settings';
+import { kstDatePlus, isUpcoming } from '@/lib/kst';
 import HomeView from './home-view';
 import OnboardButton from './onboard-button';
 
@@ -106,8 +107,10 @@ export default async function Page() {
   }));
 
   // 테넌트=한 디자이너라 예약은 이미 그 디자이너 것. booking_days_ahead 기간 내만, date+time 정렬 유지.
-  const bkCutoff = new Date(Date.now() + settings.booking_days_ahead * 86400000).toISOString().slice(0, 10);
-  const bkVisible = bk.filter((b) => (b.date || '') <= bkCutoff).slice(0, 20);
+  // 예약 시각은 KST(HandSOS 기준). 엣지 런타임은 UTC 라 KST 로 계산해야 한국 새벽에 날짜가 안 밀린다.
+  // isUpcoming 이 '오늘 이미 지난 시간'(10:00 예약을 11시에 보는 경우)도 걸러낸다.
+  const bkCutoff = kstDatePlus(settings.booking_days_ahead);
+  const bkVisible = bk.filter((b) => (b.date || '') <= bkCutoff && isUpcoming(b.date, b.time)).slice(0, 20);
   const bkNamed = await Promise.all(bkVisible.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })));
 
   return (
