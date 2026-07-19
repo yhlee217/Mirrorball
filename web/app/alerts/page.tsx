@@ -6,6 +6,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings, isLapsed } from '@/lib/settings';
+import { friendlyService } from '@/lib/service-name';
 import AlertsList from './alerts-list';
 
 type Cust = {
@@ -81,7 +82,7 @@ export default async function AlertsPage() {
   const items = base.map((c, i) => {
     const name = names[i];
     const m = monthsOf(c.last_visit);
-    const svc = lastSvc.get(c.id);
+    const svc = friendlyService(lastSvc.get(c.id)); // 고객 문구용(직급·성별 표기 제거)
     const loyal = c.visit_count >= settings.vip_visits;
     const why =
       c.revisit_state === 'overdue'

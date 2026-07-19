@@ -1,5 +1,8 @@
 // 콘텐츠 코치 — 문구 생성(템플릿 기준선, 무료·결정적).
 // '진짜 AI' 다듬기는 /api/ai 온디맨드로만(제공자 추상화). 여기 함수들은 서버·클라 공용.
+// 고객·SNS 에 나가는 문구의 시술명은 friendlyService 로 다듬는다(남자컷(부원장) → 커트).
+
+import { friendlyService } from '@/lib/service-name';
 
 const HASHTAGS: Record<string, string[]> = {
   펌: ['#펌', '#볼륨매직', '#헤어펌', '#펌스타그램', '#셋팅펌'],
@@ -24,12 +27,14 @@ export function hashtagsFor(service: string, salon?: string): string[] {
 }
 
 export function captionFor(service: string, salon?: string): string {
-  const tags = hashtagsFor(service, salon).join(' ');
-  return `${service} 시술 완료 ✨\n오늘도 정성껏 완성했어요. 마음에 드셨길 바라요 🥰\n예약·문의는 프로필 링크로!\n\n${tags}`;
+  const tags = hashtagsFor(service, salon).join(' '); // 해시태그 분류는 원본 메뉴명으로(정확도)
+  const disp = friendlyService(service) || service;
+  return `${disp} 시술 완료 ✨\n오늘도 정성껏 완성했어요. 마음에 드셨길 바라요 🥰\n예약·문의는 프로필 링크로!\n\n${tags}`;
 }
 
 export function reviewRequestFor(name: string, service?: string): string {
-  const svc = service ? `오늘 ${service} 시술` : '오늘 시술';
+  const disp = friendlyService(service);
+  const svc = disp ? `오늘 ${disp} 시술` : '오늘 시술';
   return `${name}님, ${svc} 어떠셨어요? 😊 만족하셨다면 네이버 플레이스에 짧게 리뷰 남겨주시면 큰 힘이 돼요. 다음에도 예쁘게 해드릴게요 🙏`;
 }
 
@@ -43,8 +48,8 @@ export function templateImprove(kind: string, ctx: Record<string, string>): stri
 // LLM 프롬프트(온디맨드 시). 제공자(Cloudflare/Gemini/유료)와 무관하게 동일 프롬프트.
 export function buildPrompt(kind: string, ctx: Record<string, string>): string {
   if (kind === 'caption')
-    return `헤어살롱 인스타그램 게시물 캡션을 써줘. 시술명: ${ctx.service}. 살롱: ${ctx.salon || '헤어살롱'}. 3~4줄, 친근한 존댓말, 이모지 1~2개, 마지막 줄에 관련 해시태그 5개. 과장·이모지 남발 금지.`;
+    return `헤어살롱 인스타그램 게시물 캡션을 써줘. 시술명: ${friendlyService(ctx.service) || ctx.service}. 살롱: ${ctx.salon || '헤어살롱'}. 3~4줄, 친근한 존댓말, 이모지 1~2개, 마지막 줄에 관련 해시태그 5개. 과장·이모지 남발 금지.`;
   if (kind === 'review')
-    return `${ctx.name}님에게 보낼 네이버 플레이스 리뷰 요청 메시지를 써줘. 오늘 ${ctx.service || '시술'}을 받음. 부담 없고 따뜻하게, 2~3문장, 존댓말, 이모지 1개.`;
+    return `${ctx.name}님에게 보낼 네이버 플레이스 리뷰 요청 메시지를 써줘. 오늘 ${friendlyService(ctx.service) || '시술'}을 받음. 부담 없고 따뜻하게, 2~3문장, 존댓말, 이모지 1개.`;
   return ctx.text || '';
 }
