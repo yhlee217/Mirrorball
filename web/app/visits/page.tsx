@@ -6,7 +6,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { friendlyService } from '@/lib/service-name';
-import { reviewRequestFor } from '@/lib/coach';
+import { careFor } from '@/lib/care-cycle';
 import { kstNow } from '@/lib/kst';
 import VisitsList from './visits-list';
 
@@ -93,10 +93,11 @@ export default async function VisitsPage() {
           id: v.customer_id,
           name,
           date: v.date,
+          time: null as string | null, // 매출 데이터에 시각이 없어 아직 비움(수집 확인 후 연결)
           service: svc,
           amount: v.amount,
           visit_count: c.visit_count,
-          draft: reviewRequestFor(name, rawMain ?? undefined),
+          tip: careFor(rawMain)?.tip ?? '', // 그날 받은 시술의 홈케어 안내
         };
       }),
   );

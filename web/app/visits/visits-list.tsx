@@ -1,51 +1,37 @@
-'use client';
-import { useState } from 'react';
 import Link from 'next/link';
 
+// 방문 관리 — 리뷰 요청 '복사 버튼'은 강요처럼 보여서 뺐다. 대신 그날 받은 시술의 홈케어 팁을
+// 본문에 그대로 노출한다(손님께 전할 말 겸, 디자이너 기억용). 행 전체가 카르테로 연결된다.
 type Item = {
   id: string;
   name: string;
   date: string;
+  time: string | null;
   service: string;
   amount: number;
   visit_count: number;
-  draft: string;
+  tip: string;
 };
 
 const won = (n: number) => (n >= 10000 ? Math.round(n / 10000) + '만' : n.toLocaleString()) + '원';
 
 function Row({ it }: { it: Item }) {
-  const [msg, setMsg] = useState('');
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(it.draft);
-      setMsg('복사됨 ✓');
-    } catch {
-      setMsg('복사 실패');
-    }
-    setTimeout(() => setMsg(''), 1600);
-  };
   return (
-    <div className="li" style={{ alignItems: 'flex-start' }}>
+    <Link href={`/customer/${it.id}`} className="li li-link" style={{ alignItems: 'flex-start' }}>
       <div className="av">{it.name.charAt(0)}</div>
       <div className="bd">
         <div className="nm">
-          {it.name} 님 <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--muted)' }}>· {it.visit_count}회</span>
+          {it.name} 님
+          <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--muted)' }}> · {it.visit_count}회째</span>
         </div>
         <div className="sub">
+          {it.time ? it.time + ' · ' : ''}
           {it.service || '시술'}
           {it.amount ? ' · ' + won(it.amount) : ''}
         </div>
-        <div className="row2" style={{ marginTop: 8 }}>
-          <button type="button" className="btn ghost" onClick={copy}>
-            {msg || '리뷰 요청 복사'}
-          </button>
-          <Link href={`/customer/${it.id}`} className="btn" style={{ textAlign: 'center', textDecoration: 'none' }}>
-            카르테
-          </Link>
-        </div>
+        {it.tip ? <div className="tip">{it.tip}</div> : null}
       </div>
-    </div>
+    </Link>
   );
 }
 
