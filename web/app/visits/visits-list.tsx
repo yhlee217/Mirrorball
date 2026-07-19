@@ -10,6 +10,7 @@ type Item = {
   service: string;
   amount: number;
   visit_count: number;
+  memo: string;
   tip: string;
 };
 
@@ -29,6 +30,7 @@ function Row({ it }: { it: Item }) {
           {it.service || '시술'}
           {it.amount ? ' · ' + won(it.amount) : ''}
         </div>
+        {it.memo ? <div className="memo-note">{it.memo}</div> : null}
         {it.tip ? <div className="tip">{it.tip}</div> : null}
       </div>
     </Link>

@@ -24,7 +24,7 @@ type Cust = {
   family_ext_id: string | null;
   pos_note: string | null;
 };
-type Tx = { id: string; date: string; service: string | null; amount_won: number };
+type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
 type Bk = { date: string; time: string | null; service: string | null; note: string | null };
 
 const SIGNAL: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', new: '신규' };
@@ -60,7 +60,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', cust.tenant_id).maybeSingle(),
     supabase
       .from('transactions')
-      .select('id,date,service,amount_won')
+      .select('id,date,time,service,amount_won,memo')
       .eq('customer_id', cust.id)
       .order('date', { ascending: false })
       .limit(100),
@@ -235,10 +235,14 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           <div className="ch">시술 이력{history.length ? ' · ' + history.length + '건' : ''}</div>
           {history.length ? (
             history.map((h) => (
-              <div className="li" key={h.id}>
+              <div className="li" key={h.id} style={{ alignItems: 'flex-start' }}>
                 <div className="bd">
                   <div className="nm" style={{ fontWeight: 600 }}>{h.service ?? '시술'}</div>
-                  <div className="sub">{h.date}</div>
+                  <div className="sub">
+                    {h.date}
+                    {h.time ? ' ' + h.time : ''}
+                  </div>
+                  {h.memo ? <div className="tip">{h.memo}</div> : null}
                 </div>
                 <div className="rt">{won(h.amount_won)}</div>
               </div>

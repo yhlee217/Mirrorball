@@ -65,6 +65,7 @@ def _sync_one(tenant: dict, rows: list, reserve_rows: list, staff, reservations_
             "date": t["date"],
             "time": t.get("time"),
             "service": t.get("service"),
+            "memo": t.get("memo"),
             "amount_won": t.get("amount_won", 0),
             "ext_id": t["ext_id"],
         }

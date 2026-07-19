@@ -46,6 +46,23 @@ def _norm_time(v) -> str | None:
     return f"{int(m.group(1)):02d}:{m.group(2)}" if m else None
 
 
+def _memo_digest(pairs: list, limit: int = 6) -> str | None:
+    """[(날짜, 메모)] → 최근순 요약 'MM.DD 메모 / MM.DD 메모'.
+
+    메모는 '그 방문'에 적은 것이라 날짜가 붙어야 의미가 산다(예전엔 가나다순으로 뭉쳐 언제 적은
+    건지 알 수 없었다). 같은 문구가 여러 방문에 반복되면 가장 최근 것만 남긴다."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for d, m in sorted(pairs, reverse=True):
+        if m in seen:
+            continue
+        seen.add(m)
+        out.append(f"{str(d)[5:].replace('-', '.')} {m}")
+        if len(out) >= limit:
+            break
+    return (" / ".join(out)[:1000]) or None
+
+
 def _won(v) -> int:
     if v is None:
         return 0
@@ -140,16 +157,16 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
         won = _won(r.get("결제액"))
         svc = _clean(r.get("상세메뉴"))
         memo = _note(r.get("메모"))  # 매출 메모에도 네이버 보일러플레이트가 섞여옴 → 개별 메모만 남김
-        c = custs.setdefault(ext, {"ext_id": ext, "name": name, "phone": (r.get("전화번호") or "").strip() or None, "dates": set(), "total_won": 0, "memos": set()})
+        c = custs.setdefault(ext, {"ext_id": ext, "name": name, "phone": (r.get("전화번호") or "").strip() or None, "dates": set(), "total_won": 0, "memos": []})
         if name and not c["name"]:
             c["name"] = name
-        if memo:
-            c["memos"].add(memo)
+        if memo and d:
+            c["memos"].append((d, memo))  # 날짜와 함께 보관 — 요약을 최근순으로 만들기 위해
         if d:
             c["dates"].add(d)
         c["total_won"] += won
         raw_tx.append({"customer_ext": ext, "date": d, "time": _norm_time(r.get("시간")),
-                       "service": svc, "amount_won": won})
+                       "service": svc, "amount_won": won, "memo": memo})
 
     customers = []
     for ext, c in custs.items():
@@ -160,7 +177,7 @@ def normalize(rows: list[dict], reserve_rows: list[dict], staff: str | None = No
             "visit_count": len(dates), "first_visit": dates[-1] if dates else None,
             "last_visit": dates[0] if dates else None, "total_won": c["total_won"],
             "revisit_cycle_days": cycle, "revisit_state": state,
-            "pos_note": " · ".join(sorted(c.get("memos") or []))[:1000] or None,
+            "pos_note": _memo_digest(c.get("memos") or []),
         })
 
     # 안정 키: 고객번호-날짜-당일순번. 수집 창(31일/전체)과 무관하게 같은 방문=같은 키 → 병합 정확.
