@@ -19,13 +19,21 @@ import scrape  # noqa: E402
 
 
 class _FakeResp:
-    status_code = 200
-    text = ""
+    def __init__(self, data=None):
+        self.status_code = 200
+        self.text = ""
+        self._data = data if data is not None else []
+
+    def json(self):
+        return self._data
 
 
 class _FakeClient:
-    """httpx.Client 대역 — delete 호출을 calls 리스트에 기록."""
-    calls: list = []
+    """httpx.Client 대역 — get(범위 내 기존 ext_id 조회)·delete 호출 기록.
+    현 delete_stale 은 'not.in URL' 대신 기존 ext_id 를 읽어 로컬 차집합만 삭제한다."""
+    deletes: list = []
+    gets: list = []
+    existing: list = []       # _existing_ext_ids 가 돌려줄 기존 ext_id 목록
 
     def __init__(self, *a, **k):
         pass
@@ -36,14 +44,33 @@ class _FakeClient:
     def __exit__(self, *a):
         return False
 
+    def get(self, url, params=None, headers=None):
+        _FakeClient.gets.append({"url": url, "params": params or {}})
+        off = int((params or {}).get("offset", "0"))
+        rows = [{"ext_id": e} for e in _FakeClient.existing] if off == 0 else []
+        return _FakeResp(rows)
+
     def delete(self, url, params=None, headers=None):
-        _FakeClient.calls.append({"url": url, "params": params or {}})
+        _FakeClient.deletes.append({"url": url, "params": params or {}})
         return _FakeResp()
+
+
+def _deleted_ext_ids(deletes) -> set:
+    """delete 호출들의 ext_id=in.(...) 에서 실제 삭제된 ext_id 집합 추출."""
+    import re
+    out: set = set()
+    for c in deletes:
+        m = re.search(r"in\.\((.*)\)", c["params"].get("ext_id", ""))
+        if m:
+            out |= {s.strip().strip('"') for s in m.group(1).split(",") if s.strip()}
+    return out
 
 
 @pytest.fixture
 def fake_delete(monkeypatch):
-    _FakeClient.calls = []
+    _FakeClient.deletes = []
+    _FakeClient.gets = []
+    _FakeClient.existing = []
     monkeypatch.setattr(supa, "_URL", "http://supa.test")
     monkeypatch.setattr(supa, "_KEY", "svc-key")
     monkeypatch.setattr(supa.httpx, "Client", _FakeClient)
@@ -52,17 +79,17 @@ def fake_delete(monkeypatch):
 
 # ── H1: 빈 수집분 전체삭제 금지 ──
 def test_delete_stale_empty_without_allow_is_noop(fake_delete):
-    # 예약 수확 실패로 빈 리스트가 와도 DELETE 가 나가면 안 됨(전량 삭제 사고 방지)
+    # 예약 수확 실패로 빈 리스트가 와도 어떤 HTTP 도 나가면 안 됨(전량 삭제 사고 방지)
+    fake_delete.existing = ["B0", "B1"]
     supa.delete_stale("bookings", "tid-1", [])
-    assert fake_delete.calls == []            # HTTP 미발생 = 기존 예약 보존
+    assert fake_delete.deletes == [] and fake_delete.gets == []   # 조회·삭제 모두 미발생 = 보존
 
 
 def test_delete_stale_empty_with_allow_deletes_all(fake_delete):
-    # '진짜 0건' 을 확인한 호출자만 allow_empty=True → 테넌트 전체(스테일) 삭제
+    # '진짜 0건' 을 확인한 호출자만 allow_empty=True → 범위 내 기존분 전부(스테일) 삭제
+    fake_delete.existing = ["B0", "B1"]
     supa.delete_stale("bookings", "tid-1", [], allow_empty=True)
-    assert len(fake_delete.calls) == 1
-    p = dict(fake_delete.calls[0]["params"])
-    assert p["tenant_id"] == "eq.tid-1" and "ext_id" not in p   # ext_id 필터 없음 = 전체
+    assert _deleted_ext_ids(fake_delete.deletes) == {"B0", "B1"}   # 기존 전부 삭제
 
 
 def test_delete_guards_empty_tenant(fake_delete):
@@ -71,31 +98,31 @@ def test_delete_guards_empty_tenant(fake_delete):
         supa.delete("bookings", "")
     with pytest.raises(ValueError):
         supa.delete_stale("bookings", "", ["B0"])
-    assert fake_delete.calls == []          # 어떤 DELETE 도 나가지 않음
+    assert fake_delete.deletes == [] and fake_delete.gets == []   # 어떤 HTTP 도 나가지 않음
 
 
-def test_delete_stale_nonempty_uses_not_in(fake_delete):
+def test_delete_stale_deletes_only_stale(fake_delete):
+    # 기존 [B0,B1,B2] 중 수집분 [B0,B1] 유지 → B2(스테일)만 삭제(B0/B1 은 보존)
+    fake_delete.existing = ["B0", "B1", "B2"]
     supa.delete_stale("bookings", "tid-1", ["B0", "B1"])
-    assert len(fake_delete.calls) == 1
-    p = dict(fake_delete.calls[0]["params"])
-    assert p["tenant_id"] == "eq.tid-1"
-    assert p["ext_id"].startswith("not.in.(") and '"B0"' in p["ext_id"] and '"B1"' in p["ext_id"]
+    assert _deleted_ext_ids(fake_delete.deletes) == {"B2"}
 
 
 # ── H2: 거래 스테일 정리는 수집한 날짜 범위로 한정 ──
 def test_delete_stale_scopes_by_date_range(fake_delete):
-    # 창 밖 과거 거래를 지우지 않도록 date gte/lte 로 범위를 좁혀야 함
+    # 범위 밖 과거 거래를 안 지우도록, 기존 조회(GET)·삭제(DELETE) 모두 date gte/lte 로 좁혀야 함
+    fake_delete.existing = ["100-2026-06-01-0", "100-2026-06-03-0"]
     supa.delete_stale("transactions", "tid-1", ["100-2026-06-01-0"],
                       date_from="2026-06-01", date_to="2026-06-07")
-    assert len(fake_delete.calls) == 1
-    params = fake_delete.calls[0]["params"]      # list[tuple] (중복 date 키 허용)
-    keys = [k for k, _ in params]
-    assert keys.count("date") == 2               # gte + lte 둘 다
-    vals = dict((k, v) for k, v in params if k != "date")
-    dates = [v for k, v in params if k == "date"]
-    assert "gte.2026-06-01" in dates and "lte.2026-06-07" in dates
-    assert vals["tenant_id"] == "eq.tid-1"
-    assert vals["ext_id"].startswith("not.in.(")
+    # 기존 조회가 날짜 범위로 스코프됐는지
+    assert fake_delete.gets, "범위 내 기존 ext_id 조회 GET 발생해야"
+    gp = fake_delete.gets[0]["params"]
+    assert gp["tenant_id"] == "eq.tid-1"
+    assert gp.get("date") == ["gte.2026-06-01", "lte.2026-06-07"]
+    # 삭제도 범위 포함 + 스테일(수집분에 없는 것)만
+    assert _deleted_ext_ids(fake_delete.deletes) == {"100-2026-06-03-0"}
+    dp = fake_delete.deletes[0]["params"]
+    assert dp.get("date") == ["gte.2026-06-01", "lte.2026-06-07"]
 
 
 def test_normalize_tx_ext_ids_stable_same_day():
