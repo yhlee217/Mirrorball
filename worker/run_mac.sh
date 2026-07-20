@@ -1,4 +1,9 @@
 #!/bin/bash
+# ⛔ 2026-07-20 중단됨 — HandSOS 약관 제19조 1항 17호(스크래핑 금지) 위반.
+#    launchd 배치를 내린 상태이며, (주)예스오예스의 서면 승낙이나 정식 반출 경로로
+#    전환하기 전에는 재가동하지 말 것. 배경·재개 조건은 LAUNCH.md 최상단 참조.
+#    위반 시 매장 계정이 사전 통지 없이 해지될 수 있고, 잃는 쪽은 매장입니다.
+#
 # Mirrorball v2 수집 — HandSOS 스크레이프 → Supabase 업서트. 국내 IP(이 맥)에서 실행.
 # launchd(com.mirrorball.collect)가 30분마다 호출. 수동 테스트: FORCE=1 bash worker/run_mac.sh
 set -uo pipefail
