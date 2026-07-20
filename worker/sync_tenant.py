@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import traceback
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 
 import mirrorball_crypto as mc
 import scrape
@@ -22,7 +22,11 @@ def _recompute_aggregates(tid: str) -> int:
     for t in txs:
         if t.get("customer_id") and t.get("date"):
             byc[t["customer_id"]].append((t["date"], t.get("amount_won") or 0))
-    today = str(date.today())
+    today_d = date.today()
+    today = str(today_d)
+    # VIP 판정용 최근 방문 횟수. 앱이 매번 전체 거래를 훑지 않도록 여기서 미리 센다.
+    # 창은 3개 고정 — 설정(vip_recent_months)이 그중 하나를 고르므로 설정을 바꿔도 재수집 불필요.
+    cut90, cut180, cut365 = (str(today_d - timedelta(days=n)) for n in (90, 180, 365))
     updates = []
     for cid, items in byc.items():
         dates = sorted({d for d, _ in items}, reverse=True)
@@ -33,6 +37,9 @@ def _recompute_aggregates(tid: str) -> int:
             "last_visit": dates[0] if dates else None,
             "total_won": sum(a for _, a in items),
             "revisit_cycle_days": cycle, "revisit_state": state,
+            "visits_90d": sum(1 for d in dates if d >= cut90),
+            "visits_180d": sum(1 for d in dates if d >= cut180),
+            "visits_365d": sum(1 for d in dates if d >= cut365),
         })
     supa.upsert("customers", updates, "id")
     return len(updates)

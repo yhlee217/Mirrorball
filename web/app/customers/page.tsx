@@ -19,6 +19,9 @@ type Cust = {
   first_visit: string | null;
   total_won: number;
   churned_at: string | null;
+  visits_90d: number | null;
+  visits_180d: number | null;
+  visits_365d: number | null;
 };
 
 // 시술명 → 대분류(필터용). 매칭 안 되면 제외.
@@ -55,7 +58,7 @@ export default async function CustomersPage({
     fetchAllRows<Cust>((from, to) =>
       supabase
         .from('customers')
-        .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won,churned_at')
+        .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d')
         .order('id')
         .range(from, to)),
     fetchAllRows<{ customer_id: string | null }>((from, to) =>
@@ -117,6 +120,9 @@ export default async function CustomersPage({
     hasBooking: bookingSet.has(c.id),
     hasPhone: decoded[i].hasPhone,
     churned: !!c.churned_at, // 디자이너가 직접 이탈로 표시한 고객
+    visits_90d: c.visits_90d,
+    visits_180d: c.visits_180d,
+    visits_365d: c.visits_365d,
     services: Array.from(svcMap.get(c.id) ?? []),
   }));
 

@@ -24,6 +24,9 @@ type Cust = {
   memo: string | null;
   family_ext_id: string | null;
   churned_at: string | null;
+  visits_90d: number | null;
+  visits_180d: number | null;
+  visits_365d: number | null;
 };
 type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
 type Bk = { date: string; time: string | null; service: string | null; note: string | null };
@@ -49,7 +52,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at',
+      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -99,12 +102,21 @@ export default async function CustomerPage({ params }: { params: { id: string } 
 
   // 가족: 같은 tenant 내 동일 family_ext_id. 담당(디자이너)이 다른 가족원은 다른 tenant 라
   // 여기 안 보인다(멀티테넌트 격리 유지) — 각 디자이너는 '자기 고객인 가족원'만 본다.
-  type FamRow = { id: string; pii_enc: string | null; visit_count: number; last_visit: string | null; total_won: number };
+  type FamRow = {
+    id: string;
+    pii_enc: string | null;
+    visit_count: number;
+    last_visit: string | null;
+    total_won: number;
+    visits_90d: number | null;
+    visits_180d: number | null;
+    visits_365d: number | null;
+  };
   let familyList: { id: string; name: string; visit_count: number; last_visit: string | null; vip: boolean }[] = [];
   if (cust.family_ext_id) {
     const { data: fam } = await supabase
       .from('customers')
-      .select('id,pii_enc,visit_count,last_visit,total_won')
+      .select('id,pii_enc,visit_count,last_visit,total_won,visits_90d,visits_180d,visits_365d')
       .eq('tenant_id', cust.tenant_id)
       .eq('family_ext_id', cust.family_ext_id)
       .neq('id', cust.id)
@@ -116,7 +128,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
         name: await nameFrom(m.pii_enc),
         visit_count: m.visit_count,
         last_visit: m.last_visit,
-        vip: isVip({ total_won: m.total_won, visit_count: m.visit_count }, settings),
+        vip: isVip(m, settings),
       })),
     );
   }

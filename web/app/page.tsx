@@ -20,6 +20,9 @@ type Cust = {
   pii_enc: string | null;
   last_visit: string | null;
   churned_at: string | null;
+  visits_90d: number | null;
+  visits_180d: number | null;
+  visits_365d: number | null;
 };
 type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; pii_enc: string | null; staff: string | null; status: string | null; name?: string };
 
@@ -53,7 +56,7 @@ export default async function Page() {
       .order('time', { ascending: true, nullsFirst: false })
       .limit(200),
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select('id,ext_id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit,churned_at').order('id').range(from, to)),
+      supabase.from('customers').select('id,ext_id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit,churned_at,visits_90d,visits_180d,visits_365d').order('id').range(from, to)),
   ]);
 
   const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null; settings: unknown } | null;

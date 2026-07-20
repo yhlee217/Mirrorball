@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { mergeSettings } from '@/lib/settings';
+import { unwrapDek, decryptPII } from '@/lib/crypto';
 import SettingsForm from './settings-form';
+import ChurnedList from './churned-list';
 import LogoutButton from '../logout-button';
 
 export default async function SettingsPage() {
@@ -19,14 +21,51 @@ export default async function SettingsPage() {
   if (!mem) redirect('/');
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
-  const [{ data: tenant }, { count }, { data: latest }] = await Promise.all([
-    supabase.from('tenants').select('salon_name,designer_name,slug,settings').eq('id', tenantId).maybeSingle(),
+  const [{ data: tenant }, { count }, { data: latest }, { data: churned }] = await Promise.all([
+    supabase.from('tenants').select('salon_name,designer_name,slug,settings,dek_wrapped').eq('id', tenantId).maybeSingle(),
     supabase.from('customers').select('id', { count: 'exact', head: true }),
     supabase.from('transactions').select('date').order('date', { ascending: false }).limit(1),
+    supabase
+      .from('customers')
+      .select('id,pii_enc,visit_count,last_visit,churned_at')
+      .not('churned_at', 'is', null)
+      .order('churned_at', { ascending: false })
+      .limit(200),
   ]);
-  const t = tenant as { salon_name: string; designer_name: string | null; slug: string; settings: unknown } | null;
+  const t = tenant as {
+    salon_name: string;
+    designer_name: string | null;
+    slug: string;
+    settings: unknown;
+    dek_wrapped: string | null;
+  } | null;
   const settings = mergeSettings(t?.settings);
   const lastDate = (latest as { date: string }[] | null)?.[0]?.date ?? null;
+
+  // 이탈 표시 고객 — 이름은 테넌트 키로 복호화(다른 화면과 동일).
+  type ChurnRow = { id: string; pii_enc: string | null; visit_count: number; last_visit: string | null; churned_at: string };
+  let dek: Uint8Array | null = null;
+  if (t?.dek_wrapped) {
+    try {
+      dek = await unwrapDek(t.dek_wrapped);
+    } catch {
+      dek = null;
+    }
+  }
+  const churnedRows = await Promise.all(
+    ((churned as ChurnRow[]) ?? []).map(async (c) => {
+      let name = '고객';
+      if (dek && c.pii_enc) {
+        try {
+          const p = await decryptPII(c.pii_enc, dek);
+          if (typeof p.name === 'string' && p.name) name = p.name;
+        } catch {
+          /* noop */
+        }
+      }
+      return { id: c.id, name, visit_count: c.visit_count, last_visit: c.last_visit, churned_at: c.churned_at };
+    }),
+  );
 
   return (
     <main className="wrap">
@@ -41,6 +80,14 @@ export default async function SettingsPage() {
           salon={t?.salon_name ?? ''}
           slug={t?.slug ?? ''}
         />
+
+        <div className="card">
+          <div className="ch">이탈 고객 {churnedRows.length > 0 ? `· ${churnedRows.length}명` : ''}</div>
+          <ChurnedList rows={churnedRows} />
+          <p className="note" style={{ padding: '0 15px 13px' }}>
+            직접 이탈로 표시한 고객이에요. 챙길 고객·홈 신호에서 빠져 있고, 이력과 매출은 그대로 남아 있어요.
+          </p>
+        </div>
 
         <div className="card" style={{ padding: '14px 15px' }}>
           <div className="ch" style={{ padding: 0, marginBottom: 8 }}>데이터 수집</div>

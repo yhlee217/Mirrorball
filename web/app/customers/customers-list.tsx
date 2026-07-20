@@ -14,6 +14,9 @@ type Row = {
   hasBooking: boolean;
   hasPhone: boolean;
   churned: boolean;
+  visits_90d: number | null; // VIP 판정(최근 자주 오심)용 — 워커가 미리 집계
+  visits_180d: number | null;
+  visits_365d: number | null;
   services: string[];
 };
 

@@ -82,6 +82,7 @@ a.hs:active{background:var(--soft)}
 .signal-card.c{background:var(--soft)}
 .signal-card.c .sig-t{color:var(--muted)}
 .churn-set{display:block;margin:0 0 13px auto;padding:4px 2px;font-size:11.5px;font-family:inherit;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.churn-undo{flex-shrink:0;font-size:11.5px;font-weight:700;font-family:inherit;color:var(--accent-d);background:var(--soft);border:none;border-radius:9px;padding:6px 11px;cursor:pointer}
 .signal-card .sig-w{font-size:12.5px;color:var(--muted);margin-top:3px}
 .tags{display:flex;flex-wrap:wrap;gap:6px}
 .tagx{background:var(--soft);color:var(--accent-d);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer}
