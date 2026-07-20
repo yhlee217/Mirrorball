@@ -42,6 +42,21 @@ export default function HomeView({
           </div>
         </div>
 
+        <div className="hsig">
+          <Link href="/customers?filter=overdue" className="hs x" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="hn">{signals.overdue}</div><div className="hl">이탈위험 ›</div>
+          </Link>
+          <Link href="/customers?filter=due" className="hs d" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="hn">{signals.due}</div><div className="hl">재방문도래 ›</div>
+          </Link>
+          <Link href="/customers?filter=new" className="hs g" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="hn">{signals.new}</div><div className="hl">신규 ›</div>
+          </Link>
+          <Link href="/customers?filter=vip" className="hs v" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="hn">{signals.vip}</div><div className="hl">VIP ›</div>
+          </Link>
+        </div>
+
         <div className="chips">
           <Link href="/alerts" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="nnum">{careCount}</div>
@@ -53,18 +68,11 @@ export default function HomeView({
           </a>
           <Link href="/visits" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="nnum">{todayVisits}</div>
-            <div className="l">오늘 방문 ›</div>
+            <div className="l">방문 관리 ›</div>
           </Link>
           <Link href="/stats" className="chip chip-flat" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="l">기록 · 통계 ›</div>
           </Link>
-        </div>
-
-        <div className="hsig">
-          <div className="hs x"><div className="hn">{signals.overdue}</div><div className="hl">이탈위험</div></div>
-          <div className="hs d"><div className="hn">{signals.due}</div><div className="hl">재방문도래</div></div>
-          <div className="hs g"><div className="hn">{signals.new}</div><div className="hl">신규</div></div>
-          <div className="hs v"><div className="hn">{signals.vip}</div><div className="hl">VIP</div></div>
         </div>
 
         <div className="card" id="bookings" style={{ scrollMarginTop: 12 }}>

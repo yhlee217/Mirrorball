@@ -20,9 +20,18 @@ const DAY = 86400000;
 const daysSince = (d: string | null) => (d ? Math.floor((Date.now() - new Date(d).getTime()) / DAY) : Infinity);
 const won = (n: number) => (n >= 10000 ? Math.round(n / 10000) + '만' : String(n));
 
-export default function CustomersList({ rows, settings }: { rows: Row[]; settings: TenantSettings }) {
+export default function CustomersList({
+  rows,
+  settings,
+  initialFilter = null,
+}: {
+  rows: Row[];
+  settings: TenantSettings;
+  initialFilter?: string | null;
+}) {
   const [q, setQ] = useState('');
-  const [chips, setChips] = useState<Set<string>>(new Set());
+  // 홈 신호 타일(이탈위험/재방문도래/신규/VIP 등)에서 넘어온 초기 필터를 켠 상태로 시작.
+  const [chips, setChips] = useState<Set<string>>(() => new Set(initialFilter ? [initialFilter] : []));
   const [visitF, setVisitF] = useState('');
   const [revF, setRevF] = useState('');
   const [recF, setRecF] = useState('');
