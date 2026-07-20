@@ -127,7 +127,6 @@ export default async function Page() {
   return (
     <HomeView
       designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
-      totalCustomers={cust.length}
       recentVisits={recentVisits}
       signals={signals}
       care={care}

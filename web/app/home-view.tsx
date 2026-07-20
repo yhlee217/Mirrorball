@@ -8,14 +8,12 @@ const STATE_LABEL: Record<string, string> = { overdue: '이탈 위험', due: '�
 
 export default function HomeView({
   designer,
-  totalCustomers,
   recentVisits,
   signals,
   care,
   bookings,
 }: {
   designer: string;
-  totalCustomers: number;
   recentVisits: number; // 방문 관리 화면과 같은 최근 14일 기준
   signals: Signals;
   care: Care[];
@@ -37,9 +35,6 @@ export default function HomeView({
             <Link href="/settings" className="gear" aria-label="설정" title="설정">⚙</Link>
           </div>
           <h2>{designer}님, 안녕하세요 👋</h2>
-          <div className="s">
-            챙길 고객 {careCount} · 다가오는 예약 {activeBk} · 전체 {totalCustomers}명
-          </div>
         </div>
 
         <div className="hsig">
