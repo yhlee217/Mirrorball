@@ -8,6 +8,7 @@ import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow, isUpcoming } from '@/lib/kst';
 import CustomerNote from './customer-note';
+import ChurnToggle from './churn-toggle';
 
 type Cust = {
   id: string;
@@ -22,6 +23,7 @@ type Cust = {
   prefer_tags: string[] | null;
   memo: string | null;
   family_ext_id: string | null;
+  churned_at: string | null;
 };
 type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
 type Bk = { date: string; time: string | null; service: string | null; note: string | null };
@@ -47,7 +49,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id',
+      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -164,7 +166,8 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           </div>
         </div>
 
-        {(overdue || due) && (
+        {/* 이탈로 표시한 고객은 '이탈 위험' 추정을 띄우지 않는다 — 이미 확정된 걸 재촉하는 꼴이라. */}
+        {!cust.churned_at && (overdue || due) && (
           <div className={'signal-card ' + (overdue ? 'x' : 'd')}>
             <div className="sig-t">{SIGNAL[cust.revisit_state as string]}</div>
             <div className="sig-w">
@@ -173,6 +176,8 @@ export default async function CustomerPage({ params }: { params: { id: string } 
             </div>
           </div>
         )}
+
+        <ChurnToggle id={cust.id} churnedAt={cust.churned_at} />
 
         <div className="stat-grid">
           <div className="stat"><div className="sn">{cust.visit_count}</div><div className="sl">방문</div></div>

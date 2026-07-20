@@ -13,6 +13,7 @@ type Row = {
   state: string | null;
   hasBooking: boolean;
   hasPhone: boolean;
+  churned: boolean;
   services: string[];
 };
 
@@ -55,11 +56,13 @@ export default function CustomersList({
     let f = rows;
     if (term) f = f.filter((r) => r.name.includes(term));
     // 이탈위험·재방문도래는 홈 신호와 같은 기준으로 — '이탈 판정'(설정: N개월 초과 미방문 등)
-    // 고객은 홈 숫자에서 빠지므로 여기서도 빼야 '눌렀더니 인원이 다른' 불일치가 안 생긴다.
-    if (chips.has('overdue')) f = f.filter((r) => r.state === 'overdue' && !isLapsed(r, settings));
-    if (chips.has('due')) f = f.filter((r) => r.state === 'due' && !isLapsed(r, settings));
-    if (chips.has('new')) f = f.filter((r) => r.state === 'new');
-    if (chips.has('vip')) f = f.filter((r) => isVipS(r, settings));
+    // 고객과 디자이너가 직접 이탈 표시한 고객은 홈 숫자에서 빠지므로 여기서도 빼야
+    // '눌렀더니 인원이 다른' 불일치가 안 생긴다.
+    if (chips.has('overdue')) f = f.filter((r) => r.state === 'overdue' && !isLapsed(r, settings) && !r.churned);
+    if (chips.has('due')) f = f.filter((r) => r.state === 'due' && !isLapsed(r, settings) && !r.churned);
+    if (chips.has('new')) f = f.filter((r) => r.state === 'new' && !r.churned);
+    if (chips.has('vip')) f = f.filter((r) => isVipS(r, settings) && !r.churned);
+    if (chips.has('churned')) f = f.filter((r) => r.churned);
     if (chips.has('booking')) f = f.filter((r) => r.hasBooking);
     if (chips.has('nophone')) f = f.filter((r) => !r.hasPhone);
     if (visitF === 'reg') f = f.filter((r) => r.visit_count >= 10);
@@ -103,6 +106,7 @@ export default function CustomersList({
         <Chip k="vip" label="VIP" />
         <Chip k="booking" label="예약있음" />
         <Chip k="nophone" label="전화없음" />
+        <Chip k="churned" label="이탈" />
       </div>
 
       <div className="fsel">
@@ -153,13 +157,15 @@ export default function CustomersList({
               <div className="bd">
                 <div className="nm">
                   {r.name} 님{vip(r) ? <span className="tag-vip">VIP</span> : null}
+                  {r.churned ? <span className="tag-off">이탈</span> : null}
                 </div>
                 <div className="sub">
                   {r.visit_count}회 · {won(r.total_won)}원{r.last_visit ? ' · 마지막 ' + r.last_visit : ''}
                 </div>
               </div>
               <div className="rt">
-                {r.state === 'overdue' ? '이탈 위험' : r.state === 'due' ? '재방문 도래' : r.hasBooking ? '예약 있음' : ''}
+                {/* 이탈로 확정한 고객에게 '이탈 위험'(=아직 붙잡을 수 있다) 추정을 띄우지 않는다 */}
+                {r.churned ? '' : r.state === 'overdue' ? '이탈 위험' : r.state === 'due' ? '재방문 도래' : r.hasBooking ? '예약 있음' : ''}
               </div>
             </Link>
           ))

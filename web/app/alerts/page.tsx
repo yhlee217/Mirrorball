@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
-import { fetchAllRows, isRealCustomer } from '@/lib/customers';
+import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
 import { mergeSettings, isLapsed } from '@/lib/settings';
 import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
@@ -18,6 +18,7 @@ type Cust = {
   revisit_cycle_days: number | null;
   last_visit: string | null;
   visit_count: number;
+  churned_at: string | null;
 };
 
 export default async function AlertsPage() {
@@ -34,7 +35,7 @@ export default async function AlertsPage() {
   const [{ data: tenant }, customers] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select('id,ext_id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count').in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
+      supabase.from('customers').select('id,ext_id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count,churned_at').in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
   ]);
 
   const tRow = tenant as { dek_wrapped: string | null; settings: unknown } | null;
@@ -59,7 +60,7 @@ export default async function AlertsPage() {
   };
 
   const base = ((customers as Cust[]) ?? [])
-    .filter((c) => isRealCustomer(c.ext_id) && !isLapsed(c, settings))
+    .filter((c) => isRealCustomer(c.ext_id) && !isChurned(c) && !isLapsed(c, settings))
     .sort((a, b) => (a.revisit_state === 'overdue' ? 0 : 1) - (b.revisit_state === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count)
     .slice(0, 50);
   const names = await Promise.all(base.map((c) => nameFrom(c.pii_enc)));

@@ -18,6 +18,7 @@ type Cust = {
   last_visit: string | null;
   first_visit: string | null;
   total_won: number;
+  churned_at: string | null;
 };
 
 // 시술명 → 대분류(필터용). 매칭 안 되면 제외.
@@ -31,7 +32,7 @@ function svcCat(s: string | null): string | null {
 }
 
 // 홈의 신호 타일(이탈위험/재방문도래/신규/VIP)에서 넘어올 때 초기 필터를 받는다.
-const FILTERS = new Set(['overdue', 'due', 'new', 'vip', 'booking', 'nophone']);
+const FILTERS = new Set(['overdue', 'due', 'new', 'vip', 'booking', 'nophone', 'churned']);
 
 export default async function CustomersPage({
   searchParams,
@@ -54,7 +55,7 @@ export default async function CustomersPage({
     fetchAllRows<Cust>((from, to) =>
       supabase
         .from('customers')
-        .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won')
+        .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won,churned_at')
         .order('id')
         .range(from, to)),
     fetchAllRows<{ customer_id: string | null }>((from, to) =>
@@ -115,6 +116,7 @@ export default async function CustomersPage({
     state: c.revisit_state,
     hasBooking: bookingSet.has(c.id),
     hasPhone: decoded[i].hasPhone,
+    churned: !!c.churned_at, // 디자이너가 직접 이탈로 표시한 고객
     services: Array.from(svcMap.get(c.id) ?? []),
   }));
 

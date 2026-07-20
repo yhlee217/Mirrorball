@@ -4,6 +4,10 @@ import type { PostgrestError } from '@supabase/supabase-js';
 // 집계는 이름 기반(비숫자) ext_id 라 관리 화면(홈·알림·목록)에서 제외한다.
 export const isRealCustomer = (extId: string | null | undefined): boolean => /^\d+$/.test(extId ?? '');
 
+// 디자이너가 직접 '이탈'로 표시한 고객. 자동 판정(revisit_state)은 추정일 뿐이라,
+// 확실히 안 오시는 걸 아는 사람이 확정한 이 표시가 우선한다 → 챙길 고객·홈 신호에서 제외.
+export const isChurned = (c: { churned_at?: string | null }): boolean => !!c.churned_at;
+
 /**
  * Supabase/PostgREST 는 요청당 최대 1000행(하드캡)만 반환한다.
  * 1000행이 넘을 수 있는 조회는 range 로 나눠 전부 가져와야 한다

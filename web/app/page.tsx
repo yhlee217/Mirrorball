@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
-import { fetchAllRows, isRealCustomer } from '@/lib/customers';
+import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
 import { mergeSettings, isVip, isLapsed } from '@/lib/settings';
 import { kstDatePlus, isUpcoming } from '@/lib/kst';
 import HomeView from './home-view';
@@ -19,6 +19,7 @@ type Cust = {
   total_won: number;
   pii_enc: string | null;
   last_visit: string | null;
+  churned_at: string | null;
 };
 type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; pii_enc: string | null; staff: string | null; status: string | null; name?: string };
 
@@ -52,7 +53,7 @@ export default async function Page() {
       .order('time', { ascending: true, nullsFirst: false })
       .limit(200),
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select('id,ext_id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit').order('id').range(from, to)),
+      supabase.from('customers').select('id,ext_id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit,churned_at').order('id').range(from, to)),
   ]);
 
   const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null; settings: unknown } | null;
@@ -84,6 +85,7 @@ export default async function Page() {
   const signals = { overdue: 0, due: 0, new: 0, vip: 0 };
   for (const c of cust) {
     if (!isRealCustomer(c.ext_id)) continue; // '손님' 등 미식별 워크인 집계는 관리대상 제외
+    if (isChurned(c)) continue; // 디자이너가 직접 이탈로 표시 — 모든 신호에서 제외
     if (c.revisit_state === 'overdue' || c.revisit_state === 'due') {
       if (!lapsed(c)) (signals as Record<string, number>)[c.revisit_state]++;
     } else if (c.revisit_state === 'new') {
@@ -94,7 +96,7 @@ export default async function Page() {
 
   const rank: Record<string, number> = { overdue: 0, due: 1 };
   const careBase = cust
-    .filter((c) => isRealCustomer(c.ext_id) && (c.revisit_state === 'overdue' || c.revisit_state === 'due') && !lapsed(c))
+    .filter((c) => isRealCustomer(c.ext_id) && !isChurned(c) && (c.revisit_state === 'overdue' || c.revisit_state === 'due') && !lapsed(c))
     .sort((a, b) => rank[a.revisit_state as string] - rank[b.revisit_state as string] || b.visit_count - a.visit_count)
     .slice(0, 20);
   const careNames = await Promise.all(careBase.map((c) => nameFrom(c.pii_enc)));
