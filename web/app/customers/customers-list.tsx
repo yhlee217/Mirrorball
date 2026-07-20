@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { isVip as isVipS, type TenantSettings } from '@/lib/settings';
+import { isVip as isVipS, isLapsed, type TenantSettings } from '@/lib/settings';
 
 type Row = {
   id: string;
@@ -54,8 +54,10 @@ export default function CustomersList({
     const term = q.trim();
     let f = rows;
     if (term) f = f.filter((r) => r.name.includes(term));
-    if (chips.has('overdue')) f = f.filter((r) => r.state === 'overdue');
-    if (chips.has('due')) f = f.filter((r) => r.state === 'due');
+    // 이탈위험·재방문도래는 홈 신호와 같은 기준으로 — '이탈 판정'(설정: N개월 초과 미방문 등)
+    // 고객은 홈 숫자에서 빠지므로 여기서도 빼야 '눌렀더니 인원이 다른' 불일치가 안 생긴다.
+    if (chips.has('overdue')) f = f.filter((r) => r.state === 'overdue' && !isLapsed(r, settings));
+    if (chips.has('due')) f = f.filter((r) => r.state === 'due' && !isLapsed(r, settings));
     if (chips.has('new')) f = f.filter((r) => r.state === 'new');
     if (chips.has('vip')) f = f.filter((r) => isVipS(r, settings));
     if (chips.has('booking')) f = f.filter((r) => r.hasBooking);

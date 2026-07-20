@@ -31,7 +31,9 @@ body{background:var(--bg);color:var(--ink);
 .hsig{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:14px}
 .hs{border:1px solid var(--line);border-radius:13px;padding:11px 4px 9px;text-align:center}
 .hs .hn{font-size:21px;font-weight:800;line-height:1}
-.hs .hl{font-size:10.5px;color:var(--muted);margin-top:4px}
+.hs .hl{font-size:10.5px;color:var(--muted);margin-top:4px;letter-spacing:-.2px}
+a.hs{display:block;-webkit-tap-highlight-color:transparent;transition:background .12s}
+a.hs:active{background:var(--soft)}
 .hs.x .hn{color:var(--rose)} .hs.d .hn{color:var(--gold)} .hs.g .hn{color:var(--sage)} .hs.v .hn{color:var(--gold)}
 
 .card{background:var(--paper);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:13px}

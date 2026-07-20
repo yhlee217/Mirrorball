@@ -9,14 +9,14 @@ const STATE_LABEL: Record<string, string> = { overdue: '이탈 위험', due: '�
 export default function HomeView({
   designer,
   totalCustomers,
-  todayVisits,
+  recentVisits,
   signals,
   care,
   bookings,
 }: {
   designer: string;
   totalCustomers: number;
-  todayVisits: number;
+  recentVisits: number; // 방문 관리 화면과 같은 최근 14일 기준
   signals: Signals;
   care: Care[];
   bookings: Booking[];
@@ -67,7 +67,7 @@ export default function HomeView({
             <div className="l">다가오는 예약 ›</div>
           </a>
           <Link href="/visits" className="chip" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="nnum">{todayVisits}</div>
+            <div className="nnum">{recentVisits}</div>
             <div className="l">방문 관리 ›</div>
           </Link>
           <Link href="/stats" className="chip chip-flat" style={{ textDecoration: 'none', color: 'inherit' }}>

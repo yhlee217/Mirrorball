@@ -6,7 +6,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings, isVip, isLapsed } from '@/lib/settings';
-import { kstNow, kstDatePlus, isUpcoming } from '@/lib/kst';
+import { kstDatePlus, isUpcoming } from '@/lib/kst';
 import HomeView from './home-view';
 import OnboardButton from './onboard-button';
 
@@ -113,21 +113,17 @@ export default async function Page() {
   const bkVisible = bk.filter((b) => (b.date || '') <= bkCutoff && isUpcoming(b.date, b.time)).slice(0, 20);
   const bkNamed = await Promise.all(bkVisible.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc) })));
 
-  // 오늘 다녀가신 분(매출 기준) — 방문 관리 진입점에 표시
-  const { data: todayTx } = await supabase
-    .from('transactions')
-    .select('customer_id')
-    .eq('date', kstNow().date)
-    .limit(500);
-  const todayVisits = new Set(
-    ((todayTx as { customer_id: string | null }[]) ?? []).map((x) => x.customer_id).filter(Boolean),
-  ).size;
+  // 방문 관리 진입점 숫자 — 그 화면이 보여주는 창(최근 14일)과 같은 기준으로 센다.
+  // '오늘' 기준이면 눌러 들어갔을 때 14일치가 나와 숫자와 화면이 어긋난다.
+  const recentTx = await fetchAllRows<{ customer_id: string | null }>((from, to) =>
+    supabase.from('transactions').select('customer_id').gte('date', kstDatePlus(-13)).order('id').range(from, to));
+  const recentVisits = new Set(recentTx.map((x) => x.customer_id).filter(Boolean)).size;
 
   return (
     <HomeView
       designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
       totalCustomers={cust.length}
-      todayVisits={todayVisits}
+      recentVisits={recentVisits}
       signals={signals}
       care={care}
       bookings={bkNamed}
