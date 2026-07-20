@@ -4,6 +4,15 @@
   --sage:#5C7A57; --gold:#9A7B33; --rose:#B0574A;
 }
 *{box-sizing:border-box}
+
+/* iOS: 링크·버튼을 길게 누르면 '링크 주소 복사' 콜아웃 메뉴가 뜬다. 앱처럼 쓰는 화면이라 끈다.
+   touch-action:manipulation 은 더블탭 확대를 없애 탭 반응 지연(약 300ms)도 같이 제거한다. */
+a,button{-webkit-touch-callout:none;touch-action:manipulation}
+/* 순수 조작 요소는 길게 눌러도 글자가 잡히지 않게. 고객 이름·메모 같은 '내용'은 선택 가능하게
+   남겨둔다(전부 막으면 복사해 쓸 수가 없다). */
+.tab,.chip,.hs,.btn,.fchip,.gear,.back,.sug,.tagx,.churn-set,.churn-undo,.seg a,.seg button,button{
+  -webkit-user-select:none;user-select:none}
+input,textarea,select{-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
 html,body{margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--ink);
