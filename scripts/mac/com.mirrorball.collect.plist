@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Mirrorball v2 수집 (macOS launchd). 30분마다 run_mac.sh 호출(영업시간 게이트는 스크립트 내부).
+  Mirrorball v2 수집 (macOS launchd). 주 1회(일요일 14:00 KST) run_mac.sh 호출 — 저빈도 재개(2026-07-23).
+  고객 관리 용도. HandSOS 약관 19조1항17호 리스크는 LAUNCH.md 참조(빈도와 무관한 금지).
   국내 IP 필요 → 반드시 이 맥에서 실행(GitHub 해외러너는 HandSOS 차단).
-  설치:  cp scripts/mac/com.mirrorball.collect.plist ~/Library/LaunchAgents/
-         launchctl load ~/Library/LaunchAgents/com.mirrorball.collect.plist
+  설치/재적용:  cp scripts/mac/com.mirrorball.collect.plist ~/Library/LaunchAgents/
+                launchctl unload ~/Library/LaunchAgents/com.mirrorball.collect.plist 2>/dev/null
+                launchctl load   ~/Library/LaunchAgents/com.mirrorball.collect.plist
+  주기 변경: 아래 StartCalendarInterval 에서 Weekday 삭제=매일, Hour/Minute 조정. 매일 원하면 Weekday 줄만 제거.
 -->
 <plist version="1.0">
 <dict>
@@ -19,8 +22,12 @@
   <dict>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
-  <key>StartInterval</key><integer>1800</integer>
-  <key>RunAtLoad</key><true/>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key><integer>0</integer>
+    <key>Hour</key><integer>14</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
   <key>StandardOutPath</key><string>/Users/eyonghwi/Desktop/Dev/Mirrorball/runs/collect.out.log</string>
   <key>StandardErrorPath</key><string>/Users/eyonghwi/Desktop/Dev/Mirrorball/runs/collect.err.log</string>
 </dict>

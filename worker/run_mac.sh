@@ -1,11 +1,11 @@
 #!/bin/bash
-# ⛔ 2026-07-20 중단됨 — HandSOS 약관 제19조 1항 17호(스크래핑 금지) 위반.
-#    launchd 배치를 내린 상태이며, (주)예스오예스의 서면 승낙이나 정식 반출 경로로
-#    전환하기 전에는 재가동하지 말 것. 배경·재개 조건은 LAUNCH.md 최상단 참조.
-#    위반 시 매장 계정이 사전 통지 없이 해지될 수 있고, 잃는 쪽은 매장입니다.
+# ⚠ 2026-07-23 저빈도 재개(리스크 인지) — HandSOS 약관 19조1항17호(스크래핑 금지)는
+#    빈도·목적과 무관한 금지라 위반 리스크는 남아 있음(계정 해지 시 잃는 쪽은 매장).
+#    운영자 판단으로 '고객 관리용·주 1회'로만 재개. 탐지 확률은 낮지만 저확률·고피해 꼬리
+#    리스크로 관리. 근본 해소는 '매장이 직접 내보낸 파일 읽기'로 전환 — LAUNCH.md 최상단 참조.
 #
 # Mirrorball v2 수집 — HandSOS 스크레이프 → Supabase 업서트. 국내 IP(이 맥)에서 실행.
-# launchd(com.mirrorball.collect)가 30분마다 호출. 수동 테스트: FORCE=1 bash worker/run_mac.sh
+# launchd(com.mirrorball.collect)가 주 1회(일요일 14:00 KST) 호출. 수동 테스트: FORCE=1 bash worker/run_mac.sh
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,6 +29,7 @@ fi
 export SUPABASE_URL="${SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}"
 
 echo "[$(ts)] collect 시작"
-SYNC_ALL=1 "$PY" worker/run.py; rc=$?
+# 주 1회 실행이라 한 번 걸러도 누락 없게 14일 겹침 창으로 수집(증분·과거 백필분은 보존).
+SYNC_ALL=1 SYNC_DAYS="${SYNC_DAYS:-14}" "$PY" worker/run.py; rc=$?
 echo "[$(ts)] collect 종료(exit=$rc)"
 exit $rc
