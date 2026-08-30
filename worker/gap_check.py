@@ -37,6 +37,18 @@ import supa  # noqa: E402
 MARGIN_DAYS = 14  # 겹침 여유 — 경계에서 놓치지 않게
 
 
+def _list_tenants() -> list:
+    """테넌트 목록. industry 컬럼은 세무 마이그레이션(0016) 적용 전 DB 에는 없으므로,
+    없으면 컬럼 없이 다시 조회하고 전부 미용실로 본다."""
+    try:
+        return supa._get("/tenants", {"select": "id,slug,salon_name,industry", "order": "slug"})
+    except RuntimeError as exc:
+        if "industry" not in str(exc):
+            raise
+        print("참고: tenants.industry 없음 — 0016_tax_domain 미적용 DB 로 보고 전부 미용실로 처리\n")
+        return supa._get("/tenants", {"select": "id,slug,salon_name", "order": "slug"})
+
+
 def _last_date(table: str, tid: str) -> str | None:
     rows = supa._get(f"/{table}", {"tenant_id": f"eq.{tid}", "select": "date",
                                    "order": "date.desc", "limit": "1"})
@@ -62,7 +74,7 @@ def _recent_months(tid: str, today: date, months: int = 5) -> list[tuple[str, in
 
 def main() -> int:
     today = date.today()
-    tenants = supa._get("/tenants", {"select": "id,slug,salon_name,industry", "order": "slug"})
+    tenants = _list_tenants()
     if not tenants:
         print("테넌트 없음")
         return 1
