@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 
 import httpx
@@ -173,6 +174,28 @@ def insert(table: str, rows: list):
     with httpx.Client(timeout=60) as c:
         r = c.post(_base() + f"/{table}", headers=_headers({"Prefer": "return=minimal"}), json=rows)
         _check(r)
+
+
+def record_sync(tenant_id: str, stats: dict | None, error: str | None = None) -> None:
+    """수집 결과를 sync_jobs 에 한 줄 남긴다 — 앱이 '언제 기준 데이터인지' 말할 수 있게.
+
+    launchd 경로(run.py sync_all)는 큐를 쓰지 않아 지금껏 아무 흔적도 남기지 않았다.
+    30분마다 돌 때는 없어도 그만이었지만, 주 1회로 바뀐 뒤로는 '이 화면이 며칠 전 것인지'가
+    정보의 일부다. 기록이 실패해도 수집 자체는 성공으로 둬야 하므로 예외는 삼킨다.
+    """
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    try:
+        insert("sync_jobs", [{
+            "tenant_id": tenant_id,
+            "kind": "sync",
+            "status": "error" if error else "ok",
+            "started_at": now,
+            "finished_at": now,
+            "stats": stats,
+            "error": error,
+        }])
+    except Exception as exc:  # noqa: BLE001
+        print(f"  (수집 시각 기록 실패 — 수집 자체는 유효): {exc}")
 
 
 def patch(table: str, filters: dict, fields: dict) -> None:

@@ -23,3 +23,20 @@ export function isUpcoming(date: string | null | undefined, time: string | null 
   if (date < now.date) return false;
   return !time || time >= now.time;
 }
+
+/**
+ * 수집 시각을 'M월 D일' + 며칠 전으로. 주 1회 수집이라 화면이 언제 기준인지가 정보의 일부다.
+ * null 이면 아직 기록이 없는 것(이 기능 이전에 수집된 데이터) — 호출부에서 표시를 생략한다.
+ */
+export function kstStamp(iso: string | null | undefined): { label: string; daysAgo: number } | null {
+  if (!iso) return null;
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return null;
+  const k = new Date(t.getTime() + KST_OFFSET);
+  const n = new Date(Date.now() + KST_OFFSET);
+  const day = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  return {
+    label: `${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일`,
+    daysAgo: Math.max(0, Math.round((day(n) - day(k)) / 86400000)),
+  };
+}

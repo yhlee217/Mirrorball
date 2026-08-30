@@ -55,6 +55,8 @@ a.hs:active{background:var(--soft)}
 .li .rt{margin-left:auto;font-size:12px;color:var(--muted);text-align:right;flex-shrink:0;max-width:44%;line-height:1.35}
 .tag-new{display:inline-block;font-size:9.5px;font-weight:800;color:var(--sage);background:#E7EFE5;border-radius:20px;padding:1px 7px;margin-left:6px;vertical-align:middle}
 .li .bd{flex:1;min-width:0}
+/* 카드 머리말 아래 근거 한 줄 — 주 1회 수집이라 '언제 기준'인지 밝히는 자리 */
+.csub{font-size:11.5px;color:var(--muted);padding:2px 15px 10px;line-height:1.5}
 .empty{padding:20px 15px;color:var(--muted);font-size:13px;text-align:center}
 .sk{background:linear-gradient(90deg,var(--soft) 25%,#E6DFD4 37%,var(--soft) 63%);background-size:400% 100%;animation:shimmer 1.4s ease infinite;border-radius:13px}
 @keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}

@@ -173,8 +173,10 @@ def sync_salon(salon: dict) -> dict:
             continue
         try:
             out[slug] = _sync_one(target, rows, reserve, dz.get("staff"), res_ok)
+            supa.record_sync(target["id"], out[slug])   # 앱의 '수집 기준일' 근거
             print(f"  OK {slug}: {out[slug]}")
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
             out[slug] = {"error": str(exc)}
+            supa.record_sync(target["id"], None, error=str(exc))
     return out
