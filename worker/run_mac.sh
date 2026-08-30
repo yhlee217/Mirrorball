@@ -28,6 +28,19 @@ else
 fi
 export SUPABASE_URL="${SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}"
 
+# Playwright 크로미움 확인 — 주 1회 배치라 한 번 실패하면 일주일을 통째로 놓친다.
+# 브라우저가 없으면(플레이라이트 업데이트 후 흔함) 트레이스백 대신 고치는 법 한 줄로 끝낸다.
+if ! "$PY" - >/dev/null 2>&1 <<'PYCHK'
+import os, sys
+from playwright.sync_api import sync_playwright
+with sync_playwright() as p:
+    sys.exit(0 if os.path.exists(p.chromium.executable_path) else 1)
+PYCHK
+then
+  echo "[$(ts)] X Playwright 크로미움 없음 → 설치 후 재시도:  $PY -m playwright install chromium"
+  exit 1
+fi
+
 echo "[$(ts)] collect 시작"
 # 주 1회 실행이라 한 번 걸러도 누락 없게 14일 겹침 창으로 수집(증분·과거 백필분은 보존).
 SYNC_ALL=1 SYNC_DAYS="${SYNC_DAYS:-14}" "$PY" worker/run.py; rc=$?
