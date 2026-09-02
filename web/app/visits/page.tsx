@@ -8,6 +8,7 @@ import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
 import { kstNow } from '@/lib/kst';
+import { lastSynced, syncLine } from '@/lib/sync';
 import VisitsList from './visits-list';
 
 // 방문 관리 — '다녀가신 분'을 챙기는 화면(알림 탭이 '아직 안 오신 분'을 챙기는 것과 짝).
@@ -33,7 +34,7 @@ export default async function VisitsPage() {
   const today = kstNow().date;
   const since = new Date(Date.now() + KST - 13 * DAY).toISOString().slice(0, 10); // 최근 14일
 
-  const [{ data: tenant }, txs] = await Promise.all([
+  const [{ data: tenant }, txs, synced] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Tx>((from, to) =>
       supabase
@@ -42,6 +43,7 @@ export default async function VisitsPage() {
         .gte('date', since)
         .order('id')
         .range(from, to)),
+    lastSynced(supabase),
   ]);
 
   // 같은 날 여러 시술은 한 번의 방문으로 묶는다.
@@ -120,7 +122,8 @@ export default async function VisitsPage() {
             <span>Visits</span>
           </div>
           <h2>방문 관리</h2>
-          <div className="s">최근 다녀가신 분 — 리뷰 요청하고 메모 남기기 좋아요</div>
+          <div className="s">지난 2주 다녀가신 분 — 리뷰 요청하고 메모 남기기 좋아요</div>
+          {syncLine(synced) ? <div className="s">{syncLine(synced)} · 그 뒤 방문은 다음 수집에 들어와요</div> : null}
         </div>
         <VisitsList items={items} today={today} yesterday={yesterday} />
       </div>

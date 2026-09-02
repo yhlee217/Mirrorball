@@ -126,7 +126,8 @@ export default async function SettingsPage() {
           <div className="ch" style={{ padding: 0, marginBottom: 8 }}>데이터 수집</div>
           <div className="set-row">고객 {count ?? 0}명 수집됨 · 최근 방문기록 {lastDate ?? '-'}</div>
           <p className="note">
-            수집은 매장 PC(맥)에서 영업시간 중 30분마다 자동 실행됩니다. 재연결이 필요하면 관리자에게 문의하세요.
+            수집은 매장 PC(맥)에서 <b>매주 일요일 1회</b> 자동 실행됩니다. 그래서 화면은 마지막 수집 시점 기준이고,
+            그 뒤에 생긴 방문·예약은 다음 주에 반영돼요. 재연결이 필요하면 관리자에게 문의하세요.
           </p>
         </div>
 

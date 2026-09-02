@@ -6,7 +6,8 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
 import { mergeSettings, isVip, isLapsed } from '@/lib/settings';
-import { kstDatePlus, isUpcoming, kstStamp } from '@/lib/kst';
+import { kstDatePlus, isUpcoming } from '@/lib/kst';
+import { lastSynced } from '@/lib/sync';
 import HomeView from './home-view';
 import OnboardButton from './onboard-button';
 
@@ -47,7 +48,7 @@ export default async function Page() {
   }
 
   const tenantId = (mem as { tenant_id: string }).tenant_id;
-  const [{ data: tenant }, { data: bookings }, customers, { data: lastJob }] = await Promise.all([
+  const [{ data: tenant }, { data: bookings }, customers, synced] = await Promise.all([
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     supabase
       .from('bookings')
@@ -57,10 +58,7 @@ export default async function Page() {
       .limit(200),
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select('id,ext_id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit,churned_at,visits_90d,visits_180d,visits_365d').order('id').range(from, to)),
-    // 마지막 성공 수집 시각 — 주 1회라 '이 화면이 언제 기준인지'를 밝혀야 한다.
-    // 이 기록을 남기기 전에 수집된 데이터면 결과가 없고, 그때는 표시를 생략한다.
-    supabase.from('sync_jobs').select('finished_at').eq('status', 'ok')
-      .order('finished_at', { ascending: false }).limit(1).maybeSingle(),
+    lastSynced(supabase), // 주 1회라 '이 화면이 언제 기준인지'를 밝혀야 한다
   ]);
 
   const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null; settings: unknown } | null;
@@ -131,7 +129,7 @@ export default async function Page() {
   return (
     <HomeView
       designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
-      synced={kstStamp((lastJob as { finished_at: string | null } | null)?.finished_at)}
+      synced={synced}
       recentVisits={recentVisits}
       signals={signals}
       care={care}

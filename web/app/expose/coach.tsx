@@ -68,7 +68,7 @@ export default function Coach({
             key={t.id}
             title={`${t.name} 님`}
             sub={[t.last_visit, friendlyService(t.service)].filter(Boolean).join(' · ')}
-            initial={reviewRequestFor(t.name, t.service ?? undefined)}
+            initial={reviewRequestFor(t.name, t.service ?? undefined, t.last_visit)}
           />
         ))
       ) : (

@@ -8,6 +8,7 @@ import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
 import { mergeSettings, isLapsed } from '@/lib/settings';
 import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
+import { lastSynced, syncLine } from '@/lib/sync';
 import AlertsList from './alerts-list';
 
 type Cust = {
@@ -114,13 +115,17 @@ export default async function AlertsPage() {
     return { id: c.id, name, state: c.revisit_state as string, why, draft };
   });
 
+  // 이탈·재방문 판정은 월 단위라 주 1회 수집으로도 충분하지만, 어느 시점 기준인지는 밝힌다.
+  const synced = await lastSynced(supabase);
+  const basis = syncLine(synced);
+
   return (
     <main className="wrap">
       <div className="bar">
-        <div className="ttl">오늘 챙길 고객</div>
+        <div className="ttl">챙길 고객</div>
       </div>
       <div className="body">
-        <div className="sec-h">자동 발송 X · 문구만 복사해서 직접</div>
+        <div className="sec-h">자동 발송 X · 문구만 복사해서 직접{basis ? ` · ${basis}` : ''}</div>
         <AlertsList items={items} />
       </div>
     </main>

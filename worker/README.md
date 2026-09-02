@@ -19,11 +19,25 @@ HANDSOS_ID=<아이디> HANDSOS_PW=<비번> node --env-file=.env.local scripts/se
 ```
 > ⚠ 디자이너의 **명시적 동의 + 위탁 약관**을 전제로만. ToS 저촉 리스크 인지.
 
-## 배포 A — GitHub Actions (무료 · 권장)
-`.github/workflows/collect.yml` 이 크론(KST 영업시간 30분마다)으로 `SYNC_ALL=1 python worker/run.py` 실행 → 자격증명 등록된 전 테넌트 수집. 서버·비용 없음.
-1. 리포 **Settings → Secrets and variables → Actions** 에 시크릿 3개: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MIRRORBALL_KEK`(web/.env.local 과 동일 값).
-2. 스케줄 트리거는 **기본 브랜치**의 워크플로만 동작 → 이 파일이 기본 브랜치에 있어야 함(claude 브랜치면 머지/기본브랜치 변경).
-3. **Actions 탭 → collect → Run workflow** 로 수동 테스트.
+## 배포 A — 맥 launchd (현행 · 이것만 실제로 동작)
+HandSOS 가 해외 IP 를 막아 **국내 IP 인 매장 맥에서만** 수집이 된다. `scripts/mac/com.mirrorball.collect.plist`
+가 `worker/run_mac.sh` 를 **주 1회(일요일 14:00 KST)** 호출한다. 설치·주기 변경은 plist 주석 참고.
+
+```bash
+cp scripts/mac/com.mirrorball.collect.plist ~/Library/LaunchAgents/
+launchctl unload ~/Library/LaunchAgents/com.mirrorball.collect.plist 2>/dev/null
+launchctl load   ~/Library/LaunchAgents/com.mirrorball.collect.plist
+FORCE=1 bash worker/run_mac.sh          # 즉시 1회(영업시간 게이트 무시)
+.venv/bin/python worker/gap_check.py    # 어디까지 모았는지 · 백필 SYNC_DAYS 산출
+```
+
+- 주 1회라 한 번 걸러도 안 비도록 **14일 겹침 창**으로 수집한다(`SYNC_DAYS` 기본 14).
+- 수집 결과는 `sync_jobs` 에 남고, 앱이 그걸 읽어 '언제 기준 화면인지'를 표시한다.
+- 약관 리스크(19조1항17호)와 재개 조건은 `LAUNCH.md` 최상단 참조.
+
+## 배포 A-폐기 — GitHub Actions
+`.github/workflows/collect.yml` 은 **자동 스케줄이 제거된 상태**다(해외 러너 IP → HandSOS 차단으로
+30분마다 실패했음). `workflow_dispatch` 만 남아 있으나 **수동 실행도 같은 이유로 실패**한다. 쓰지 말 것.
 
 ## 배포 B — Fly.io (유료 · 선택)
 > Fly는 무료 티어가 없어짐(종량제 ~$5/월). 무료로는 A(GitHub Actions) 권장.

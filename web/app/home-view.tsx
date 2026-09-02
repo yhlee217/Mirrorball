@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { syncLine } from '@/lib/sync';
 
 type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; status: string | null; name?: string };
 type Care = { id: string; name: string; state: string; visit_count: number; last_visit: string | null };
@@ -30,12 +31,7 @@ export default function HomeView({
   const monthsAgo = (d: string | null) => (d ? Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000)) : null);
 
   // 수집은 주 1회다. 며칠 전 자료인지 모르고 보면 '예약이 없다'를 사실로 오해한다.
-  // 주기(7일)를 한 번 놓친 수준이면 조용히 넘기지 않고 화면에서 알린다 — 주 1회의 진짜 위험은
-  // 수집이 멈춘 걸 몇 주씩 모르는 것이다.
-  const stale = !!synced && synced.daysAgo >= 10;
-  const freshness = synced
-    ? `${synced.label} 수집 기준 · ${synced.daysAgo === 0 ? '오늘 갱신' : `${synced.daysAgo}일 전`}${stale ? ' · 수집이 밀렸어요' : ''}`
-    : null;
+  const freshness = syncLine(synced);
   const bookingBasis = synced
     ? `${synced.label} 수집 기준 · ${activeBk}건 — 그 뒤로 잡힌 예약은 HandSOS에서 확인하세요`
     : `수집 시점 기준 · ${activeBk}건 — 그 뒤로 잡힌 예약은 HandSOS에서 확인하세요`;
