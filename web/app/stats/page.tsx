@@ -4,6 +4,8 @@ export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
+import { kstNow } from '@/lib/kst';
+import { lastSynced } from '@/lib/sync';
 import { fetchAllRows } from '@/lib/customers';
 
 function won(n: number): string {
@@ -45,12 +47,19 @@ export default async function StatsPage() {
   const newCust = totalCustomers - repeatCust;
   const retention = totalCustomers ? Math.round((repeatCust / totalCustomers) * 100) : 0;
 
-  // 월별 매출(최근 6개월)
-  const now = new Date();
-  const months: { label: string; key: string; rev: number }[] = [];
+  // 월별 매출(최근 6개월). 거래 날짜가 KST 라 '이번 달'도 KST 로 잡는다(엣지는 UTC).
+  const [ky, km] = kstNow().date.split('-').map(Number);
+  const months: { label: string; key: string; rev: number; partial: boolean }[] = [];
   for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ label: `${d.getMonth() + 1}월`, key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, rev: 0 });
+    const d = new Date(Date.UTC(ky, km - 1 - i, 1));
+    months.push({
+      label: `${d.getUTCMonth() + 1}월`,
+      key: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`,
+      rev: 0,
+      // 이번 달은 아직 안 끝났고, 게다가 수집이 주 1회라 마지막 며칠이 통째로 빠져 있다.
+      // 다른 달과 같은 막대로 그리면 '이번 달 매출이 떨어졌다'로 잘못 읽힌다.
+      partial: i === 0,
+    });
   }
   const mmap = new Map(months.map((m) => [m.key, m]));
   for (const t of tx) {
@@ -60,6 +69,7 @@ export default async function StatsPage() {
     }
   }
   const maxRev = Math.max(1, ...months.map((m) => m.rev));
+  const synced = await lastSynced(supabase);
 
   // 요일별 방문
   const days = DOW.map((label) => ({ label, count: 0 }));
@@ -117,11 +127,18 @@ export default async function StatsPage() {
             {months.map((m) => (
               <div className="b" key={m.key}>
                 <div className="bv">{Math.round(m.rev / 10000)}</div>
-                <div className="bar2" style={{ height: `${Math.round((m.rev / maxRev) * 80) + 3}px` }} />
-                <div className="bl">{m.label}</div>
+                <div
+                  className={`bar2${m.partial ? ' partial' : ''}`}
+                  style={{ height: `${Math.round((m.rev / maxRev) * 80) + 3}px` }}
+                />
+                <div className="bl">{m.label}{m.partial ? '*' : ''}</div>
               </div>
             ))}
           </div>
+          <p className="note">
+            * 이번 달은 아직 진행 중이고{synced ? ` ${synced.label} 수집 기준이라` : ' 수집 시점 기준이라'} 마지막 며칠이 빠져 있어요.
+            다른 달과 바로 비교하지 마세요.
+          </p>
         </div>
 
         <div className="card" style={{ padding: '14px 15px' }}>

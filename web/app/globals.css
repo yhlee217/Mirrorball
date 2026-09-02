@@ -154,6 +154,9 @@ a.hs:active{background:var(--soft)}
 .bars .bar2{width:100%;max-width:34px;background:var(--accent);border-radius:5px 5px 0 0;min-height:3px}
 .bars .bl{font-size:10px;color:var(--muted);margin-top:5px}
 .bars .bar2.sage{background:var(--sage)}
+/* 진행 중인 달 — 아직 안 끝났고 주 1회 수집이라 마지막 며칠이 빠져 있다.
+   같은 채도로 그리면 '매출이 꺾였다'로 잘못 읽혀서 흐리게 + 점선 윤곽으로 구분한다. */
+.bars .bar2.partial{background:transparent;border:1px dashed var(--accent);opacity:.85}
 .reten{display:flex;align-items:center;gap:12px}
 .reten-n{font-size:28px;font-weight:800;color:var(--accent-d);flex-shrink:0}
 .reten-b{flex:1;height:10px;background:var(--soft);border-radius:6px;overflow:hidden}
