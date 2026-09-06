@@ -7,6 +7,8 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
+import { kstNow } from '@/lib/kst';
+import { isActiveBooking } from '@/lib/bookings';
 import CustomersList from './customers-list';
 
 type Cust = {
@@ -61,8 +63,11 @@ export default async function CustomersPage({
         .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d')
         .order('id')
         .range(from, to)),
-    fetchAllRows<{ customer_id: string | null }>((from, to) =>
-      supabase.from('bookings').select('customer_id').order('id').range(from, to)),
+    // 지난 예약까지 '예약 있음'으로 세지 않도록 오늘 이후만. 수집이 주 1회라 DB 에는
+    // 이미 지나간 예약이 최대 일주일 남아 있다(수집 주기에 기대면 안 된다).
+    fetchAllRows<{ customer_id: string | null; date: string | null; time: string | null; status: string | null }>((from, to) =>
+      supabase.from('bookings').select('customer_id,date,time,status')
+        .gte('date', kstNow().date).order('id').range(from, to)),
     fetchAllRows<{ customer_id: string | null; service: string | null }>((from, to) =>
       supabase.from('transactions').select('customer_id,service').order('id').range(from, to)),
   ]);
@@ -80,7 +85,10 @@ export default async function CustomersPage({
   }
 
   const bookingSet = new Set(
-    (bookings as { customer_id: string | null }[]).map((b) => b.customer_id).filter(Boolean) as string[],
+    (bookings as { customer_id: string | null; date: string | null; time: string | null; status: string | null }[])
+      .filter((b) => isActiveBooking(b)) // 오늘 지난 시간·취소·노쇼 제외
+      .map((b) => b.customer_id)
+      .filter(Boolean) as string[],
   );
   const svcMap = new Map<string, Set<string>>();
   for (const t of txs as { customer_id: string | null; service: string | null }[]) {

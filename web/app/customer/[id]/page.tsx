@@ -6,7 +6,8 @@ import { redirect, notFound } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { mergeSettings, isVip } from '@/lib/settings';
-import { kstNow, isUpcoming } from '@/lib/kst';
+import { kstNow } from '@/lib/kst';
+import { isActiveBooking } from '@/lib/bookings';
 import CustomerNote from './customer-note';
 import ChurnToggle from './churn-toggle';
 
@@ -29,7 +30,7 @@ type Cust = {
   visits_365d: number | null;
 };
 type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
-type Bk = { date: string; time: string | null; service: string | null; note: string | null };
+type Bk = { date: string; time: string | null; service: string | null; note: string | null; status: string | null };
 
 const SIGNAL: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', new: '신규' };
 
@@ -70,7 +71,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
       .limit(100),
     supabase
       .from('bookings')
-      .select('date,time,service,note')
+      .select('date,time,service,note,status')
       .eq('customer_id', cust.id)
       .gte('date', today)
       .order('date', { ascending: true })
@@ -145,7 +146,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     memoRows.push({ id: h.id, date: h.date, memo: h.memo });
     if (memoRows.length >= 8) break;
   }
-  const nextBk = ((bk as Bk[]) ?? []).find((b) => isUpcoming(b.date, b.time)) ?? null; // 지난 시간 제외
+  const nextBk = ((bk as Bk[]) ?? []).find((b) => isActiveBooking(b)) ?? null; // 지난 시간·취소·노쇼 제외
   const vip = isVip(cust, settings);
   const avg = cust.visit_count ? Math.round(cust.total_won / cust.visit_count) : 0;
 

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { syncLine } from '@/lib/sync';
+import { isCancelled } from '@/lib/bookings';
 
 type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; status: string | null; name?: string };
 type Care = { id: string; name: string; state: string; visit_count: number; last_visit: string | null };
@@ -26,7 +27,7 @@ export default function HomeView({
   const careCount = signals.overdue + signals.due;
   const nameOf = (b: Booking) => b.name || '고객';
   // 취소·노쇼도 '그 시간이 비었다'는 정보라 목록엔 보여주되, 개수에는 넣지 않는다.
-  const isOff = (b: Booking) => !!b.status && /취소|노쇼/.test(b.status);
+  const isOff = (b: Booking) => isCancelled(b.status);
   const activeBk = bookings.filter((b) => !isOff(b)).length;
   const monthsAgo = (d: string | null) => (d ? Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000)) : null);
 
