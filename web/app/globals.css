@@ -136,14 +136,21 @@ a.hs:active{background:var(--soft)}
 .seg-b.on{background:var(--paper);color:var(--accent-d)}
 .tip{margin-top:7px;font-size:12.5px;line-height:1.5;color:var(--accent-d);background:var(--soft);border-radius:9px;padding:7px 9px}
 /* 방문 관리 — 홈케어 팁은 손님께 전할 말투라 모든 줄에 펼쳐두면 목록이 지저분하다.
-   기본은 접고 누를 때만 편다(네이티브 details 라 JS 불필요). 아바타 폭만큼 들여쓴다. */
-.tipd{padding:0 15px 10px 64px}
-.tipd>summary{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);
-  cursor:pointer;list-style:none;padding:2px 0;-webkit-tap-highlight-color:transparent}
+   기본은 접고, 여는 손잡이는 행 우측 상단의 작은 표식 하나로만 둔다(글자를 넣으니 줄이 길어 보였다).
+   네이티브 details 라 JS 불필요. 펼친 내용은 아바타 폭만큼 들여써서 이름 아래에 붙는다. */
+.visit{position:relative}
+.visit.has-tip .li{padding-right:40px}          /* 긴 이름이 표식 밑으로 들어가지 않게 */
+.tipd[open]{padding:0 15px 10px 64px}
+.tipd>summary{position:absolute;top:8px;right:9px;width:26px;height:26px;
+  display:flex;align-items:center;justify-content:center;border-radius:50%;
+  font-size:11px;line-height:1;color:var(--muted);cursor:pointer;list-style:none;
+  -webkit-tap-highlight-color:transparent}
 .tipd>summary::-webkit-details-marker{display:none}
-.tipd>summary::after{content:'▾';font-size:9px}
+.tipd>summary::after{content:'▾'}
+.tipd>summary:active{background:var(--soft)}
+.tipd[open]>summary{color:var(--accent)}
 .tipd[open]>summary::after{content:'▴'}
-.tipd .tip{margin-top:5px}
+.tipd .tip{margin-top:0}
 /* 카르테 '한눈에' — 흩어진 매장 메모를 맥 배치가 정리해 둔 것. 이름 바로 아래 첫 카드. */
 .memo-ai{padding:13px 15px;border-color:var(--accent);background:var(--soft)}
 .memo-ai .ai-line{font-size:13.5px;line-height:1.6;color:var(--ink);padding-left:11px;position:relative}

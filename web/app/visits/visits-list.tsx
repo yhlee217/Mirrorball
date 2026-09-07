@@ -2,7 +2,8 @@ import Link from 'next/link';
 
 // 방문 관리 — 리뷰 요청 '복사 버튼'은 강요처럼 보여서 뺐다. 홈케어 팁도 손님께 전할 말투라
 // 모든 줄에 펼쳐두니 목록이 지저분했다 → 기본은 접고 누를 때만 편다(네이티브 details, JS 없음).
-// 이름·시술 줄은 카르테로 연결되고, 팁 토글은 링크 밖에 둬야 눌렀을 때 이동하지 않는다.
+// 토글은 행 우측 상단의 작은 표식 하나로만 둔다('홈케어 팁' 글자까지 넣으니 줄이 길어 보였다).
+// 팁 토글은 링크 밖에 둬야 눌렀을 때 카르테로 이동하지 않는다.
 type Item = {
   id: string;
   name: string;
@@ -19,7 +20,7 @@ const won = (n: number) => (n >= 10000 ? Math.round(n / 10000) + '만' : n.toLoc
 
 function Row({ it }: { it: Item }) {
   return (
-    <div className="visit">
+    <div className={'visit' + (it.tip ? ' has-tip' : '')}>
       <Link href={`/customer/${it.id}`} className="li li-link" style={{ alignItems: 'flex-start' }}>
         <div className="av">{it.name.charAt(0)}</div>
         <div className="bd">
@@ -38,7 +39,7 @@ function Row({ it }: { it: Item }) {
       </Link>
       {it.tip ? (
         <details className="tipd">
-          <summary>홈케어 팁</summary>
+          <summary aria-label="홈케어 팁 펼치기" title="홈케어 팁" />
           <div className="tip">{it.tip}</div>
         </details>
       ) : null}
