@@ -28,6 +28,8 @@ type Cust = {
   visits_90d: number | null;
   visits_180d: number | null;
   visits_365d: number | null;
+  memo_ai: string | null;
+  memo_ai_at: string | null;
 };
 type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
 type Bk = { date: string; time: string | null; service: string | null; note: string | null; status: string | null };
@@ -53,7 +55,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d',
+      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d,memo_ai,memo_ai_at',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -136,16 +138,9 @@ export default async function CustomerPage({ params }: { params: { id: string } 
 
   const history = (tx as Tx[]) ?? [];
 
-  // 매장 메모 — 방문별로 저장돼 있으니 날짜와 함께 한 줄씩 보여준다(합쳐 놓으면 읽기 어렵다).
-  // 같은 문구가 여러 방문에 반복되면 가장 최근 것만.
-  const memoRows: { id: string; date: string; memo: string }[] = [];
-  const seenMemo = new Set<string>();
-  for (const h of history) {
-    if (!h.memo || seenMemo.has(h.memo)) continue;
-    seenMemo.add(h.memo);
-    memoRows.push({ id: h.id, date: h.date, memo: h.memo });
-    if (memoRows.length >= 8) break;
-  }
+  // 매장 메모를 따로 모아 보여주던 카드는 없앴다 — 아래 '시술 이력'이 같은 메모를 방문마다
+  // 이미 달고 있어 화면에 두 번 나왔다. 메모는 어느 시술 때 적힌 것인지가 중요하므로
+  // 이력 쪽에 붙은 것을 남기고, 전체를 훑는 용도는 상단 'AI 정리'가 대신한다.
   const nextBk = ((bk as Bk[]) ?? []).find((b) => isActiveBooking(b)) ?? null; // 지난 시간·취소·노쇼 제외
   const vip = isVip(cust, settings);
   const avg = cust.visit_count ? Math.round(cust.total_won / cust.visit_count) : 0;
@@ -178,6 +173,19 @@ export default async function CustomerPage({ params }: { params: { id: string } 
             </div>
           </div>
         </div>
+
+        {/* 매장 메모를 맥에서 배치로 정리해 둔 것(customers.memo_ai). 화면에서는 AI 를 부르지 않는다.
+            방문마다 흩어진 메모를 이 고객이 누구인지로 바꿔 맨 위에 둔다. */}
+        {cust.memo_ai ? (
+          <div className="card memo-ai">
+            <div className="ch" style={{ padding: 0, marginBottom: 6 }}>
+              한눈에 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>· 매장 메모 정리</span>
+            </div>
+            {cust.memo_ai.split('\n').filter(Boolean).map((line, i) => (
+              <div className="ai-line" key={i}>{line.replace(/^-\s*/, '')}</div>
+            ))}
+          </div>
+        ) : null}
 
         {/* 이탈로 표시한 고객은 '이탈 위험' 추정을 띄우지 않는다 — 이미 확정된 걸 재촉하는 꼴이라. */}
         {!cust.churned_at && (overdue || due) && (
@@ -232,20 +240,6 @@ export default async function CustomerPage({ params }: { params: { id: string } 
             {nextBk.note ? (
               <div style={{ fontSize: 13, color: 'var(--accent)', marginTop: 5 }}>“{nextBk.note}”</div>
             ) : null}
-          </div>
-        )}
-
-        {memoRows.length > 0 && (
-          <div className="card" style={{ padding: '13px 15px' }}>
-            <div className="ch" style={{ padding: 0, marginBottom: 8 }}>
-              매장 메모 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>· HandSOS</span>
-            </div>
-            {memoRows.map((m) => (
-              <div className="memo-row" key={m.id}>
-                <span className="memo-date">{m.date.slice(5).replace('-', '.')}</span>
-                <span>{m.memo}</span>
-              </div>
-            ))}
           </div>
         )}
 

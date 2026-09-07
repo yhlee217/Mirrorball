@@ -144,6 +144,11 @@ a.hs:active{background:var(--soft)}
 .tipd>summary::after{content:'▾';font-size:9px}
 .tipd[open]>summary::after{content:'▴'}
 .tipd .tip{margin-top:5px}
+/* 카르테 '한눈에' — 흩어진 매장 메모를 맥 배치가 정리해 둔 것. 이름 바로 아래 첫 카드. */
+.memo-ai{padding:13px 15px;border-color:var(--accent);background:var(--soft)}
+.memo-ai .ai-line{font-size:13.5px;line-height:1.6;color:var(--ink);padding-left:11px;position:relative}
+.memo-ai .ai-line+.ai-line{margin-top:3px}
+.memo-ai .ai-line::before{content:'·';position:absolute;left:2px;color:var(--accent)}
 .memo-note{margin-top:7px;font-size:12.5px;line-height:1.5;color:var(--ink);background:#F2EAD8;border-radius:9px;padding:7px 9px}
 .memo-row{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px;line-height:1.5;color:var(--ink)}
 .memo-row:first-of-type{border-top:none;padding-top:0}

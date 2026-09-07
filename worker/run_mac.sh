@@ -10,7 +10,8 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+# claude CLI(메모 정리용)는 보통 ~/.local/bin 이나 npm 전역에 깔린다 — launchd 는 PATH 가 빈약해 명시.
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
 PY="$ROOT/.venv/bin/python"
 ts() { date '+%F %T'; }
 
@@ -45,4 +46,13 @@ echo "[$(ts)] collect 시작"
 # 주 1회 실행이라 한 번 걸러도 누락 없게 14일 겹침 창으로 수집(증분·과거 백필분은 보존).
 SYNC_ALL=1 SYNC_DAYS="${SYNC_DAYS:-14}" "$PY" worker/run.py; rc=$?
 echo "[$(ts)] collect 종료(exit=$rc)"
+
+# 매장 메모 AI 정리 — 수집으로 메모가 늘었을 수 있으니 이어서 한 번 돌린다.
+# 메모가 그대로인 고객은 건너뛰므로 보통 몇 명만 처리된다. 실패해도 수집 결과는 유효하다.
+if [ "$rc" -eq 0 ]; then
+  echo "[$(ts)] 메모 정리 시작"
+  "$PY" worker/summarize_memos.py || echo "[$(ts)] ! 메모 정리 건너뜀(claude CLI 미설치·로그인 필요 등) — 수집은 정상"
+  echo "[$(ts)] 메모 정리 종료"
+fi
+
 exit $rc
