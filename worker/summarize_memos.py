@@ -23,6 +23,7 @@
     FORCE=1 .venv/bin/python worker/summarize_memos.py    # 전부 다시
     LIMIT=5 .venv/bin/python worker/summarize_memos.py    # 5명만(시험)
     CHECK=1 .venv/bin/python worker/summarize_memos.py    # CLI 가 되는지만 점검
+    USE_API_KEY=1 .venv/bin/python ...                    # 구독 대신 ANTHROPIC_API_KEY 로 청구
     JOBS=8 .venv/bin/python worker/summarize_memos.py     # 동시 실행 수(기본 4)
     MODEL=opus .venv/bin/python ...                       # 모델 변경(기본 sonnet), MODEL= 로 지정 해제
 """
@@ -64,6 +65,28 @@ CLI_TIMEOUT = 180
 MODEL = os.environ.get("MODEL", "sonnet")
 
 
+# claude CLI 는 ANTHROPIC_API_KEY 가 있으면 그걸 우선 쓰고 claude.ai 로그인(구독)을 무시한다.
+# 이 리포는 voicenote 용으로 키를 둘 수 있고, _load_env() 가 web/.env.local 을 통째로 환경에
+# 올리기까지 해서, 크레딧 없는 키가 잡히면 "Credit balance is too low" 로 전부 실패한다.
+# 요약은 구독 로그인으로 도는 게 맞으므로 자식 프로세스에서만 인증 변수를 걷어낸다.
+# 정말 API 키로 청구하고 싶으면 USE_API_KEY=1.
+_AUTH_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
+              "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX")
+
+
+def cli_env() -> dict:
+    env = dict(os.environ)
+    if os.environ.get("USE_API_KEY"):
+        return env
+    for k in _AUTH_VARS:
+        env.pop(k, None)
+    return env
+
+
+def stripped_vars() -> list[str]:
+    return [] if os.environ.get("USE_API_KEY") else [k for k in _AUTH_VARS if os.environ.get(k)]
+
+
 def run_claude(prompt: str) -> tuple[str | None, str]:
     """Claude CLI 호출. (출력, 실패사유) — 실패 사유를 삼키지 않고 돌려준다.
 
@@ -78,7 +101,7 @@ def run_claude(prompt: str) -> tuple[str | None, str]:
     why = "알 수 없음"
     for cmd in attempts:
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT)
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT, env=cli_env())
         except FileNotFoundError:
             print("❌ claude CLI 가 없습니다. 설치 후 로그인하세요: https://claude.com/claude-code",
                   file=sys.stderr)
@@ -97,10 +120,13 @@ def run_claude(prompt: str) -> tuple[str | None, str]:
 def check_cli() -> int:
     """CHECK=1 — 한 번만 불러보고 무슨 일이 일어나는지 그대로 보여준다."""
     print(f"claude CLI 점검 · 모델 {MODEL or '기본'}")
+    dropped = stripped_vars()
+    if dropped:
+        print(f"인증 변수 제외(구독 로그인 사용): {', '.join(dropped)}")
     cmd = ["claude", "-p", "한 단어로 답해: 안녕"] + (["--model", MODEL] if MODEL else [])
     print("실행:", " ".join(cmd[:3]), "…")
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT, env=cli_env())
     except FileNotFoundError:
         print("❌ claude 명령을 찾을 수 없음 — 설치/PATH 확인")
         return 1
