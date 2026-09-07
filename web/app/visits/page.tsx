@@ -12,7 +12,7 @@ import { lastSynced, syncLine } from '@/lib/sync';
 import VisitsList from './visits-list';
 
 // 방문 관리 — '다녀가신 분'을 챙기는 화면(알림 탭이 '아직 안 오신 분'을 챙기는 것과 짝).
-// 리뷰 요청 문구는 원래 노출 탭에 있었는데, 성격상 고객 관리라 이쪽으로 옮겼다.
+// 리뷰 요청은 종용하는 느낌이라 이 화면에서 빼고 노출(콘텐츠 코치) 탭에만 둔다.
 
 type Tx = { customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
 type Cust = { id: string; ext_id: string | null; pii_enc: string | null; visit_count: number };
@@ -122,7 +122,7 @@ export default async function VisitsPage() {
             <span>Visits</span>
           </div>
           <h2>방문 관리</h2>
-          <div className="s">지난 2주 다녀가신 분 — 리뷰 요청하고 메모 남기기 좋아요</div>
+          <div className="s">지난 2주 다녀가신 분 — 메모 남기고 다음 방문 챙기기 좋아요</div>
           {syncLine(synced) ? <div className="s">{syncLine(synced)} · 그 뒤 방문은 다음 수집에 들어와요</div> : null}
         </div>
         <VisitsList items={items} today={today} yesterday={yesterday} />

@@ -1,7 +1,8 @@
 import Link from 'next/link';
 
-// 방문 관리 — 리뷰 요청 '복사 버튼'은 강요처럼 보여서 뺐다. 대신 그날 받은 시술의 홈케어 팁을
-// 본문에 그대로 노출한다(손님께 전할 말 겸, 디자이너 기억용). 행 전체가 카르테로 연결된다.
+// 방문 관리 — 리뷰 요청 '복사 버튼'은 강요처럼 보여서 뺐다. 홈케어 팁도 손님께 전할 말투라
+// 모든 줄에 펼쳐두니 목록이 지저분했다 → 기본은 접고 누를 때만 편다(네이티브 details, JS 없음).
+// 이름·시술 줄은 카르테로 연결되고, 팁 토글은 링크 밖에 둬야 눌렀을 때 이동하지 않는다.
 type Item = {
   id: string;
   name: string;
@@ -18,22 +19,30 @@ const won = (n: number) => (n >= 10000 ? Math.round(n / 10000) + '만' : n.toLoc
 
 function Row({ it }: { it: Item }) {
   return (
-    <Link href={`/customer/${it.id}`} className="li li-link" style={{ alignItems: 'flex-start' }}>
-      <div className="av">{it.name.charAt(0)}</div>
-      <div className="bd">
-        <div className="nm">
-          {it.name} 님
-          <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--muted)' }}> · {it.visit_count}회째</span>
+    <div className="visit">
+      <Link href={`/customer/${it.id}`} className="li li-link" style={{ alignItems: 'flex-start' }}>
+        <div className="av">{it.name.charAt(0)}</div>
+        <div className="bd">
+          <div className="nm">
+            {it.name} 님
+            <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--muted)' }}> · {it.visit_count}회째</span>
+          </div>
+          <div className="sub">
+            {it.time ? it.time + ' · ' : ''}
+            {it.service || '시술'}
+            {it.amount ? ' · ' + won(it.amount) : ''}
+          </div>
+          {/* 매장이 그날 남긴 메모는 디자이너 본인의 기록이라 그대로 보여준다 */}
+          {it.memo ? <div className="memo-note">{it.memo}</div> : null}
         </div>
-        <div className="sub">
-          {it.time ? it.time + ' · ' : ''}
-          {it.service || '시술'}
-          {it.amount ? ' · ' + won(it.amount) : ''}
-        </div>
-        {it.memo ? <div className="memo-note">{it.memo}</div> : null}
-        {it.tip ? <div className="tip">{it.tip}</div> : null}
-      </div>
-    </Link>
+      </Link>
+      {it.tip ? (
+        <details className="tipd">
+          <summary>홈케어 팁</summary>
+          <div className="tip">{it.tip}</div>
+        </details>
+      ) : null}
+    </div>
   );
 }
 

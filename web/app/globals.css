@@ -135,6 +135,15 @@ a.hs:active{background:var(--soft)}
 .seg-b{flex:1;text-align:center;padding:8px 6px;border-radius:9px;font-size:13px;font-weight:700;color:var(--muted);text-decoration:none}
 .seg-b.on{background:var(--paper);color:var(--accent-d)}
 .tip{margin-top:7px;font-size:12.5px;line-height:1.5;color:var(--accent-d);background:var(--soft);border-radius:9px;padding:7px 9px}
+/* 방문 관리 — 홈케어 팁은 손님께 전할 말투라 모든 줄에 펼쳐두면 목록이 지저분하다.
+   기본은 접고 누를 때만 편다(네이티브 details 라 JS 불필요). 아바타 폭만큼 들여쓴다. */
+.tipd{padding:0 15px 10px 64px}
+.tipd>summary{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);
+  cursor:pointer;list-style:none;padding:2px 0;-webkit-tap-highlight-color:transparent}
+.tipd>summary::-webkit-details-marker{display:none}
+.tipd>summary::after{content:'▾';font-size:9px}
+.tipd[open]>summary::after{content:'▴'}
+.tipd .tip{margin-top:5px}
 .memo-note{margin-top:7px;font-size:12.5px;line-height:1.5;color:var(--ink);background:#F2EAD8;border-radius:9px;padding:7px 9px}
 .memo-row{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px;line-height:1.5;color:var(--ink)}
 .memo-row:first-of-type{border-top:none;padding-top:0}
