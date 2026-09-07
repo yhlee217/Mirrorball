@@ -190,10 +190,35 @@ def parse_sections(text: str) -> tuple[str | None, str | None]:
     return ("\n".join(pref[:4]) or None, "\n".join(recent[:3]) or None)
 
 
+def preflight_columns() -> None:
+    """쓸 컬럼이 실제로 있는지 먼저 확인한다.
+
+    없으면 AI 를 다 부른 뒤 저장 단계에서 400 이 나 그때까지의 호출이 통째로 버려진다
+    (1,300명 배치에서는 한 시간을 날린다). 그래서 호출 전에 한 번 찔러보고 멈춘다.
+    """
+    need = "id,memo_ai,memo_ai_recent,memo_ai_at,memo_ai_src"
+    try:
+        supa._get("/customers", {"select": need, "limit": "1"})
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "memo_ai" not in msg and "PGRST204" not in msg:
+            raise
+        print("❌ customers 에 필요한 컬럼이 없습니다(마이그레이션 미적용).", file=sys.stderr)
+        print("   Supabase SQL Editor 에서 아래를 실행한 뒤 다시 돌리세요:\n", file=sys.stderr)
+        print("   alter table customers add column if not exists memo_ai        text;", file=sys.stderr)
+        print("   alter table customers add column if not exists memo_ai_at     timestamptz;", file=sys.stderr)
+        print("   alter table customers add column if not exists memo_ai_src    text;", file=sys.stderr)
+        print("   alter table customers add column if not exists memo_ai_recent text;", file=sys.stderr)
+        print("\n   이미 실행했는데도 이 메시지가 나오면 스키마 캐시가 덜 갱신된 것:", file=sys.stderr)
+        print("   notify pgrst, 'reload schema';", file=sys.stderr)
+        raise SystemExit(1)
+
+
 def main() -> int:
     if os.environ.get("CHECK"):
         return check_cli()
 
+    preflight_columns()          # 컬럼부터 확인 — AI 호출을 낭비하지 않게
     force = bool(os.environ.get("FORCE"))
     limit = int(os.environ.get("LIMIT") or 0)
     jobs_n = max(1, int(os.environ.get("JOBS") or 4))
