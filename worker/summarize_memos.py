@@ -63,6 +63,8 @@ CLI_TIMEOUT = 180
 # 단순 요약이 아니다 — "지난번엔 밝게, 최근엔 어둡게"처럼 시간에 따라 뒤집히는 걸 정리하고,
 # 지속되는 선호와 한 번뿐인 잡담을 갈라내야 한다. 판단이 필요한 일이라 작은 모델은 쓰지 않는다.
 MODEL = os.environ.get("MODEL", "sonnet")
+# 프롬프트가 바뀌면 기존 요약은 형식이 달라 못 쓴다. 해시에 섞어 자동으로 다시 만들게 한다.
+PROMPT_VERSION = "2-sections"
 
 
 # claude CLI 는 ANTHROPIC_API_KEY 가 있으면 그걸 우선 쓰고 claude.ai 로그인(구독)을 무시한다.
@@ -136,46 +138,56 @@ def check_cli() -> int:
     return 0 if (r.stdout or "").strip() else 1
 
 
-def summarize_one(job: dict) -> tuple[str, str | None, str]:
-    """한 고객 요약 — 스레드에서 실행. (customer_id, 요약문|None, 실패사유)"""
+def summarize_one(job: dict) -> tuple[str, str | None, str | None, str]:
+    """한 고객 요약 — 스레드에서 실행. (customer_id, 선호, 근황, 실패사유)"""
     out, why = run_claude(build_prompt(job["memos"]))
     if not out:
-        return job["cid"], None, why
-    cleaned = clean_output(out)
-    return job["cid"], cleaned, ("" if cleaned else "불릿 없는 응답")
+        return job["cid"], None, None, why
+    pref, recent = parse_sections(out)
+    return job["cid"], pref, recent, ("" if pref else "형식에 맞지 않는 응답")
 
 
 def build_prompt(lines: list[str]) -> str:
     """lines: '2026-06-01 컬 약하게' 처럼 날짜가 붙은 메모들(오래된 순).
-    날짜가 있어야 '최근에는 ~' 같은 시간 판단이 가능하다."""
+    날짜가 있어야 '최근에는 ~' 판단과 근황의 시점 표기가 가능하다."""
     joined = "\n".join(lines)
     return (
-        "너는 미용실 디자이너를 돕는 조수다. 아래는 한 고객에 대해 매장에서 방문마다 적어둔 메모들이다.\n"
-        "디자이너가 이 고객을 다시 맞을 때 3초 안에 파악할 수 있게 정리해라.\n\n"
-        "규칙:\n"
-        "- 한국어. 불릿 2~4개. 각 줄 25자 내외.\n"
-        "- 메모에 실제로 있는 내용만. 없는 사실을 지어내지 마라.\n"
-        "- 반복되는 선호·주의사항을 우선(예: 밝기 선호, 두피 예민, 컬 세기).\n"
-        "- 시간에 따라 내용이 뒤집히면 날짜를 보고 최근 것을 따르되 '최근에는 ~' 으로 적어라.\n"
-        "- 여러 번 반복되는 것은 지속 선호, 한 번뿐인 것은 그날 사정으로 보고 구분해라.\n"
-        "- 한 번뿐인 잡담성 메모는 빼라.\n"
-        "- 인사말·머리말·설명 없이 불릿만 출력. 각 줄은 '- ' 로 시작.\n\n"
-        f"메모(오래된 순):\n{joined}\n"
+        "너는 미용실 디자이너를 돕는 조수다. 아래는 한 고객에 대해 매장에서 방문마다 적어둔 메모다(날짜 오름차순).\n"
+        "디자이너가 이 고객을 다시 맞을 때 3초 안에 파악하도록 두 덩이로 정리해라.\n\n"
+        "[선호] — 시술에 계속 반영할 것\n"
+        "- 반복되는 선호·주의사항, 모발·두피 상태.\n"
+        "- 시간에 따라 뒤집히면 날짜를 보고 최근 것을 따르되 '최근에는 ~' 으로 적어라.\n"
+        "- 2~4개. 각 줄 25자 내외.\n\n"
+        "[근황] — 다음에 만나면 먼저 물어볼 이야기\n"
+        "- 개인 근황·대화거리(가족, 일, 이사, 여행, 행사, 건강 등). 시술과 무관해도 좋다.\n"
+        "- 한 번만 나온 이야기라도 담아라. 이게 이 항목의 목적이다.\n"
+        "- 최근 것 위주로 최대 3개. 각 줄 앞에 (YYYY-MM) 을 붙여라.\n"
+        "- 오래돼 지금 꺼내기 어색한 이야기는 빼라. 해당 없으면 아무 줄도 쓰지 마라.\n\n"
+        "공통: 메모에 실제로 있는 내용만. 없는 사실을 지어내지 마라.\n"
+        "인사말·설명 없이 아래 형식 그대로만 출력:\n"
+        "[선호]\n- ...\n[근황]\n- (2026-07) ...\n\n"
+        f"메모:\n{joined}\n"
     )
 
 
-def clean_output(text: str) -> str | None:
-    """불릿만 남긴다 — 모델이 붙이는 서두·코드펜스 제거."""
-    out = []
+def parse_sections(text: str) -> tuple[str | None, str | None]:
+    """모델 출력에서 [선호]/[근황] 두 덩이를 뽑는다. 서두·코드펜스는 버린다."""
+    pref: list[str] = []
+    recent: list[str] = []
+    cur: list[str] | None = None
     for raw in text.splitlines():
         line = raw.strip().strip("`").strip()
-        if not line or line.startswith("```"):
+        if not line:
             continue
-        if line.startswith(("- ", "• ", "* ")):
-            out.append("- " + line[2:].strip())
-        elif out:
-            break  # 불릿이 끝나면 뒤 설명은 버린다
-    return "\n".join(out[:4]) if out else None
+        if line.startswith("[선호]"):
+            cur = pref
+            continue
+        if line.startswith("[근황]"):
+            cur = recent
+            continue
+        if line.startswith(("- ", "• ", "* ")) and cur is not None:
+            cur.append("- " + line[2:].strip())
+    return ("\n".join(pref[:4]) or None, "\n".join(recent[:3]) or None)
 
 
 def main() -> int:
@@ -218,7 +230,9 @@ def main() -> int:
             if len(rows) < 2:
                 skipped += 1
                 continue
-            src = hashlib.sha256("\n".join(f"{d} {m}" for d, m in rows).encode("utf-8")).hexdigest()
+            src = hashlib.sha256(
+                (PROMPT_VERSION + "\n" + "\n".join(f"{d} {m}" for d, m in rows)).encode("utf-8")
+            ).hexdigest()
             if not force and existing.get(cid) == src:
                 skipped += 1
                 continue
@@ -244,19 +258,20 @@ def main() -> int:
     with ThreadPoolExecutor(max_workers=jobs_n) as pool:
         futs = {pool.submit(summarize_one, j): j["cid"] for j in todo}
         for fut in as_completed(futs):
-            cid, summary, why = fut.result()
+            cid, summary, recent, why = fut.result()
             if not summary:
                 failed += 1
                 print(f"  [{done + failed}/{total}] {cid[:8]} 실패 — {why}", flush=True)
                 continue
             supa.patch("customers", {"id": f"eq.{cid}"}, {
                 "memo_ai": summary,
+                "memo_ai_recent": recent,          # 없으면 null 로 덮어 옛 근황이 남지 않게
                 "memo_ai_at": datetime.now(timezone.utc).isoformat(),
                 "memo_ai_src": by_id[cid]["src"],
             })
             done += 1
-            first = summary.splitlines()[0][:34] if summary else ""
-            print(f"  [{done + failed}/{total}] {cid[:8]} ✓ {first}", flush=True)
+            first = summary.splitlines()[0][:30] if summary else ""
+            print(f"  [{done + failed}/{total}] {cid[:8]} ✓{' +근황' if recent else ''} {first}", flush=True)
 
     took = int(time.time() - t0)
     print(f"\n완료: {done}명 갱신" + (f" · 실패 {failed}명" if failed else "") + f" · {took//60}분 {took%60}초")

@@ -29,6 +29,7 @@ type Cust = {
   visits_180d: number | null;
   visits_365d: number | null;
   memo_ai: string | null;
+  memo_ai_recent: string | null;
   memo_ai_at: string | null;
 };
 type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
@@ -55,7 +56,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d,memo_ai,memo_ai_at',
+      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d,memo_ai,memo_ai_recent,memo_ai_at',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -176,14 +177,23 @@ export default async function CustomerPage({ params }: { params: { id: string } 
 
         {/* 매장 메모를 맥에서 배치로 정리해 둔 것(customers.memo_ai). 화면에서는 AI 를 부르지 않는다.
             방문마다 흩어진 메모를 이 고객이 누구인지로 바꿔 맨 위에 둔다. */}
-        {cust.memo_ai ? (
+        {cust.memo_ai || cust.memo_ai_recent ? (
           <div className="card memo-ai">
             <div className="ch" style={{ padding: 0, marginBottom: 6 }}>
               한눈에 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>· 매장 메모 정리</span>
             </div>
-            {cust.memo_ai.split('\n').filter(Boolean).map((line, i) => (
+            {(cust.memo_ai ?? '').split('\n').filter(Boolean).map((line, i) => (
               <div className="ai-line" key={i}>{line.replace(/^-\s*/, '')}</div>
             ))}
+            {/* 근황은 시술 지침이 아니라 '다음에 먼저 꺼낼 이야기'라 따로 묶는다. */}
+            {cust.memo_ai_recent ? (
+              <div className="ai-recent">
+                <div className="ai-rh">최근 이야기</div>
+                {cust.memo_ai_recent.split('\n').filter(Boolean).map((line, i) => (
+                  <div className="ai-line" key={i}>{line.replace(/^-\s*/, '')}</div>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
