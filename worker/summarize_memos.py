@@ -22,6 +22,7 @@
     .venv/bin/python worker/summarize_memos.py            # 바뀐 고객만
     FORCE=1 .venv/bin/python worker/summarize_memos.py    # 전부 다시
     LIMIT=5 .venv/bin/python worker/summarize_memos.py    # 5명만(시험)
+    CHECK=1 .venv/bin/python worker/summarize_memos.py    # CLI 가 되는지만 점검
     JOBS=8 .venv/bin/python worker/summarize_memos.py     # 동시 실행 수(기본 4)
     MODEL=opus .venv/bin/python ...                       # 모델 변경(기본 sonnet), MODEL= 로 지정 해제
 """
@@ -63,29 +64,59 @@ CLI_TIMEOUT = 180
 MODEL = os.environ.get("MODEL", "sonnet")
 
 
-def run_claude(prompt: str) -> str | None:
-    """Claude CLI(`claude -p`) 호출. 설치/로그인 안 돼 있으면 None."""
-    cmd = ["claude", "-p", prompt] + (["--model", MODEL] if MODEL else [])
+def run_claude(prompt: str) -> tuple[str | None, str]:
+    """Claude CLI 호출. (출력, 실패사유) — 실패 사유를 삼키지 않고 돌려준다.
+
+    처음엔 --model 을 붙여 부르고, 실패하면 한 번은 빼고 재시도한다(CLI 버전에 따라
+    플래그를 모를 수 있다). 무엇 때문에 실패했는지 모르면 고칠 수가 없으므로
+    stderr 첫 줄과 종료코드를 그대로 올려보낸다.
+    """
+    attempts = [["claude", "-p", prompt] + (["--model", MODEL] if MODEL else [])]
+    if MODEL:
+        attempts.append(["claude", "-p", prompt])
+
+    why = "알 수 없음"
+    for cmd in attempts:
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT)
+        except FileNotFoundError:
+            print("❌ claude CLI 가 없습니다. 설치 후 로그인하세요: https://claude.com/claude-code",
+                  file=sys.stderr)
+            raise SystemExit(1)
+        except subprocess.TimeoutExpired:
+            why = f"타임아웃 {CLI_TIMEOUT}s"
+            continue
+        out = (r.stdout or "").strip()
+        if out:
+            return out, ""
+        err = (r.stderr or "").strip()
+        why = (err.splitlines()[0][:160] if err else f"빈 응답 (exit={r.returncode})")
+    return None, why
+
+
+def check_cli() -> int:
+    """CHECK=1 — 한 번만 불러보고 무슨 일이 일어나는지 그대로 보여준다."""
+    print(f"claude CLI 점검 · 모델 {MODEL or '기본'}")
+    cmd = ["claude", "-p", "한 단어로 답해: 안녕"] + (["--model", MODEL] if MODEL else [])
+    print("실행:", " ".join(cmd[:3]), "…")
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT)
-        out = (r.stdout or "").strip()
-        if not out and MODEL and "--model" in (r.stderr or ""):
-            # 이 CLI 버전이 --model 을 모르면 한 번은 빼고 재시도
-            r = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True, timeout=CLI_TIMEOUT)
-            out = (r.stdout or "").strip()
-        return out or None
     except FileNotFoundError:
-        print("❌ claude CLI 가 없습니다. 설치 후 로그인하세요: https://claude.com/claude-code", file=sys.stderr)
-        raise SystemExit(1)
-    except Exception as exc:  # noqa: BLE001
-        print(f"  (claude 호출 실패, 건너뜀): {exc}", file=sys.stderr)
-        return None
+        print("❌ claude 명령을 찾을 수 없음 — 설치/PATH 확인")
+        return 1
+    print(f"exit={r.returncode}")
+    print("--- stdout ---\n" + (r.stdout or "(비어 있음)"))
+    print("--- stderr ---\n" + (r.stderr or "(비어 있음)"))
+    return 0 if (r.stdout or "").strip() else 1
 
 
-def summarize_one(job: dict) -> tuple[str, str | None]:
-    """한 고객 요약 — 스레드에서 실행. (customer_id, 요약문|None)"""
-    out = run_claude(build_prompt(job["memos"]))
-    return job["cid"], (clean_output(out) if out else None)
+def summarize_one(job: dict) -> tuple[str, str | None, str]:
+    """한 고객 요약 — 스레드에서 실행. (customer_id, 요약문|None, 실패사유)"""
+    out, why = run_claude(build_prompt(job["memos"]))
+    if not out:
+        return job["cid"], None, why
+    cleaned = clean_output(out)
+    return job["cid"], cleaned, ("" if cleaned else "불릿 없는 응답")
 
 
 def build_prompt(lines: list[str]) -> str:
@@ -122,6 +153,9 @@ def clean_output(text: str) -> str | None:
 
 
 def main() -> int:
+    if os.environ.get("CHECK"):
+        return check_cli()
+
     force = bool(os.environ.get("FORCE"))
     limit = int(os.environ.get("LIMIT") or 0)
     jobs_n = max(1, int(os.environ.get("JOBS") or 4))
@@ -184,10 +218,10 @@ def main() -> int:
     with ThreadPoolExecutor(max_workers=jobs_n) as pool:
         futs = {pool.submit(summarize_one, j): j["cid"] for j in todo}
         for fut in as_completed(futs):
-            cid, summary = fut.result()
+            cid, summary, why = fut.result()
             if not summary:
                 failed += 1
-                print(f"  [{done + failed}/{total}] {cid[:8]} 실패", flush=True)
+                print(f"  [{done + failed}/{total}] {cid[:8]} 실패 — {why}", flush=True)
                 continue
             supa.patch("customers", {"id": f"eq.{cid}"}, {
                 "memo_ai": summary,
