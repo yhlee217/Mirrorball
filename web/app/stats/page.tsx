@@ -31,9 +31,9 @@ export default async function StatsPage() {
 
   const [customers, txs] = await Promise.all([
     fetchAllRows<{ ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
-                   age_band: string | null; gender_src: string | null; revisit_cycle_days: number | null }>((from, to) =>
+                   age_band: string | null; gender_src: string | null; gender_manual: string | null; revisit_cycle_days: number | null }>((from, to) =>
       supabase.from('customers')
-        .select('ext_id,total_won,visit_count,gender,age_band,gender_src,revisit_cycle_days')
+        .select('ext_id,total_won,visit_count,gender,gender_manual,age_band,gender_src,revisit_cycle_days')
         .eq('tenant_id', tenantId).order('id').range(from, to)),
     fetchAllRows<{ date: string; service: string | null; amount_won: number; kind: string | null; covered_won: number | null }>((from, to) =>
       supabase.from('transactions').select('date,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
@@ -90,10 +90,15 @@ export default async function StatsPage() {
   };
   let gNoClue = 0;   // 성별이 적힌 시술을 받은 적이 없는 고객
   let gProxy = 0;    // 남·여가 섞여 대신 결제로 보이는 고객
+  let gManual = 0;   // 디자이너가 직접 지정한 고객
   let kidCount = 0;
   for (const c of cs) {
     if (c.age_band === 'kid') kidCount++;
-    const g = c.gender === 'M' || c.gender === 'F' ? (c.gender as G) : null;
+    // 사람이 지정했으면 그게 맞다 — 추정보다 우선한다.
+    const picked = c.gender_manual === 'M' || c.gender_manual === 'F' ? c.gender_manual : null;
+    if (picked) gManual++;
+    const eff = picked ?? c.gender;
+    const g = eff === 'M' || eff === 'F' ? (eff as G) : null;
     if (!g) {
       if (c.gender_src === 'proxy') gProxy++;
       else gNoClue++;
@@ -224,7 +229,9 @@ export default async function StatsPage() {
             )}
 
             <p className="note">
-              메뉴에 성별이 적힌 시술(남자컷·여자컷 등)로 추정해 <b>{gRate}%</b>가 판정됐어요.
+              메뉴에 성별이 적힌 시술(남자컷·여자컷 등)로 추정해 <b>{gRate}%</b>가 판정됐어요
+              {gManual > 0 ? <> (그중 <b>{gManual.toLocaleString()}명</b>은 직접 지정)</> : null}.
+              미상인 고객은 카르테에서 성별을 직접 지정하면 바로 반영됩니다.
               미상 {(gNoClue + gProxy).toLocaleString()}명은 —
               성별이 적힌 시술을 받은 적이 없는 고객 <b>{gNoClue.toLocaleString()}명</b>
               (다운펌·앞머리컷·뿌리염색처럼 메뉴에 성별이 없는 시술만 받은 경우)과,

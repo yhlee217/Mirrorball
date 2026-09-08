@@ -10,6 +10,7 @@ import { kstNow } from '@/lib/kst';
 import { isActiveBooking } from '@/lib/bookings';
 import { txKind, ledger } from '@/lib/tx';
 import PocketToggle from './pocket-toggle';
+import GenderPicker from './gender-picker';
 import CustomerNote from './customer-note';
 import ChurnToggle from './churn-toggle';
 
@@ -33,6 +34,8 @@ type Cust = {
   memo_ai: string | null;
   memo_ai_recent: string | null;
   prepaid_balance: number | null;
+  gender: string | null;
+  gender_manual: string | null;
   memo_ai_at: string | null;
 };
 type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null; kind: string | null; paid_out_of_pocket: boolean | null };
@@ -59,7 +62,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d,memo_ai,memo_ai_recent,memo_ai_at,prepaid_balance',
+      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d,memo_ai,memo_ai_recent,memo_ai_at,prepaid_balance,gender,gender_manual',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -232,6 +235,14 @@ export default async function CustomerPage({ params }: { params: { id: string } 
         )}
 
         <ChurnToggle id={cust.id} churnedAt={cust.churned_at} />
+
+        {/* 시술명 추정이 못 가른 고객을 사람이 채운다. 저장은 gender_manual 로 가서
+            주간 재계산에 덮이지 않는다. */}
+        <GenderPicker
+          id={cust.id}
+          manual={cust.gender_manual === 'M' || cust.gender_manual === 'F' ? cust.gender_manual : null}
+          inferred={cust.gender === 'M' || cust.gender === 'F' ? cust.gender : null}
+        />
 
         <div className="stat-grid">
           <div className="stat"><div className="sn">{cust.visit_count}</div><div className="sl">방문</div></div>

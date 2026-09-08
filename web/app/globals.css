@@ -263,3 +263,15 @@ a.hs:active{background:var(--soft)}
 .gtab td:first-child{text-align:left;color:var(--muted);font-size:12px}
 .gtab tbody tr:last-child td{border-bottom:0}
 .gtab .sub2{display:block;font-size:10px;color:var(--muted);font-weight:400}
+
+/* 성별 지정 — 추정을 사람이 덮어쓰는 자리. 지정하면 진하게, 추정 상태면 옅게 표시한다 */
+.gpick{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:13px;
+  background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
+.gp-l{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.5px}
+.gp-b{font-size:12px;font-weight:700;color:var(--muted);background:var(--soft);
+  border:1px solid var(--line);border-radius:20px;padding:4px 12px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+.gp-b.inf{color:var(--accent-d);border-color:var(--accent);background:transparent}
+.gp-b.on{color:#fff;background:var(--accent);border-color:var(--accent)}
+.gp-b:disabled{opacity:.5}
+.gp-s{font-size:11px;color:var(--muted);margin-left:auto}
