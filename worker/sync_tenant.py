@@ -116,7 +116,10 @@ def _recompute_aggregates(tid: str) -> int:
             "last_visit": dates[0] if dates else None,
             "total_won": book["revenue"],
             **({"prepaid_balance": book["balance"]} if full else {}),
-            **({"gender": g["gender"], "age_band": g["age_band"], "gender_src": g["resolved_by"]}
+            # 성별 미상은 성격이 둘이다: 단서가 아예 없는 경우와, 대신 결제로 남·여가 섞인 경우.
+            # 화면에서 갈라 보여주려면 저장할 때 구분해야 한다.
+            **({"gender": g["gender"], "age_band": g["age_band"],
+                "gender_src": "proxy" if g["proxy"] else g["resolved_by"]}
                if has_gender else {}),
             "revisit_cycle_days": cycle, "revisit_state": state,
             "visits_90d": sum(1 for d in dates if d >= cut90),

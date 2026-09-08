@@ -31,9 +31,9 @@ export default async function StatsPage() {
 
   const [customers, txs] = await Promise.all([
     fetchAllRows<{ ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
-                   age_band: string | null; revisit_cycle_days: number | null }>((from, to) =>
+                   age_band: string | null; gender_src: string | null; revisit_cycle_days: number | null }>((from, to) =>
       supabase.from('customers')
-        .select('ext_id,total_won,visit_count,gender,age_band,revisit_cycle_days')
+        .select('ext_id,total_won,visit_count,gender,age_band,gender_src,revisit_cycle_days')
         .eq('tenant_id', tenantId).order('id').range(from, to)),
     fetchAllRows<{ date: string; service: string | null; amount_won: number; kind: string | null; covered_won: number | null }>((from, to) =>
       supabase.from('transactions').select('date,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
@@ -88,13 +88,15 @@ export default async function StatsPage() {
     M: { n: 0, rev: 0, visits: 0, cyc: [] },
     F: { n: 0, rev: 0, visits: 0, cyc: [] },
   };
-  let gUnknown = 0;
+  let gNoClue = 0;   // 성별이 적힌 시술을 받은 적이 없는 고객
+  let gProxy = 0;    // 남·여가 섞여 대신 결제로 보이는 고객
   let kidCount = 0;
   for (const c of cs) {
     if (c.age_band === 'kid') kidCount++;
     const g = c.gender === 'M' || c.gender === 'F' ? (c.gender as G) : null;
     if (!g) {
-      gUnknown++;
+      if (c.gender_src === 'proxy') gProxy++;
+      else gNoClue++;
       continue;
     }
     gStat[g].n++;
@@ -174,12 +176,12 @@ export default async function StatsPage() {
             <div className="gbar">
               <div className="gm" style={{ width: `${Math.round((gStat.M.n / totalCustomers) * 100)}%` }} />
               <div className="gf" style={{ width: `${Math.round((gStat.F.n / totalCustomers) * 100)}%` }} />
-              <div className="gu" style={{ width: `${Math.round((gUnknown / totalCustomers) * 100)}%` }} />
+              <div className="gu" style={{ width: `${Math.round(((gNoClue + gProxy) / totalCustomers) * 100)}%` }} />
             </div>
             <div className="glegend">
               <span><i className="gm" />남성 {gStat.M.n.toLocaleString()}명</span>
               <span><i className="gf" />여성 {gStat.F.n.toLocaleString()}명</span>
-              <span><i className="gu" />미상 {gUnknown.toLocaleString()}명</span>
+              <span><i className="gu" />미상 {(gNoClue + gProxy).toLocaleString()}명</span>
             </div>
 
             {/* ②③ 객단가·재방문 주기·매출 비중 — 판정된 고객끼리만 비교 */}
@@ -223,8 +225,12 @@ export default async function StatsPage() {
 
             <p className="note">
               메뉴에 성별이 적힌 시술(남자컷·여자컷 등)로 추정해 <b>{gRate}%</b>가 판정됐어요.
-              남·여가 섞여 대신 결제한 것으로 보이는 고객과 단서가 없는 고객은 <b>미상</b>으로 두고
-              위 비교에서 제외합니다.
+              미상 {(gNoClue + gProxy).toLocaleString()}명은 —
+              성별이 적힌 시술을 받은 적이 없는 고객 <b>{gNoClue.toLocaleString()}명</b>
+              (다운펌·앞머리컷·뿌리염색처럼 메뉴에 성별이 없는 시술만 받은 경우)과,
+              남·여가 섞여 대신 결제로 보이는 고객 <b>{gProxy.toLocaleString()}명</b>입니다.
+              둘 다 위 비교에서 제외했어요. 미상 고객은 방문 횟수가 평균의 절반 수준이라
+              객단가·주기 비교에 미치는 영향은 크지 않습니다.
             </p>
           </div>
         )}
