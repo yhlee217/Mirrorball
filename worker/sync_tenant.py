@@ -16,6 +16,31 @@ from scrape import _derive
 _PII_FIELDS = ("name", "birthday", "phone")
 
 
+_SCHEMA_0019: bool | None = None
+
+
+def _has_0019() -> bool:
+    """0019(kind·covered_won·prepaid_balance)가 적용됐는지 한 번만 확인.
+
+    맥의 주간 수집은 사람이 안 보는 채로 돈다. 마이그레이션이 아직 안 걸렸다고 수집 전체가
+    죽으면 일주일치를 잃는다. 없으면 없는 대로(시술명으로 판정) 돌고, 있으면 정확히 쓴다.
+    """
+    global _SCHEMA_0019
+    if _SCHEMA_0019 is None:
+        try:
+            supa._get("/transactions", {"select": "id,kind,covered_won", "limit": "1"})
+            supa._get("/customers", {"select": "id,prepaid_balance", "limit": "1"})
+            _SCHEMA_0019 = True
+        except RuntimeError as exc:
+            if "42703" in str(exc) or "does not exist" in str(exc):
+                _SCHEMA_0019 = False
+                print("  ⚠ 0019 미적용 — 충전 분리 없이 수집만 진행"
+                      "(supabase/migrations/0019_transaction_kind.sql 적용 후 recompute.py 권장)")
+            else:
+                raise
+    return _SCHEMA_0019
+
+
 def _recompute_aggregates(tid: str) -> int:
     """전체 거래로 고객 집계 재계산 — 수집 창과 무관하게 방문수·주기·매출 lifetime 정확.
 
@@ -25,8 +50,10 @@ def _recompute_aggregates(tid: str) -> int:
     매출은 선불 원장(txkind.ledger)으로 낸다 — 충전과 그 충전금으로 한 시술을 둘 다 더하면
     이중 계상이라, 실제로 받은 돈만 남긴다.
     """
-    txs = supa.select_all("transactions", tid,
-                          "id,customer_id,date,service,amount_won,kind,paid_out_of_pocket,covered_won")
+    full = _has_0019()
+    cols = ("id,customer_id,date,service,amount_won,kind,paid_out_of_pocket,covered_won"
+            if full else "id,customer_id,date,service,amount_won")
+    txs = supa.select_all("transactions", tid, cols)
     byc: dict = defaultdict(list)
     for t in txs:
         if t.get("customer_id") and t.get("date"):
@@ -62,16 +89,16 @@ def _recompute_aggregates(tid: str) -> int:
             "first_visit": dates[-1] if dates else None,
             "last_visit": dates[0] if dates else None,
             "total_won": book["revenue"],
-            "prepaid_balance": book["balance"],
+            **({"prepaid_balance": book["balance"]} if full else {}),
             "revisit_cycle_days": cycle, "revisit_state": state,
             "visits_90d": sum(1 for d in dates if d >= cut90),
             "visits_180d": sum(1 for d in dates if d >= cut180),
             "visits_365d": sum(1 for d in dates if d >= cut365),
         })
     # 바뀐 거래만 갱신 — 선불 고객은 일부라 보통 몇 건이다.
-    for txid, val in covered_fix:
+    for txid, val in (covered_fix if full else []):
         supa.patch("transactions", {"id": f"eq.{txid}"}, {"covered_won": val})
-    if covered_fix:
+    if full and covered_fix:
         print(f"  잔액결제 반영 {len(covered_fix)}건")
     supa.upsert("customers", updates, "id")
     return len(updates)
@@ -106,7 +133,7 @@ def _sync_one(tenant: dict, rows: list, reserve_rows: list, staff, reservations_
             "service": t.get("service"),
             "memo": t.get("memo"),
             "amount_won": t.get("amount_won", 0),
-            "kind": txkind.classify(t.get("service")),
+            **({"kind": txkind.classify(t.get("service"))} if _has_0019() else {}),
             "ext_id": t["ext_id"],
             # paid_out_of_pocket 은 일부러 넣지 않는다 — 사장님이 표시한 값을 수집이 덮으면 안 된다
             # (업서트가 merge-duplicates 라 payload 에 없는 컬럼은 그대로 남는다).

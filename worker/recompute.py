@@ -35,6 +35,19 @@ from sync_tenant import _recompute_aggregates  # noqa: E402
 
 
 def main() -> int:
+    try:
+        supa._get("/transactions", {"select": "id,kind,covered_won", "limit": "1"})
+        supa._get("/customers", {"select": "id,prepaid_balance", "limit": "1"})
+    except RuntimeError as exc:
+        if "42703" not in str(exc) and "does not exist" not in str(exc):
+            raise
+        print("❌ 마이그레이션 0019 가 아직 적용되지 않았습니다.")
+        print("   Supabase SQL Editor 에서 아래 파일 내용을 실행한 뒤 다시 돌리세요:")
+        print("   supabase/migrations/0019_transaction_kind.sql")
+        print("\n   (이미 실행했는데도 이 메시지가 나오면 스키마 캐시 갱신)")
+        print("   notify pgrst, 'reload schema';")
+        return 1
+
     tenants = supa._get("/tenants", {"select": "id,slug", "order": "slug"})
     total = 0
     for t in tenants:
