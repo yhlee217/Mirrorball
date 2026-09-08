@@ -40,7 +40,12 @@ def main() -> int:
     for t in tenants:
         tid, slug = t["id"], t.get("slug") or t["id"][:8]
         txs = supa.select_all("transactions", tid, "customer_id,service,date,memo,kind")
-        custs = {c["id"]: c for c in supa.select_all("customers", tid, "id,family_ext_id")}
+        try:
+            custs = {c["id"]: c for c in supa.select_all("customers", tid, "id,family_ext_id,gender")}
+            db_set = sum(1 for c in custs.values() if c.get("gender"))
+        except RuntimeError:
+            custs = {c["id"]: c for c in supa.select_all("customers", tid, "id,family_ext_id")}
+            db_set = None
 
         by_cust: dict = defaultdict(list)
         clue_tx = 0
@@ -86,6 +91,28 @@ def main() -> int:
               f"메모(가족 귀속) {howto.get('memo-family', 0)}명 · 메모(배우자) {howto.get('memo-spouse', 0)}명")
         print(f"  판정불가 중 가족 연결 있음: {proxy_with_family}명")
         print(f"  본인이 아동·학생으로 보임: {kid_self}명")
+        if db_set is None:
+            print("  DB customers.gender: 컬럼 없음 (0020 미적용) → 화면은 전부 '미상'으로 보인다")
+        else:
+            print(f"  DB customers.gender 채워진 고객: {db_set}명"
+                  + ("  ⚠ 0이면 recompute.py 를 아직 안 돌린 것 — 화면은 전부 '미상'" if db_set == 0 else ""))
+
+        # 왜 미상인가 — 단서가 하나도 없는 고객들이 실제로 무슨 시술을 받았는지 본다.
+        # 여기 상위 메뉴에 성별이 드러나 있으면 규칙을 넓혀 미상을 줄일 수 있다.
+        noclue = Counter()
+        noclue_cust = 0
+        for cid, rows in by_cust.items():
+            if any(gender.service_gender(r.get("service")) for r in rows):
+                continue
+            noclue_cust += 1
+            for r in rows:
+                sv = (r.get("service") or "").strip()
+                if sv:
+                    noclue[sv] += 1
+        if noclue:
+            print(f"  ── 단서 0 인 고객 {noclue_cust}명이 받은 시술 상위 20 ──")
+            for name, cnt in noclue.most_common(20):
+                print(f"     {cnt:>5}회  {name}")
     print("\n→ 메모로 갈린 인원이 많으면 추정이 값을 한다. '판정불가'와 '단서없음'만 통계에서 뺀다.")
     return 0
 
