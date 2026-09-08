@@ -7,7 +7,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { txKind } from '@/lib/tx';
-import { fetchAllRows } from '@/lib/customers';
+import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 
 function won(n: number): string {
   if (!n) return '0원';
@@ -30,15 +30,17 @@ export default async function StatsPage() {
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
   const [customers, txs] = await Promise.all([
-    fetchAllRows<{ total_won: number; visit_count: number; gender: string | null;
+    fetchAllRows<{ ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
                    age_band: string | null; revisit_cycle_days: number | null }>((from, to) =>
       supabase.from('customers')
-        .select('total_won,visit_count,gender,age_band,revisit_cycle_days')
+        .select('ext_id,total_won,visit_count,gender,age_band,revisit_cycle_days')
         .eq('tenant_id', tenantId).order('id').range(from, to)),
     fetchAllRows<{ date: string; service: string | null; amount_won: number; kind: string | null; covered_won: number | null }>((from, to) =>
       supabase.from('transactions').select('date,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
   ]);
-  const cs = customers;
+  // '손님' 등 미식별 워크인은 관리 대상이 아니다 — 홈·알림·고객목록과 같은 기준으로 뺀다.
+  // 통계만 포함하고 있어서 고객수·재방문율·객단가가 부풀고, 성별은 전부 '미상'으로 쌓였다.
+  const cs = customers.filter((c) => isRealCustomer(c.ext_id));
   const tx = txs;
 
   const totalRevenue = cs.reduce((s, c) => s + (c.total_won || 0), 0);

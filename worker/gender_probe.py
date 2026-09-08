@@ -41,16 +41,18 @@ def main() -> int:
         tid, slug = t["id"], t.get("slug") or t["id"][:8]
         txs = supa.select_all("transactions", tid, "customer_id,service,date,memo,kind")
         try:
-            custs = {c["id"]: c for c in supa.select_all("customers", tid, "id,family_ext_id,gender")}
+            custs = {c["id"]: c for c in supa.select_all("customers", tid, "id,ext_id,family_ext_id,gender")}
             db_set = sum(1 for c in custs.values() if c.get("gender"))
         except RuntimeError:
-            custs = {c["id"]: c for c in supa.select_all("customers", tid, "id,family_ext_id")}
+            custs = {c["id"]: c for c in supa.select_all("customers", tid, "id,ext_id,family_ext_id")}
             db_set = None
 
+        # 앱과 같은 기준: 고객번호(숫자)를 가진 실제 고객만. '손님' 워크인은 관리 대상이 아니다.
+        real = {cid for cid, c in custs.items() if str(c.get("ext_id") or "").isdigit()}
         by_cust: dict = defaultdict(list)
         clue_tx = 0
         for r in txs:
-            if not r.get("customer_id"):
+            if not r.get("customer_id") or r["customer_id"] not in real:
                 continue
             if (r.get("kind") or txkind.classify(r.get("service"))) != "service":
                 continue
