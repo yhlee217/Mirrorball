@@ -29,7 +29,7 @@
     CHECK=1 .venv/bin/python worker/summarize_memos.py    # CLI 가 되는지만 점검
     USE_API_KEY=1 .venv/bin/python ...                    # 구독 대신 ANTHROPIC_API_KEY 로 청구
     JOBS=8 .venv/bin/python worker/summarize_memos.py     # 동시 실행 수(기본 4)
-    BATCH=8 .venv/bin/python worker/summarize_memos.py    # 1회 호출에 묶을 고객 수(기본 6)
+    BATCH=20 .venv/bin/python worker/summarize_memos.py   # 1회 호출에 묶을 고객 수(기본 12)
     ACTIVE_MONTHS=12 .venv/bin/python ...                 # 최근 12개월 방문 고객만(기본: 전체)
     MODEL=opus .venv/bin/python ...                       # 모델 변경(기본 sonnet), MODEL= 로 지정 해제
 """
@@ -37,6 +37,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -71,9 +72,14 @@ CLI_TIMEOUT = 180
 MODEL = os.environ.get("MODEL", "sonnet")
 # 프롬프트가 바뀌면 기존 요약은 형식이 달라 못 쓴다. 해시에 섞어 자동으로 다시 만들게 한다.
 PROMPT_VERSION = "2-sections"
-# 고객 1명당 호출 1번이면 1,300명에 1,300번이라 구독 사용량이 순식간에 녹는다.
-# 여러 명을 한 프롬프트에 묶어 호출 수를 BATCH 배로 줄인다.
-BATCH = max(1, int(os.environ.get("BATCH") or 6))
+# claude -p 는 단순 모델 호출이 아니라 Claude Code 에이전트를 띄운다. 실측 결과 프롬프트가
+# 10토큰이어도 시스템 프롬프트·툴 정의로 호출당 약 3만 토큰이 붙는다(대부분 캐시 읽기).
+# 즉 비용은 '메모 길이'가 아니라 '호출 횟수'가 정한다 — 1,300명을 1명씩 부르면 4천만 토큰,
+# 20명씩 묶으면 200만 토큰. 그래서 최대한 크게 묶는다.
+#
+# 참고: --system-prompt 로 껍데기를 줄이려 하면 오히려 손해다. 기본 시스템 프롬프트는
+# 호출 간 캐시로 재사용(1/10 가격)되는데, 직접 지정하면 캐시가 깨져 매번 새로 쓴다.
+BATCH = max(1, int(os.environ.get("BATCH") or 12))
 # 2년 전 한 번 오고 안 오는 고객까지 정리해봐야 그 카르테는 열릴 일이 없다.
 # 최근 N개월 안에 다녀간 고객만 대상으로 잡아 일 자체를 줄인다(0 이면 전체).
 ACTIVE_MONTHS = int(os.environ.get("ACTIVE_MONTHS") or 0)
@@ -101,16 +107,20 @@ def stripped_vars() -> list[str]:
     return [] if os.environ.get("USE_API_KEY") else [k for k in _AUTH_VARS if os.environ.get(k)]
 
 
-def run_claude(prompt: str) -> tuple[str | None, str]:
-    """Claude CLI 호출. (출력, 실패사유) — 실패 사유를 삼키지 않고 돌려준다.
+USAGE = {"calls": 0, "in": 0, "cache_read": 0, "cache_write": 0, "out": 0}
+_usage_lock = __import__("threading").Lock()
 
-    처음엔 --model 을 붙여 부르고, 실패하면 한 번은 빼고 재시도한다(CLI 버전에 따라
-    플래그를 모를 수 있다). 무엇 때문에 실패했는지 모르면 고칠 수가 없으므로
-    stderr 첫 줄과 종료코드를 그대로 올려보낸다.
+
+def run_claude(prompt: str) -> tuple[str | None, str]:
+    """Claude CLI 호출. (출력, 실패사유).
+
+    --output-format json 으로 받아 본문과 함께 토큰 사용량도 집계한다.
+    호출당 고정비가 큰 구조라, 얼마나 쓰고 있는지 눈으로 봐야 판단이 선다.
     """
-    attempts = [["claude", "-p", prompt] + (["--model", MODEL] if MODEL else [])]
+    base = ["claude", "-p", prompt, "--output-format", "json"]
+    attempts = [base + (["--model", MODEL] if MODEL else [])]
     if MODEL:
-        attempts.append(["claude", "-p", prompt])
+        attempts.append(base)
 
     why = "알 수 없음"
     for cmd in attempts:
@@ -123,12 +133,39 @@ def run_claude(prompt: str) -> tuple[str | None, str]:
         except subprocess.TimeoutExpired:
             why = f"타임아웃 {CLI_TIMEOUT}s"
             continue
-        out = (r.stdout or "").strip()
-        if out:
-            return out, ""
+
+        raw = (r.stdout or "").strip()
+        if raw:
+            try:
+                d = json.loads(raw)
+                u = d.get("usage") or {}
+                with _usage_lock:
+                    USAGE["calls"] += 1
+                    USAGE["in"] += u.get("input_tokens") or 0
+                    USAGE["cache_read"] += u.get("cache_read_input_tokens") or 0
+                    USAGE["cache_write"] += u.get("cache_creation_input_tokens") or 0
+                    USAGE["out"] += u.get("output_tokens") or 0
+                text = (d.get("result") or "").strip()
+                if text:
+                    return text, ""
+                why = f"빈 결과 (subtype={d.get('subtype')})"
+                continue
+            except json.JSONDecodeError:
+                return raw, ""      # json 이 아니면 본문으로 취급
         err = (r.stderr or "").strip()
         why = (err.splitlines()[0][:160] if err else f"빈 응답 (exit={r.returncode})")
     return None, why
+
+
+def print_usage() -> None:
+    u = USAGE
+    if not u["calls"]:
+        return
+    billed = u["in"] + u["cache_write"] + u["cache_read"]
+    print(f"\n토큰 사용 · 호출 {u['calls']}회 · 입력 {u['in']:,} + 캐시읽기 {u['cache_read']:,}"
+          f" + 캐시쓰기 {u['cache_write']:,} · 출력 {u['out']:,}")
+    print(f"  호출당 평균 {billed // u['calls']:,} 토큰"
+          f" (대부분 Claude Code 기본 장착분 — 묶을수록 1인당 비용이 준다)")
 
 
 def check_cli() -> int:
@@ -379,6 +416,7 @@ def main() -> int:
                 first = summary.splitlines()[0][:30]
                 print(f"  [{done + failed}/{total}] {cid[:8]} ✓{' +근황' if recent else ''} {first}", flush=True)
 
+    print_usage()
     took = int(time.time() - t0)
     print(f"\n완료: {done}명 갱신" + (f" · 실패 {failed}명" if failed else "") + f" · {took//60}분 {took%60}초")
     if limit and total == limit:
