@@ -8,7 +8,7 @@ import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { isActiveBooking } from '@/lib/bookings';
-import { txKind } from '@/lib/tx';
+import { txKind, ledger } from '@/lib/tx';
 import PocketToggle from './pocket-toggle';
 import CustomerNote from './customer-note';
 import ChurnToggle from './churn-toggle';
@@ -74,7 +74,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
       .select('id,date,time,service,amount_won,memo,kind,paid_out_of_pocket')
       .eq('customer_id', cust.id)
       .order('date', { ascending: false })
-      .limit(100),
+      .limit(500), // 잔액 계산이 과거 충전까지 봐야 해서 넉넉히
     supabase
       .from('bookings')
       .select('date,time,service,note,status')
@@ -149,8 +149,18 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     const k = txKind(h.kind, h.service);
     return k === 'product' || k === 'refund';
   });
-  const chargedTotal = charges.reduce((a, h) => a + (h.amount_won || 0), 0);
-  const balance = cust.prepaid_balance ?? 0;
+  // 잔액을 DB 값에만 기대면 워커 재계산 전까지 0으로 보인다. 이 고객 거래는 이미 들고
+  // 있으니 같은 규칙(lib/tx ledger)으로 여기서 바로 계산한다.
+  const book = ledger(
+    all.map((h) => ({
+      date: h.date, time: h.time, id: h.id,
+      amount: h.amount_won || 0,
+      kind: txKind(h.kind, h.service),
+      pocket: !!h.paid_out_of_pocket,
+    })),
+  );
+  const chargedTotal = book.charged;
+  const balance = book.balance;
 
   // 매장 메모를 따로 모아 보여주던 카드는 없앴다 — 아래 '시술 이력'이 같은 메모를 방문마다
   // 이미 달고 있어 화면에 두 번 나왔다. 메모는 어느 시술 때 적힌 것인지가 중요하므로
@@ -292,7 +302,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
             </div>
             {charges.map((h) => (
               <div className="memo-row" key={h.id}>
-                <span className="memo-date">{h.date.slice(5).replace('-', '.')}</span>
+                <span className="memo-date">{h.date.replace(/-/g, '.')}</span>
                 <span>{won(h.amount_won)} 충전</span>
               </div>
             ))}

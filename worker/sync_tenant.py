@@ -51,8 +51,8 @@ def _recompute_aggregates(tid: str) -> int:
     이중 계상이라, 실제로 받은 돈만 남긴다.
     """
     full = _has_0019()
-    cols = ("id,customer_id,date,service,amount_won,kind,paid_out_of_pocket,covered_won"
-            if full else "id,customer_id,date,service,amount_won")
+    cols = ("id,customer_id,date,time,service,amount_won,kind,paid_out_of_pocket,covered_won"
+            if full else "id,customer_id,date,time,service,amount_won")
     txs = supa.select_all("transactions", tid, cols)
     byc: dict = defaultdict(list)
     for t in txs:
@@ -60,6 +60,7 @@ def _recompute_aggregates(tid: str) -> int:
             byc[t["customer_id"]].append({
                 "id": t.get("id"),
                 "date": t["date"],
+                "time": t.get("time"),
                 "amount": t.get("amount_won") or 0,
                 # kind 가 아직 없는 행(마이그레이션 전 수집분)은 시술명으로 즉시 판정
                 "kind": t.get("kind") or txkind.classify(t.get("service")),

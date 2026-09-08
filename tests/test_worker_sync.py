@@ -231,3 +231,40 @@ def test_ledger_partial_coverage():
              {"date": "2026-02-01", "amount": 80000, "kind": "service"}]
     b = txkind.ledger(items)
     assert b["revenue"] == 80000 and b["balance"] == 0
+
+
+def test_ledger_same_day_uses_time_order():
+    # 같은 날 충전 → 시술 순서를 시각으로 가린다(정렬이 뒤집히면 잔액이 틀린다)
+    import txkind
+    items = [{"date": "2026-01-01", "time": "11:00", "amount": 40000, "kind": "service"},
+             {"date": "2026-01-01", "time": "10:00", "amount": 100000, "kind": "charge"}]
+    b = txkind.ledger(items)
+    assert b["balance"] == 60000 and b["covered"] == 40000
+
+
+def test_ledger_matches_web_implementation():
+    """web/lib/tx.ts 의 ledger 와 같은 답을 내야 한다.
+
+    같은 규칙이 두 곳에 있으면 반드시 갈라진다. 실제 TS 를 여기서 돌릴 수 없으므로,
+    합의된 기대값을 표로 박아 파이썬 쪽이 먼저 어긋나는 걸 잡는다.
+    (TS 값은 동일 케이스를 node 로 돌려 확인함)
+    """
+    import txkind
+    expect = {
+        "charge_then_services": (0, 300000),      # (balance, revenue)
+        "runs_out": (0, 400000),
+        "pocket": (300000, 400000),
+        "partial": (0, 80000),
+    }
+    charge = {"date": "2026-01-01", "amount": 300000, "kind": "charge"}
+    svc = lambda d, a=100000, **k: {"date": d, "amount": a, "kind": "service", **k}  # noqa: E731
+
+    got = {
+        "charge_then_services": txkind.ledger([charge, svc("2026-02-01"), svc("2026-03-01"), svc("2026-04-01")]),
+        "runs_out": txkind.ledger([charge, svc("2026-02-01"), svc("2026-03-01"), svc("2026-04-01"), svc("2026-05-01")]),
+        "pocket": txkind.ledger([charge, svc("2026-02-01", out_of_pocket=True)]),
+        "partial": txkind.ledger([{"date": "2026-01-01", "amount": 50000, "kind": "charge"},
+                                  svc("2026-02-01", 80000)]),
+    }
+    for k, (bal, rev) in expect.items():
+        assert (got[k]["balance"], got[k]["revenue"]) == (bal, rev), f"{k} 불일치: {got[k]}"

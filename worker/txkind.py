@@ -44,7 +44,8 @@ def ledger(items: list[dict]) -> dict:
     covered = 0          # 잔액으로 결제된 것으로 본 금액(표시용)
     per_tx: dict = {}    # 거래 id → 잔액으로 결제된 금액. 통계가 월별로 합산할 때 쓴다
 
-    for it in sorted(items, key=lambda x: (x.get("date") or "", x.get("id") or "")):
+    # 같은 날 충전과 시술이 같이 있으면 순서가 결과를 바꾼다 — 시각까지 보고 정렬한다.
+    for it in sorted(items, key=lambda x: (x.get("date") or "", x.get("time") or "", x.get("id") or "")):
         amt = int(it.get("amount") or 0)
         kind = it.get("kind") or "service"
 
