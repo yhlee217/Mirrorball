@@ -9,12 +9,13 @@ import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
 import { kstNow } from '@/lib/kst';
 import { lastSynced, syncLine } from '@/lib/sync';
+import { txKind } from '@/lib/tx';
 import VisitsList from './visits-list';
 
 // 방문 관리 — '다녀가신 분'을 챙기는 화면(알림 탭이 '아직 안 오신 분'을 챙기는 것과 짝).
 // 리뷰 요청은 종용하는 느낌이라 이 화면에서 빼고 노출(콘텐츠 코치) 탭에만 둔다.
 
-type Tx = { customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
+type Tx = { customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null; kind: string | null };
 type Cust = { id: string; ext_id: string | null; pii_enc: string | null; visit_count: number };
 
 const DAY = 86400000;
@@ -39,7 +40,7 @@ export default async function VisitsPage() {
     fetchAllRows<Tx>((from, to) =>
       supabase
         .from('transactions')
-        .select('customer_id,date,time,service,amount_won,memo')
+        .select('customer_id,date,time,service,amount_won,memo,kind')
         .gte('date', since)
         .order('id')
         .range(from, to)),
@@ -53,6 +54,7 @@ export default async function VisitsPage() {
   >();
   for (const t of txs) {
     if (!t.customer_id || !t.date) continue;
+    if (txKind(t.kind, t.service) !== 'service') continue; // 충전·제품만 있는 날은 방문이 아니다
     const k = `${t.customer_id}|${t.date}`;
     const e = byVisit.get(k) ?? { customer_id: t.customer_id, date: t.date, time: null, services: [], amount: 0, memo: null };
     if (t.service) e.services.push(t.service);

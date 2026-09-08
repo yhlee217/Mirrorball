@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase/server';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
+import { txKind } from '@/lib/tx';
 import { fetchAllRows } from '@/lib/customers';
 
 function won(n: number): string {
@@ -31,8 +32,8 @@ export default async function StatsPage() {
   const [customers, txs] = await Promise.all([
     fetchAllRows<{ total_won: number; visit_count: number }>((from, to) =>
       supabase.from('customers').select('total_won,visit_count').eq('tenant_id', tenantId).order('id').range(from, to)),
-    fetchAllRows<{ date: string; service: string | null; amount_won: number }>((from, to) =>
-      supabase.from('transactions').select('date,service,amount_won').eq('tenant_id', tenantId).order('id').range(from, to)),
+    fetchAllRows<{ date: string; service: string | null; amount_won: number; kind: string | null; covered_won: number | null }>((from, to) =>
+      supabase.from('transactions').select('date,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
   ]);
   const cs = customers;
   const tx = txs;
@@ -46,6 +47,11 @@ export default async function StatsPage() {
   const repeatCust = cs.filter((c) => c.visit_count >= 2).length;
   const newCust = totalCustomers - repeatCust;
   const retention = totalCustomers ? Math.round((repeatCust / totalCustomers) * 100) : 0;
+
+  // 실매출 = 결제 금액 − 선불 잔액으로 결제된 금액.
+  // 충전과 그 충전금으로 한 시술을 둘 다 더하면 이중 계상이라, 한 규칙으로 걷어낸다.
+  const net = (t: { amount_won: number; covered_won: number | null }) =>
+    (t.amount_won || 0) - (t.covered_won || 0);
 
   // 월별 매출(최근 6개월). 거래 날짜가 KST 라 '이번 달'도 KST 로 잡는다(엣지는 UTC).
   const [ky, km] = kstNow().date.split('-').map(Number);
@@ -65,7 +71,7 @@ export default async function StatsPage() {
   for (const t of tx) {
     if (t.date) {
       const m = mmap.get(t.date.slice(0, 7));
-      if (m) m.rev += t.amount_won || 0;
+      if (m) m.rev += net(t);
     }
   }
   const maxRev = Math.max(1, ...months.map((m) => m.rev));
@@ -88,7 +94,7 @@ export default async function StatsPage() {
     if (!s) continue;
     const e = svc.get(s) || { n: 0, rev: 0 };
     e.n++;
-    e.rev += t.amount_won || 0;
+    e.rev += net(t);
     svc.set(s, e);
   }
   const topSvc = [...svc.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 6);

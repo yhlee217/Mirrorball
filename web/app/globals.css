@@ -236,3 +236,15 @@ a.hs:active{background:var(--soft)}
 .pub-a{font-size:13.5px;color:var(--muted);margin-top:5px;line-height:1.6}
 .pub-loc{font-size:14.5px;color:var(--ink);line-height:1.6}
 .pub-foot{text-align:center;color:var(--muted);font-size:11px;letter-spacing:1px;margin-top:38px;opacity:.55}
+
+/* 선불 충전 — 잔액은 추정이라 강조하지 않고, 사비 토글로 사람이 고칠 수 있게 한다 */
+.prepaid{display:flex;gap:18px;margin-bottom:8px}
+.prepaid>div{display:flex;flex-direction:column;gap:2px}
+.prepaid .pl{font-size:10.5px;color:var(--muted)}
+.prepaid b{font-size:16px;font-weight:800}
+.prepaid b.pos{color:var(--accent-d)}
+.pocket{font-size:9.5px;font-weight:700;color:var(--muted);background:var(--soft);
+  border:1px solid var(--line);border-radius:20px;padding:2px 7px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+.pocket.on{color:#fff;background:var(--accent);border-color:var(--accent)}
+.pocket:disabled{opacity:.5}

@@ -8,6 +8,8 @@ import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { isActiveBooking } from '@/lib/bookings';
+import { txKind } from '@/lib/tx';
+import PocketToggle from './pocket-toggle';
 import CustomerNote from './customer-note';
 import ChurnToggle from './churn-toggle';
 
@@ -30,9 +32,10 @@ type Cust = {
   visits_365d: number | null;
   memo_ai: string | null;
   memo_ai_recent: string | null;
+  prepaid_balance: number | null;
   memo_ai_at: string | null;
 };
-type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null };
+type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null; kind: string | null; paid_out_of_pocket: boolean | null };
 type Bk = { date: string; time: string | null; service: string | null; note: string | null; status: string | null };
 
 const SIGNAL: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', new: '신규' };
@@ -56,7 +59,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d,memo_ai,memo_ai_recent,memo_ai_at',
+      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d,memo_ai,memo_ai_recent,memo_ai_at,prepaid_balance',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -68,7 +71,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', cust.tenant_id).maybeSingle(),
     supabase
       .from('transactions')
-      .select('id,date,time,service,amount_won,memo')
+      .select('id,date,time,service,amount_won,memo,kind,paid_out_of_pocket')
       .eq('customer_id', cust.id)
       .order('date', { ascending: false })
       .limit(100),
@@ -137,7 +140,17 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     );
   }
 
-  const history = (tx as Tx[]) ?? [];
+  const all = (tx as Tx[]) ?? [];
+  // 충전·상품권은 시술이 아니다. 같이 늘어놓으면 시술 이력이 읽히지 않고,
+  // 매출·방문수도 이 구분 위에서 계산된다(worker/txkind.py).
+  const history = all.filter((h) => txKind(h.kind, h.service) === 'service');
+  const charges = all.filter((h) => txKind(h.kind, h.service) === 'charge');
+  const others = all.filter((h) => {
+    const k = txKind(h.kind, h.service);
+    return k === 'product' || k === 'refund';
+  });
+  const chargedTotal = charges.reduce((a, h) => a + (h.amount_won || 0), 0);
+  const balance = cust.prepaid_balance ?? 0;
 
   // 매장 메모를 따로 모아 보여주던 카드는 없앴다 — 아래 '시술 이력'이 같은 메모를 방문마다
   // 이미 달고 있어 화면에 두 번 나왔다. 메모는 어느 시술 때 적힌 것인지가 중요하므로
@@ -268,6 +281,29 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           </div>
         )}
 
+        {charges.length > 0 && (
+          <div className="card" style={{ padding: '13px 15px' }}>
+            <div className="ch" style={{ padding: 0, marginBottom: 6 }}>
+              선불 충전 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>· 잔액은 추정</span>
+            </div>
+            <div className="prepaid">
+              <div><span className="pl">충전 합계</span><b>{won(chargedTotal)}</b></div>
+              <div><span className="pl">추정 잔액</span><b className={balance > 0 ? 'pos' : ''}>{won(balance)}</b></div>
+            </div>
+            {charges.map((h) => (
+              <div className="memo-row" key={h.id}>
+                <span className="memo-date">{h.date.slice(5).replace('-', '.')}</span>
+                <span>{won(h.amount_won)} 충전</span>
+              </div>
+            ))}
+            <p className="note">
+              결제수단이 기록되지 않아 <b>충전 이후 시술은 잔액에서 쓴 것으로 추정</b>합니다.
+              사비로 결제한 시술은 아래 이력에서 <b>&lsquo;사비?&rsquo;</b>를 눌러 빼주세요.
+              {balance === 0 && chargedTotal > 0 ? ' 잔액이 0이면 그 뒤 시술은 사비로 계산됩니다.' : ''}
+            </p>
+          </div>
+        )}
+
         <div className="card">
           <div className="ch">시술 이력{history.length ? ' · ' + history.length + '건' : ''}</div>
           {history.length ? (
@@ -281,13 +317,33 @@ export default async function CustomerPage({ params }: { params: { id: string } 
                   </div>
                   {h.memo ? <div className="tip">{h.memo}</div> : null}
                 </div>
-                <div className="rt">{won(h.amount_won)}</div>
+                <div className="rt">
+                  {won(h.amount_won)}
+                  {/* 충전 이력이 있는 고객만 — 없으면 어차피 전부 사비라 물을 이유가 없다 */}
+                  {charges.length > 0 ? (
+                    <div style={{ marginTop: 4 }}>
+                      <PocketToggle id={h.id} initial={!!h.paid_out_of_pocket} />
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ))
           ) : (
             <div className="empty">시술 이력이 없어요</div>
           )}
         </div>
+
+        {others.length > 0 && (
+          <div className="card" style={{ padding: '13px 15px' }}>
+            <div className="ch" style={{ padding: 0, marginBottom: 6 }}>제품 · 기타</div>
+            {others.map((h) => (
+              <div className="memo-row" key={h.id}>
+                <span className="memo-date">{h.date.slice(5).replace('-', '.')}</span>
+                <span>{h.service ?? '기타'} · {won(h.amount_won)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );

@@ -181,3 +181,53 @@ def _row(custno="100", name="김", date="2026-06-01", svc="컷", won="10,000"):
 
 def normalize_min():
     return scrape.normalize([_row()], [])
+
+
+# ── 선불 충전 분리(B안: 매출 = 실제로 받은 돈) ──
+def test_classify_splits_charge_from_service():
+    import txkind
+    assert txkind.classify("[300,000] 원 충전") == "charge"
+    assert txkind.classify("정액권") == "charge"
+    assert txkind.classify("여자컷(원장)") == "service"
+    assert txkind.classify("제품 판매") == "product"
+    assert txkind.classify("환불") == "refund"
+    assert txkind.classify(None) == "service"      # 시술명 없으면 시술로
+
+
+def test_ledger_no_double_count():
+    # 30만 충전 후 10만 시술 3회 — 실제로 받은 돈은 30만(예전엔 60만으로 계상됐다)
+    import txkind
+    items = [{"date": "2026-01-01", "amount": 300000, "kind": "charge"}] + [
+        {"date": d, "amount": 100000, "kind": "service"}
+        for d in ("2026-02-01", "2026-03-01", "2026-04-01")
+    ]
+    b = txkind.ledger(items)
+    assert b["revenue"] == 300000 and b["balance"] == 0
+
+
+def test_ledger_self_corrects_when_balance_runs_out():
+    # 잔액이 바닥나면 그 뒤 시술은 사비로 본다 — 추정이 스스로 교정된다
+    import txkind
+    items = [{"date": "2026-01-01", "amount": 300000, "kind": "charge"}] + [
+        {"date": d, "amount": 100000, "kind": "service"}
+        for d in ("2026-02-01", "2026-03-01", "2026-04-01", "2026-05-01")
+    ]
+    assert txkind.ledger(items)["revenue"] == 400000
+
+
+def test_ledger_respects_out_of_pocket_flag():
+    # 사장님이 '사비'로 표시하면 잔액을 건드리지 않고 매출에 더한다
+    import txkind
+    items = [{"date": "2026-01-01", "amount": 300000, "kind": "charge"},
+             {"date": "2026-02-01", "amount": 100000, "kind": "service", "out_of_pocket": True}]
+    b = txkind.ledger(items)
+    assert b["revenue"] == 400000 and b["balance"] == 300000
+
+
+def test_ledger_partial_coverage():
+    # 잔액이 부족하면 부족분만 사비로 잡는다
+    import txkind
+    items = [{"date": "2026-01-01", "amount": 50000, "kind": "charge"},
+             {"date": "2026-02-01", "amount": 80000, "kind": "service"}]
+    b = txkind.ledger(items)
+    assert b["revenue"] == 80000 and b["balance"] == 0

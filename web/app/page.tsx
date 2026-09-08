@@ -8,6 +8,7 @@ import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
 import { mergeSettings, isVip, isLapsed } from '@/lib/settings';
 import { kstDatePlus, isUpcoming } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
+import { txKind } from '@/lib/tx';
 import HomeView from './home-view';
 import OnboardButton from './onboard-button';
 
@@ -122,9 +123,12 @@ export default async function Page() {
 
   // 방문 관리 진입점 숫자 — 그 화면이 보여주는 창(최근 14일)과 같은 기준으로 센다.
   // '오늘' 기준이면 눌러 들어갔을 때 14일치가 나와 숫자와 화면이 어긋난다.
-  const recentTx = await fetchAllRows<{ customer_id: string | null }>((from, to) =>
-    supabase.from('transactions').select('customer_id').gte('date', kstDatePlus(-13)).order('id').range(from, to));
-  const recentVisits = new Set(recentTx.map((x) => x.customer_id).filter(Boolean)).size;
+  // 충전만 하고 간 날은 '방문'이 아니다 — 시술 거래만 센다(집계 기준과 동일).
+  const recentTx = await fetchAllRows<{ customer_id: string | null; kind: string | null; service: string | null }>((from, to) =>
+    supabase.from('transactions').select('customer_id,kind,service').gte('date', kstDatePlus(-13)).order('id').range(from, to));
+  const recentVisits = new Set(
+    recentTx.filter((x) => txKind(x.kind, x.service) === 'service').map((x) => x.customer_id).filter(Boolean),
+  ).size;
 
   return (
     <HomeView

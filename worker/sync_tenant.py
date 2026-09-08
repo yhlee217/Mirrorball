@@ -10,37 +10,69 @@ from datetime import date, timedelta
 import mirrorball_crypto as mc
 import scrape
 import supa
+import txkind
 from scrape import _derive
 
 _PII_FIELDS = ("name", "birthday", "phone")
 
 
 def _recompute_aggregates(tid: str) -> int:
-    """전체 거래로 고객 집계 재계산 — 수집 창과 무관하게 방문수·주기·매출 lifetime 정확."""
-    txs = supa.select_all("transactions", tid, "customer_id,date,amount_won")
+    """전체 거래로 고객 집계 재계산 — 수집 창과 무관하게 방문수·주기·매출 lifetime 정확.
+
+    방문수는 '시술을 받은 날'만 센다. 충전만 하고 간 날을 방문으로 세면 재방문 주기가 짧아져
+    이탈 판정이 밀린다. 같은 날 시술 2건은 날짜 집합이라 원래부터 1회로 센다.
+
+    매출은 선불 원장(txkind.ledger)으로 낸다 — 충전과 그 충전금으로 한 시술을 둘 다 더하면
+    이중 계상이라, 실제로 받은 돈만 남긴다.
+    """
+    txs = supa.select_all("transactions", tid,
+                          "id,customer_id,date,service,amount_won,kind,paid_out_of_pocket,covered_won")
     byc: dict = defaultdict(list)
     for t in txs:
         if t.get("customer_id") and t.get("date"):
-            byc[t["customer_id"]].append((t["date"], t.get("amount_won") or 0))
+            byc[t["customer_id"]].append({
+                "id": t.get("id"),
+                "date": t["date"],
+                "amount": t.get("amount_won") or 0,
+                # kind 가 아직 없는 행(마이그레이션 전 수집분)은 시술명으로 즉시 판정
+                "kind": t.get("kind") or txkind.classify(t.get("service")),
+                "out_of_pocket": bool(t.get("paid_out_of_pocket")),
+                "covered": t.get("covered_won") or 0,
+            })
     today_d = date.today()
     today = str(today_d)
     # VIP 판정용 최근 방문 횟수. 앱이 매번 전체 거래를 훑지 않도록 여기서 미리 센다.
     # 창은 3개 고정 — 설정(vip_recent_months)이 그중 하나를 고르므로 설정을 바꿔도 재수집 불필요.
     cut90, cut180, cut365 = (str(today_d - timedelta(days=n)) for n in (90, 180, 365))
     updates = []
+    covered_fix: list = []
     for cid, items in byc.items():
-        dates = sorted({d for d, _ in items}, reverse=True)
+        # 방문 = 시술을 받은 날(충전·제품만 있는 날 제외)
+        dates = sorted({it["date"] for it in items if it["kind"] == "service"}, reverse=True)
         cycle, state = _derive(dates, len(dates), today)
+        book = txkind.ledger(items)
+        # 거래별 '잔액으로 결제된 금액'. 통계는 월별로 합산해야 해서 고객 단위 집계로는 안 되고,
+        # 이 값이 있어야 어느 화면이든 '실매출 = 금액 − 잔액결제분' 한 규칙으로 계산된다.
+        for it in items:
+            want = book["per_tx"].get(it["id"], 0)
+            if want != (it.get("covered") or 0):
+                covered_fix.append((it["id"], want))
         updates.append({
             "id": cid, "tenant_id": tid, "visit_count": len(dates),
             "first_visit": dates[-1] if dates else None,
             "last_visit": dates[0] if dates else None,
-            "total_won": sum(a for _, a in items),
+            "total_won": book["revenue"],
+            "prepaid_balance": book["balance"],
             "revisit_cycle_days": cycle, "revisit_state": state,
             "visits_90d": sum(1 for d in dates if d >= cut90),
             "visits_180d": sum(1 for d in dates if d >= cut180),
             "visits_365d": sum(1 for d in dates if d >= cut365),
         })
+    # 바뀐 거래만 갱신 — 선불 고객은 일부라 보통 몇 건이다.
+    for txid, val in covered_fix:
+        supa.patch("transactions", {"id": f"eq.{txid}"}, {"covered_won": val})
+    if covered_fix:
+        print(f"  잔액결제 반영 {len(covered_fix)}건")
     supa.upsert("customers", updates, "id")
     return len(updates)
 
@@ -74,7 +106,10 @@ def _sync_one(tenant: dict, rows: list, reserve_rows: list, staff, reservations_
             "service": t.get("service"),
             "memo": t.get("memo"),
             "amount_won": t.get("amount_won", 0),
+            "kind": txkind.classify(t.get("service")),
             "ext_id": t["ext_id"],
+            # paid_out_of_pocket 은 일부러 넣지 않는다 — 사장님이 표시한 값을 수집이 덮으면 안 된다
+            # (업서트가 merge-duplicates 라 payload 에 없는 컬럼은 그대로 남는다).
         }
         for t in data.get("transactions", [])
         if t.get("date")
