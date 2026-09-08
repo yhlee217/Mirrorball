@@ -30,8 +30,11 @@ export default async function StatsPage() {
   const tenantId = (mem as { tenant_id: string }).tenant_id;
 
   const [customers, txs] = await Promise.all([
-    fetchAllRows<{ total_won: number; visit_count: number }>((from, to) =>
-      supabase.from('customers').select('total_won,visit_count').eq('tenant_id', tenantId).order('id').range(from, to)),
+    fetchAllRows<{ total_won: number; visit_count: number; gender: string | null;
+                   age_band: string | null; revisit_cycle_days: number | null }>((from, to) =>
+      supabase.from('customers')
+        .select('total_won,visit_count,gender,age_band,revisit_cycle_days')
+        .eq('tenant_id', tenantId).order('id').range(from, to)),
     fetchAllRows<{ date: string; service: string | null; amount_won: number; kind: string | null; covered_won: number | null }>((from, to) =>
       supabase.from('transactions').select('date,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
   ]);
@@ -75,6 +78,38 @@ export default async function StatsPage() {
     }
   }
   const maxRev = Math.max(1, ...months.map((m) => m.rev));
+  // ── 성별(시술명 추정) ──
+  // 판정된 고객만으로 비교한다. 미상을 0으로 섞으면 평균이 무너지므로 분모에서 뺀다.
+  // 추정이라 판정률을 함께 보여주지 않으면 오해를 부른다.
+  type G = 'M' | 'F';
+  const gStat: Record<G, { n: number; rev: number; visits: number; cyc: number[] }> = {
+    M: { n: 0, rev: 0, visits: 0, cyc: [] },
+    F: { n: 0, rev: 0, visits: 0, cyc: [] },
+  };
+  let gUnknown = 0;
+  let kidCount = 0;
+  for (const c of cs) {
+    if (c.age_band === 'kid') kidCount++;
+    const g = c.gender === 'M' || c.gender === 'F' ? (c.gender as G) : null;
+    if (!g) {
+      gUnknown++;
+      continue;
+    }
+    gStat[g].n++;
+    gStat[g].rev += c.total_won || 0;
+    gStat[g].visits += c.visit_count || 0;
+    if (c.revisit_cycle_days) gStat[g].cyc.push(c.revisit_cycle_days);
+  }
+  const gDecided = gStat.M.n + gStat.F.n;
+  const gRate = totalCustomers ? Math.round((gDecided / totalCustomers) * 100) : 0;
+  const gRev = gStat.M.rev + gStat.F.rev;
+  const median = (xs: number[]) => {
+    if (!xs.length) return 0;
+    const a = [...xs].sort((x, y) => x - y);
+    return a[Math.floor(a.length / 2)];
+  };
+  const perVisit = (g: G) => (gStat[g].visits ? Math.round(gStat[g].rev / gStat[g].visits) : 0);
+
   const synced = await lastSynced(supabase);
 
   // 요일별 방문
@@ -126,6 +161,71 @@ export default async function StatsPage() {
             재방문 고객 {repeatCust.toLocaleString()}명 · 신규(1회) {newCust.toLocaleString()}명
           </div>
         </div>
+
+        {gDecided > 0 && (
+          <div className="card" style={{ padding: '14px 15px' }}>
+            <div className="ch" style={{ padding: 0, marginBottom: 10 }}>
+              고객 성별 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>· 시술명 추정</span>
+            </div>
+
+            {/* ① 구성 — 판정된 고객 기준임을 막대에서도 드러낸다 */}
+            <div className="gbar">
+              <div className="gm" style={{ width: `${Math.round((gStat.M.n / totalCustomers) * 100)}%` }} />
+              <div className="gf" style={{ width: `${Math.round((gStat.F.n / totalCustomers) * 100)}%` }} />
+              <div className="gu" style={{ width: `${Math.round((gUnknown / totalCustomers) * 100)}%` }} />
+            </div>
+            <div className="glegend">
+              <span><i className="gm" />남성 {gStat.M.n.toLocaleString()}명</span>
+              <span><i className="gf" />여성 {gStat.F.n.toLocaleString()}명</span>
+              <span><i className="gu" />미상 {gUnknown.toLocaleString()}명</span>
+            </div>
+
+            {/* ②③ 객단가·재방문 주기·매출 비중 — 판정된 고객끼리만 비교 */}
+            <div className="tablewrap" style={{ marginTop: 12 }}>
+              <table className="gtab">
+                <thead>
+                  <tr><th></th><th>남성</th><th>여성</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>고객</td>
+                    <td>{gStat.M.n.toLocaleString()}명</td>
+                    <td>{gStat.F.n.toLocaleString()}명</td>
+                  </tr>
+                  <tr>
+                    <td>객단가<span className="sub2">방문 1회당</span></td>
+                    <td>{won(perVisit('M'))}</td>
+                    <td>{won(perVisit('F'))}</td>
+                  </tr>
+                  <tr>
+                    <td>재방문 주기<span className="sub2">중앙값</span></td>
+                    <td>{median(gStat.M.cyc) || '-'}일</td>
+                    <td>{median(gStat.F.cyc) || '-'}일</td>
+                  </tr>
+                  <tr>
+                    <td>매출 비중<span className="sub2">판정 고객 중</span></td>
+                    <td>{gRev ? Math.round((gStat.M.rev / gRev) * 100) : 0}%</td>
+                    <td>{gRev ? Math.round((gStat.F.rev / gRev) * 100) : 0}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* ④ 아동·학생 */}
+            {kidCount > 0 && (
+              <div className="set-row" style={{ marginTop: 10 }}>
+                본인이 아동·학생으로 보이는 고객 <b>{kidCount.toLocaleString()}명</b>
+                <span style={{ color: 'var(--muted)' }}> ({Math.round((kidCount / totalCustomers) * 100)}%)</span>
+              </div>
+            )}
+
+            <p className="note">
+              메뉴에 성별이 적힌 시술(남자컷·여자컷 등)로 추정해 <b>{gRate}%</b>가 판정됐어요.
+              남·여가 섞여 대신 결제한 것으로 보이는 고객과 단서가 없는 고객은 <b>미상</b>으로 두고
+              위 비교에서 제외합니다.
+            </p>
+          </div>
+        )}
 
         <div className="card" style={{ padding: '14px 15px' }}>
           <div className="ch" style={{ padding: 0, marginBottom: 10 }}>월별 매출 (최근 6개월 · 만원)</div>

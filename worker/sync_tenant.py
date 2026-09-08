@@ -10,6 +10,7 @@ from datetime import date, timedelta
 import mirrorball_crypto as mc
 import scrape
 import supa
+import gender as gender_mod
 import txkind
 from scrape import _derive
 
@@ -41,6 +42,25 @@ def _has_0019() -> bool:
     return _SCHEMA_0019
 
 
+_SCHEMA_GENDER: bool | None = None
+
+
+def _has_gender() -> bool:
+    """0020(gender·age_band·gender_src) 적용 여부. 없으면 성별 없이 나머지만 갱신한다."""
+    global _SCHEMA_GENDER
+    if _SCHEMA_GENDER is None:
+        try:
+            supa._get("/customers", {"select": "id,gender,age_band,gender_src", "limit": "1"})
+            _SCHEMA_GENDER = True
+        except RuntimeError as exc:
+            if "42703" in str(exc) or "does not exist" in str(exc):
+                _SCHEMA_GENDER = False
+                print("  ⚠ 0020 미적용 — 성별 추정 생략")
+            else:
+                raise
+    return _SCHEMA_GENDER
+
+
 def _recompute_aggregates(tid: str) -> int:
     """전체 거래로 고객 집계 재계산 — 수집 창과 무관하게 방문수·주기·매출 lifetime 정확.
 
@@ -51,8 +71,9 @@ def _recompute_aggregates(tid: str) -> int:
     이중 계상이라, 실제로 받은 돈만 남긴다.
     """
     full = _has_0019()
-    cols = ("id,customer_id,date,time,service,amount_won,kind,paid_out_of_pocket,covered_won"
-            if full else "id,customer_id,date,time,service,amount_won")
+    has_gender = _has_gender()
+    cols = ("id,customer_id,date,time,service,memo,amount_won,kind,paid_out_of_pocket,covered_won"
+            if full else "id,customer_id,date,time,service,memo,amount_won")
     txs = supa.select_all("transactions", tid, cols)
     byc: dict = defaultdict(list)
     for t in txs:
@@ -63,6 +84,8 @@ def _recompute_aggregates(tid: str) -> int:
                 "time": t.get("time"),
                 "amount": t.get("amount_won") or 0,
                 # kind 가 아직 없는 행(마이그레이션 전 수집분)은 시술명으로 즉시 판정
+                "service": t.get("service"),
+                "memo": t.get("memo"),
                 "kind": t.get("kind") or txkind.classify(t.get("service")),
                 "out_of_pocket": bool(t.get("paid_out_of_pocket")),
                 "covered": t.get("covered_won") or 0,
@@ -79,6 +102,8 @@ def _recompute_aggregates(tid: str) -> int:
         dates = sorted({it["date"] for it in items if it["kind"] == "service"}, reverse=True)
         cycle, state = _derive(dates, len(dates), today)
         book = txkind.ledger(items)
+        # 성별·연령대 추정 — 시술 거래만 근거로 삼는다(충전·제품엔 단서가 없다).
+        g = gender_mod.infer([it for it in items if it["kind"] == "service"])
         # 거래별 '잔액으로 결제된 금액'. 통계는 월별로 합산해야 해서 고객 단위 집계로는 안 되고,
         # 이 값이 있어야 어느 화면이든 '실매출 = 금액 − 잔액결제분' 한 규칙으로 계산된다.
         for it in items:
@@ -91,6 +116,8 @@ def _recompute_aggregates(tid: str) -> int:
             "last_visit": dates[0] if dates else None,
             "total_won": book["revenue"],
             **({"prepaid_balance": book["balance"]} if full else {}),
+            **({"gender": g["gender"], "age_band": g["age_band"], "gender_src": g["resolved_by"]}
+               if has_gender else {}),
             "revisit_cycle_days": cycle, "revisit_state": state,
             "visits_90d": sum(1 for d in dates if d >= cut90),
             "visits_180d": sum(1 for d in dates if d >= cut180),
