@@ -297,8 +297,8 @@ export default async function CustomerPage({ params }: { params: { id: string } 
               </div>
             ))}
             <p className="note">
-              결제수단이 기록되지 않아 <b>충전 이후 시술은 잔액에서 쓴 것으로 추정</b>합니다.
-              사비로 결제한 시술은 아래 이력에서 <b>&lsquo;사비?&rsquo;</b>를 눌러 빼주세요.
+              결제수단이 기록되지 않아 <b>충전 이후 시술은 잔액에서 쓴 것으로 추정</b>합니다(기본값).
+              따로 결제한 시술은 아래 이력에서 <b>&lsquo;잔액 차감&rsquo;</b>을 눌러 <b>&lsquo;사비 결제&rsquo;</b>로 바꿔주세요.
               {balance === 0 && chargedTotal > 0 ? ' 잔액이 0이면 그 뒤 시술은 사비로 계산됩니다.' : ''}
             </p>
           </div>

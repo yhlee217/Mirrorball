@@ -27,10 +27,15 @@ export default function PocketToggle({ id, initial }: { id: string; initial: boo
     }
   };
 
+  // 되묻지 않고 '지금 이 건을 어떻게 보고 있는지'를 보여준다.
+  // 기본은 잔액 차감이고, 눌러야 사비로 바뀐다.
   return (
     <button type="button" className={'pocket' + (on ? ' on' : '')} onClick={toggle} disabled={busy}
-      title={on ? '사비 결제로 표시됨 — 잔액에서 차감하지 않아요' : '이 시술을 사비 결제로 표시'}>
-      {on ? '사비 결제' : '사비?'}
+      aria-pressed={on}
+      title={on
+        ? '사비 결제로 표시됨 — 눌러서 잔액 차감으로 되돌리기'
+        : '충전 잔액에서 결제된 것으로 보고 있어요 — 눌러서 사비 결제로 표시'}>
+      {on ? '사비 결제' : '잔액 차감'}
     </button>
   );
 }
