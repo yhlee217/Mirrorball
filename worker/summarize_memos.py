@@ -13,6 +13,10 @@
     메모 원본의 해시를 memo_ai_src 에 함께 저장해, 메모가 그대로면 건너뛴다.
     주 1회 배치에서 대부분은 호출 없이 지나간다. 전부 다시 만들려면 FORCE=1.
 
+사용량:
+    고객 1명당 호출 1번이면 1,300명에 1,300번이라 구독 사용량이 순식간에 녹는다.
+    BATCH 명씩 한 프롬프트에 묶어 호출 수를 그만큼 줄인다(기본 6 → 약 1/6).
+
 속도:
     claude CLI 한 번이 기동+응답에 십수 초~1분이라 순차로 돌리면 몇십 명만 돼도 하염없다.
     모델은 판단 품질 때문에 낮추지 않고, 대신 여러 명을 동시에 돌려 벽시계 시간을 줄인다.
@@ -25,6 +29,7 @@
     CHECK=1 .venv/bin/python worker/summarize_memos.py    # CLI 가 되는지만 점검
     USE_API_KEY=1 .venv/bin/python ...                    # 구독 대신 ANTHROPIC_API_KEY 로 청구
     JOBS=8 .venv/bin/python worker/summarize_memos.py     # 동시 실행 수(기본 4)
+    BATCH=8 .venv/bin/python worker/summarize_memos.py    # 1회 호출에 묶을 고객 수(기본 6)
     MODEL=opus .venv/bin/python ...                       # 모델 변경(기본 sonnet), MODEL= 로 지정 해제
 """
 
@@ -65,6 +70,9 @@ CLI_TIMEOUT = 180
 MODEL = os.environ.get("MODEL", "sonnet")
 # 프롬프트가 바뀌면 기존 요약은 형식이 달라 못 쓴다. 해시에 섞어 자동으로 다시 만들게 한다.
 PROMPT_VERSION = "2-sections"
+# 고객 1명당 호출 1번이면 1,300명에 1,300번이라 구독 사용량이 순식간에 녹는다.
+# 여러 명을 한 프롬프트에 묶어 호출 수를 BATCH 배로 줄인다.
+BATCH = max(1, int(os.environ.get("BATCH") or 6))
 
 
 # claude CLI 는 ANTHROPIC_API_KEY 가 있으면 그걸 우선 쓰고 claude.ai 로그인(구독)을 무시한다.
@@ -145,6 +153,66 @@ def summarize_one(job: dict) -> tuple[str, str | None, str | None, str]:
         return job["cid"], None, None, why
     pref, recent = parse_sections(out)
     return job["cid"], pref, recent, ("" if pref else "형식에 맞지 않는 응답")
+
+
+def build_batch_prompt(blocks: list[list[str]]) -> str:
+    """여러 고객의 메모를 한 프롬프트로. blocks[i] = 그 고객의 '날짜 메모' 줄들."""
+    body = "\n\n".join(
+        f"--- 고객 {i + 1} ---\n" + "\n".join(lines) for i, lines in enumerate(blocks)
+    )
+    return (
+        f"너는 미용실 디자이너를 돕는 조수다. 아래에 고객 {len(blocks)}명의 매장 메모가 있다"
+        "(고객마다 날짜 오름차순). 각 고객을 두 덩이로 정리해라.\n\n"
+        "[선호] — 시술에 계속 반영할 것\n"
+        "- 반복되는 선호·주의사항, 모발·두피 상태.\n"
+        "- 시간에 따라 뒤집히면 날짜를 보고 최근 것을 따르되 '최근에는 ~' 으로 적어라.\n"
+        "- 2~4개. 각 줄 25자 내외.\n\n"
+        "[근황] — 다음에 만나면 먼저 물어볼 이야기\n"
+        "- 개인 근황·대화거리(가족, 일, 이사, 여행, 행사, 건강 등). 시술과 무관해도 좋다.\n"
+        "- 한 번만 나온 이야기라도 담아라. 이게 이 항목의 목적이다.\n"
+        "- 최근 것 위주로 최대 3개. 각 줄 앞에 (YYYY-MM) 을 붙여라.\n"
+        "- 오래돼 지금 꺼내기 어색한 이야기는 빼라. 해당 없으면 아무 줄도 쓰지 마라.\n\n"
+        "공통: 메모에 실제로 있는 내용만. 없는 사실을 지어내지 마라.\n"
+        "고객 번호를 절대 섞지 마라 — 각자 자기 메모만 보고 정리한다.\n"
+        "인사말·설명 없이 아래 형식 그대로, 고객 수만큼 반복해서 출력:\n"
+        "### 1\n[선호]\n- ...\n[근황]\n- (2026-07) ...\n### 2\n[선호]\n- ...\n\n"
+        f"{body}\n"
+    )
+
+
+def parse_batch(text: str, n: int) -> dict[int, tuple[str | None, str | None]]:
+    """'### i' 로 나뉜 응답을 고객 번호별로 파싱. 일부가 깨져도 나머지는 살린다."""
+    out: dict[int, tuple[str | None, str | None]] = {}
+    cur: int | None = None
+    buf: list[str] = []
+
+    def flush() -> None:
+        if cur is not None and 1 <= cur <= n:
+            out[cur] = parse_sections("\n".join(buf))
+
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("###"):
+            flush()
+            digits = "".join(ch for ch in line if ch.isdigit())
+            cur, buf = (int(digits) if digits else None), []
+            continue
+        buf.append(raw)
+    flush()
+    return out
+
+
+def summarize_batch(jobs: list[dict]) -> list[tuple[str, str | None, str | None, str]]:
+    """한 번의 호출로 여러 고객 처리. 반환은 고객별 (cid, 선호, 근황, 실패사유)."""
+    out, why = run_claude(build_batch_prompt([j["memos"] for j in jobs]))
+    if not out:
+        return [(j["cid"], None, None, why) for j in jobs]
+    parsed = parse_batch(out, len(jobs))
+    res = []
+    for i, j in enumerate(jobs, start=1):
+        pref, recent = parsed.get(i, (None, None))
+        res.append((j["cid"], pref, recent, "" if pref else "응답에서 이 고객 항목을 못 찾음"))
+    return res
 
 
 def build_prompt(lines: list[str]) -> str:
@@ -271,32 +339,34 @@ def main() -> int:
         print("정리할 고객 없음 — 이미 최신입니다")
         return 0
 
+    # 최근에 다녀간 고객부터. 중간에 멈춰도 지금 만날 사람들이 먼저 끝나 있게.
+    todo.sort(key=lambda j: j["last"], reverse=True)
     if limit:
         todo = todo[:limit]
     total = len(todo)
-    print(f"\n{total}명 정리 시작 · 동시 {jobs_n}개 · 모델 {MODEL or '기본'}", flush=True)
-    print("(claude CLI 한 번에 10~40초 걸립니다)", flush=True)
+    batches = [todo[i:i + BATCH] for i in range(0, total, BATCH)]
+    print(f"\n{total}명 정리 시작 · {len(batches)}회 호출(1회당 {BATCH}명) · 동시 {jobs_n} · 모델 {MODEL or '기본'}",
+          flush=True)
 
-    # ── 2) 병렬 요약 ──────────────────────────────────────────
     done = failed = 0
     by_id = {j["cid"]: j for j in todo}
     with ThreadPoolExecutor(max_workers=jobs_n) as pool:
-        futs = {pool.submit(summarize_one, j): j["cid"] for j in todo}
+        futs = [pool.submit(summarize_batch, b) for b in batches]
         for fut in as_completed(futs):
-            cid, summary, recent, why = fut.result()
-            if not summary:
-                failed += 1
-                print(f"  [{done + failed}/{total}] {cid[:8]} 실패 — {why}", flush=True)
-                continue
-            supa.patch("customers", {"id": f"eq.{cid}"}, {
-                "memo_ai": summary,
-                "memo_ai_recent": recent,          # 없으면 null 로 덮어 옛 근황이 남지 않게
-                "memo_ai_at": datetime.now(timezone.utc).isoformat(),
-                "memo_ai_src": by_id[cid]["src"],
-            })
-            done += 1
-            first = summary.splitlines()[0][:30] if summary else ""
-            print(f"  [{done + failed}/{total}] {cid[:8]} ✓{' +근황' if recent else ''} {first}", flush=True)
+            for cid, summary, recent, why in fut.result():
+                if not summary:
+                    failed += 1
+                    print(f"  [{done + failed}/{total}] {cid[:8]} 실패 — {why}", flush=True)
+                    continue
+                supa.patch("customers", {"id": f"eq.{cid}"}, {
+                    "memo_ai": summary,
+                    "memo_ai_recent": recent,      # 없으면 null 로 덮어 옛 근황이 남지 않게
+                    "memo_ai_at": datetime.now(timezone.utc).isoformat(),
+                    "memo_ai_src": by_id[cid]["src"],
+                })
+                done += 1
+                first = summary.splitlines()[0][:30]
+                print(f"  [{done + failed}/{total}] {cid[:8]} ✓{' +근황' if recent else ''} {first}", flush=True)
 
     took = int(time.time() - t0)
     print(f"\n완료: {done}명 갱신" + (f" · 실패 {failed}명" if failed else "") + f" · {took//60}분 {took%60}초")
