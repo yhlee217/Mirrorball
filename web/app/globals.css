@@ -248,3 +248,4 @@ a.hs:active{background:var(--soft)}
   -webkit-tap-highlight-color:transparent}
 .pocket.on{color:#fff;background:var(--accent);border-color:var(--accent)}
 .pocket:disabled{opacity:.5}
+.pocket.busy{min-width:52px}
