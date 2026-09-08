@@ -268,3 +268,34 @@ def test_ledger_matches_web_implementation():
     }
     for k, (bal, rev) in expect.items():
         assert (got[k]["balance"], got[k]["revenue"]) == (bal, rev), f"{k} 불일치: {got[k]}"
+
+
+# ── 성별 추정(시술명 단서) ──
+def test_service_gender_clues():
+    import gender
+    assert gender.service_gender("남자컷(부원장)") == "M"
+    assert gender.service_gender("여자컷(원장)") == "F"
+    assert gender.service_gender("주니어컷") == "K"      # 아동은 성별이 아니라 자녀 신호
+    assert gender.service_gender("학생컷") == "K"
+    assert gender.service_gender("펌") is None           # 단서 없음
+
+
+def test_infer_gender_mixed_means_unknown():
+    # 엄마가 아들 커트를 결제하면 한 고객에 남·여가 섞인다 → 단정하지 않는다
+    import gender
+    r = gender.infer(["남자컷", "여자컷(원장)"])
+    assert r["mixed"] is True and r["gender"] is None
+
+
+def test_infer_gender_consistent():
+    import gender
+    assert gender.infer(["남자컷", "남자컷+다운펌"])["gender"] == "M"
+    assert gender.infer(["여성 콜드펌"])["gender"] == "F"
+    assert gender.infer(["펌", "클리닉"])["gender"] is None   # 단서 자체가 없음
+
+
+def test_infer_kid_flag_separate_from_gender():
+    # 주니어컷은 성별을 바꾸지 않고 '자녀 결제' 신호로만 남는다
+    import gender
+    r = gender.infer(["여자컷", "주니어컷"])
+    assert r["gender"] == "F" and r["kid"] is True
