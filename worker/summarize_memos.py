@@ -377,9 +377,9 @@ def main() -> int:
             if not force and existing.get(cid) == src:
                 skipped += 1
                 continue
-            todo.append({"cid": cid, "src": src,
-                         "memos": [f"{d} {m}" for d, m in rows],  # 날짜 포함 — 모순 해소용
-                         "slug": slug})
+            todo.append({"cid": cid, "src": src, "slug": slug,
+                         "last": rows[-1][0],                     # 최근 메모 날짜 — 처리 순서용
+                         "memos": [f"{d} {m}" for d, m in rows]})  # 날짜 포함 — 모순 해소용
             picked += 1
         print(f"  [{slug}] 대상 {picked}명 · 변경 없어 건너뜀 {skipped}명")
 
