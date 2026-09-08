@@ -270,32 +270,50 @@ def test_ledger_matches_web_implementation():
         assert (got[k]["balance"], got[k]["revenue"]) == (bal, rev), f"{k} 불일치: {got[k]}"
 
 
-# ── 성별 추정(시술명 단서) ──
+# ── 성별 추정(시술명 + 메모) ──
+def _g(service, date="2026-01-01", memo=None):
+    return {"service": service, "date": date, "memo": memo}
+
+
 def test_service_gender_clues():
     import gender
     assert gender.service_gender("남자컷(부원장)") == "M"
     assert gender.service_gender("여자컷(원장)") == "F"
-    assert gender.service_gender("주니어컷") == "K"      # 아동은 성별이 아니라 자녀 신호
-    assert gender.service_gender("학생컷") == "K"
-    assert gender.service_gender("펌") is None           # 단서 없음
+    assert gender.service_gender("주니어컷") == "K"
+    assert gender.service_gender("펌") is None
 
 
-def test_infer_gender_mixed_means_unknown():
-    # 엄마가 아들 커트를 결제하면 한 고객에 남·여가 섞인다 → 단정하지 않는다
+def test_kid_only_means_customer_is_a_child():
+    # 아동컷만 계속 받는 고객은 '자녀 결제'가 아니라 그 아이 본인이다
     import gender
-    r = gender.infer(["남자컷", "여자컷(원장)"])
-    assert r["mixed"] is True and r["gender"] is None
+    r = gender.infer([_g("주니어컷", "2025-03-01"), _g("주니어컷", "2025-09-01")])
+    assert r["age_band"] == "kid" and r["proxy"] is False
 
 
-def test_infer_gender_consistent():
+def test_kid_then_adult_is_the_same_person_growing_up():
+    # 아동형이 성인형보다 모두 앞서면 자란 같은 사람 — 대행이 아니다
     import gender
-    assert gender.infer(["남자컷", "남자컷+다운펌"])["gender"] == "M"
-    assert gender.infer(["여성 콜드펌"])["gender"] == "F"
-    assert gender.infer(["펌", "클리닉"])["gender"] is None   # 단서 자체가 없음
+    r = gender.infer([_g("아동컷", "2021-03-01"), _g("남자컷", "2026-05-01")])
+    assert r["gender"] == "M" and r["proxy"] is False
 
 
-def test_infer_kid_flag_separate_from_gender():
-    # 주니어컷은 성별을 바꾸지 않고 '자녀 결제' 신호로만 남는다
+def test_mixed_resolved_by_memo_family():
+    # '남자컷 + 아드님' 메모 → 그 시술은 아들 것, 본인은 여성으로 갈린다
     import gender
-    r = gender.infer(["여자컷", "주니어컷"])
-    assert r["gender"] == "F" and r["kid"] is True
+    r = gender.infer([_g("여자컷"), _g("남자컷", "2026-02-01", "아드님 커트 같이")])
+    assert r["gender"] == "F" and r["proxy"] is False and r["resolved_by"] == "memo-family"
+
+
+def test_mixed_resolved_by_spouse_mention():
+    # 배우자 언급으로 되짚기 — '남편분과 같이' → 본인 여성
+    import gender
+    r = gender.infer([_g("여자컷"), _g("남자컷", "2026-02-01"),
+                      _g("펌", "2026-03-01", "남편분과 같이 오심")])
+    assert r["gender"] == "F" and r["resolved_by"] == "memo-spouse"
+
+
+def test_mixed_without_clues_is_excluded_last():
+    # 추정할 근거가 정말 없을 때만 제외한다
+    import gender
+    r = gender.infer([_g("여자컷"), _g("남자컷", "2026-02-01")])
+    assert r["proxy"] is True and r["gender"] is None
