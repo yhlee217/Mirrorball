@@ -51,7 +51,9 @@ echo "[$(ts)] collect 종료(exit=$rc)"
 # 메모가 그대로인 고객은 건너뛰므로 보통 몇 명만 처리된다. 실패해도 수집 결과는 유효하다.
 if [ "$rc" -eq 0 ]; then
   echo "[$(ts)] 메모 정리 시작"
-  "$PY" worker/summarize_memos.py || echo "[$(ts)] ! 메모 정리 건너뜀(claude CLI 미설치·로그인 필요 등) — 수집은 정상"
+  # 한 번에 다 돌리면 구독 사용량이 크게 빠진다. 매주 조금씩 채우게 상한을 둔다
+  # (최근 방문자부터 처리하므로 지금 만날 고객이 먼저 정리된다).
+  LIMIT="${MEMO_LIMIT:-120}" "$PY" worker/summarize_memos.py || echo "[$(ts)] ! 메모 정리 건너뜀(claude CLI 미설치·로그인 필요 등) — 수집은 정상"
   echo "[$(ts)] 메모 정리 종료"
 fi
 

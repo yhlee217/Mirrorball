@@ -30,6 +30,7 @@
     USE_API_KEY=1 .venv/bin/python ...                    # 구독 대신 ANTHROPIC_API_KEY 로 청구
     JOBS=8 .venv/bin/python worker/summarize_memos.py     # 동시 실행 수(기본 4)
     BATCH=8 .venv/bin/python worker/summarize_memos.py    # 1회 호출에 묶을 고객 수(기본 6)
+    ACTIVE_MONTHS=12 .venv/bin/python ...                 # 최근 12개월 방문 고객만(기본: 전체)
     MODEL=opus .venv/bin/python ...                       # 모델 변경(기본 sonnet), MODEL= 로 지정 해제
 """
 
@@ -41,7 +42,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,6 +74,9 @@ PROMPT_VERSION = "2-sections"
 # 고객 1명당 호출 1번이면 1,300명에 1,300번이라 구독 사용량이 순식간에 녹는다.
 # 여러 명을 한 프롬프트에 묶어 호출 수를 BATCH 배로 줄인다.
 BATCH = max(1, int(os.environ.get("BATCH") or 6))
+# 2년 전 한 번 오고 안 오는 고객까지 정리해봐야 그 카르테는 열릴 일이 없다.
+# 최근 N개월 안에 다녀간 고객만 대상으로 잡아 일 자체를 줄인다(0 이면 전체).
+ACTIVE_MONTHS = int(os.environ.get("ACTIVE_MONTHS") or 0)
 
 
 # claude CLI 는 ANTHROPIC_API_KEY 가 있으면 그걸 우선 쓰고 claude.ai 로그인(구독)을 무시한다.
@@ -287,6 +291,10 @@ def main() -> int:
         return check_cli()
 
     preflight_columns()          # 컬럼부터 확인 — AI 호출을 낭비하지 않게
+    cutoff = ""
+    if ACTIVE_MONTHS:
+        cutoff = str(date.today() - timedelta(days=30 * ACTIVE_MONTHS))
+        print(f"최근 {ACTIVE_MONTHS}개월({cutoff} 이후) 방문 고객만 대상")
     force = bool(os.environ.get("FORCE"))
     limit = int(os.environ.get("LIMIT") or 0)
     jobs_n = max(1, int(os.environ.get("JOBS") or 4))
@@ -321,6 +329,9 @@ def main() -> int:
             rows = rows[-MAX_MEMOS:]
             # 메모가 한 줄뿐이면 요약할 게 없다 — AI 를 부르지 않는다.
             if len(rows) < 2:
+                skipped += 1
+                continue
+            if cutoff and rows[-1][0] < cutoff:   # 오래 안 온 고객은 건너뛴다
                 skipped += 1
                 continue
             src = hashlib.sha256(
