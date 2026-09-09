@@ -2,20 +2,11 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { supabaseServer } from '@/lib/supabase/server';
+import { requireTenant } from '@/lib/tenant';
 import ProfileEdit from './profile-edit';
 
 export default async function ProfilePage() {
-  const supabase = supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-
-  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
-  if (!mem) redirect('/');
-  const tenantId = (mem as { tenant_id: string }).tenant_id;
+  const { supabase, tenantId } = await requireTenant();
 
   const [{ data: tenant }, { data: prof }] = await Promise.all([
     supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle(),

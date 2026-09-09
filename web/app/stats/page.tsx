@@ -2,8 +2,7 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { supabaseServer } from '@/lib/supabase/server';
+import { requireTenant } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { txKind } from '@/lib/tx';
@@ -19,15 +18,7 @@ function won(n: number): string {
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
 export default async function StatsPage() {
-  const supabase = supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-
-  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
-  if (!mem) redirect('/');
-  const tenantId = (mem as { tenant_id: string }).tenant_id;
+  const { supabase, tenantId } = await requireTenant();
 
   const [customers, txs] = await Promise.all([
     fetchAllRows<{ ext_id: string | null; total_won: number; visit_count: number; gender: string | null;

@@ -2,9 +2,8 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { supabaseServer } from '@/lib/supabase/server';
-import { unwrapDek, decryptPII } from '@/lib/crypto';
+import { openDek, requireTenant } from '@/lib/tenant';
+import { decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
@@ -45,15 +44,7 @@ export default async function CustomersPage({
   searchParams: { filter?: string };
 }) {
   const initialFilter = searchParams?.filter && FILTERS.has(searchParams.filter) ? searchParams.filter : null;
-  const supabase = supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-
-  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
-  if (!mem) redirect('/');
-  const tenantId = (mem as { tenant_id: string }).tenant_id;
+  const { supabase, tenantId } = await requireTenant();
 
   const [{ data: tenant }, customers, bookings, txs] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
@@ -74,15 +65,7 @@ export default async function CustomersPage({
 
   const tRow = tenant as { dek_wrapped: string | null; settings: unknown } | null;
   const settings = mergeSettings(tRow?.settings);
-  let dek: Uint8Array | null = null;
-  const dw = tRow?.dek_wrapped ?? null;
-  if (dw) {
-    try {
-      dek = await unwrapDek(dw);
-    } catch {
-      dek = null;
-    }
-  }
+  const dek = await openDek(tRow?.dek_wrapped);
 
   const bookingSet = new Set(
     (bookings as { customer_id: string | null; date: string | null; time: string | null; status: string | null }[])

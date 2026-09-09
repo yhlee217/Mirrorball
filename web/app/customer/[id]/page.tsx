@@ -2,9 +2,8 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { redirect, notFound } from 'next/navigation';
-import { supabaseServer } from '@/lib/supabase/server';
-import { unwrapDek, decryptPII } from '@/lib/crypto';
+import { notFound } from 'next/navigation';
+import { nameReader, openDek, requireUser } from '@/lib/tenant';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { isActiveBooking } from '@/lib/bookings';
@@ -53,11 +52,8 @@ function monthsAgo(d: string | null): number | null {
 }
 
 export default async function CustomerPage({ params }: { params: { id: string } }) {
-  const supabase = supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  // 테넌트는 RLS 가 걸린 고객 행에서 따라오므로 소속 조회가 따로 필요 없다.
+  const { supabase } = await requireUser();
 
   const { data: c } = await supabase
     .from('customers')
@@ -91,23 +87,8 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
   const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
 
-  let dek: Uint8Array | null = null;
-  if (dw) {
-    try {
-      dek = await unwrapDek(dw);
-    } catch {
-      dek = null;
-    }
-  }
-  const nameFrom = async (pii: string | null): Promise<string> => {
-    if (!dek || !pii) return '고객';
-    try {
-      const p = await decryptPII(pii, dek);
-      return typeof p.name === 'string' && p.name ? p.name : '고객';
-    } catch {
-      return '고객';
-    }
-  };
+  const dek = await openDek(dw);
+  const nameFrom = nameReader(dek);
   const name = await nameFrom(cust.pii_enc);
 
   // 가족: 같은 tenant 내 동일 family_ext_id. 담당(디자이너)이 다른 가족원은 다른 tenant 라

@@ -2,25 +2,16 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { supabaseServer } from '@/lib/supabase/server';
+import { openDek, requireTenant } from '@/lib/tenant';
 import { mergeSettings } from '@/lib/settings';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
-import { unwrapDek, decryptPII } from '@/lib/crypto';
+import { decryptPII } from '@/lib/crypto';
 import SettingsForm from './settings-form';
 import ChurnedList from './churned-list';
 import LogoutButton from '../logout-button';
 
 export default async function SettingsPage() {
-  const supabase = supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-
-  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
-  if (!mem) redirect('/');
-  const tenantId = (mem as { tenant_id: string }).tenant_id;
+  const { supabase, user, tenantId } = await requireTenant();
 
   // 판정 기준을 바꿀 때 '지금 몇 명이 되는지' 바로 보여주려면 판정에 쓰는 값만 클라이언트로 보내야 한다.
   // 키 없는 배열로 압축해서 보낸다(객체면 행마다 키가 반복돼 payload 가 두 배).
@@ -76,14 +67,7 @@ export default async function SettingsPage() {
 
   // 이탈 표시 고객 — 이름은 테넌트 키로 복호화(다른 화면과 동일).
   type ChurnRow = { id: string; pii_enc: string | null; visit_count: number; last_visit: string | null; churned_at: string };
-  let dek: Uint8Array | null = null;
-  if (t?.dek_wrapped) {
-    try {
-      dek = await unwrapDek(t.dek_wrapped);
-    } catch {
-      dek = null;
-    }
-  }
+  const dek = await openDek(t?.dek_wrapped);
   const churnedRows = await Promise.all(
     ((churned as ChurnRow[]) ?? []).map(async (c) => {
       let name = '고객';

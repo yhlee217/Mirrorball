@@ -1,9 +1,7 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import { redirect } from 'next/navigation';
-import { supabaseServer } from '@/lib/supabase/server';
-import { unwrapDek, decryptPII } from '@/lib/crypto';
+import { requireUser, getTenantId, openDek, nameReader } from '@/lib/tenant';
 import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
 import { mergeSettings, isVip, isLapsed } from '@/lib/settings';
 import { kstDatePlus, isUpcoming } from '@/lib/kst';
@@ -29,14 +27,10 @@ type Cust = {
 type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; pii_enc: string | null; staff: string | null; status: string | null; name?: string };
 
 export default async function Page() {
-  const supabase = supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-
-  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
-  if (!mem) {
+  // 홈만은 소속이 없을 때 리다이렉트가 아니라 온보딩 화면을 보여주므로 requireTenant 를 쓰지 않는다.
+  const { supabase } = await requireUser();
+  const tenantId = await getTenantId(supabase);
+  if (!tenantId) {
     return (
       <main className="wrap">
         <div className="entry">
@@ -48,7 +42,6 @@ export default async function Page() {
     );
   }
 
-  const tenantId = (mem as { tenant_id: string }).tenant_id;
   const [{ data: tenant }, { data: bookings }, customers, synced] = await Promise.all([
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     supabase
@@ -67,23 +60,8 @@ export default async function Page() {
   const bk = (bookings as Booking[]) ?? [];
   const cust = (customers as Cust[]) ?? [];
 
-  let dek: Uint8Array | null = null;
-  if (t?.dek_wrapped) {
-    try {
-      dek = await unwrapDek(t.dek_wrapped);
-    } catch {
-      dek = null;
-    }
-  }
-  const nameFrom = async (pii: string | null): Promise<string> => {
-    if (!dek || !pii) return '고객';
-    try {
-      const p = await decryptPII(pii, dek);
-      return typeof p.name === 'string' ? p.name : '고객';
-    } catch {
-      return '고객';
-    }
-  };
+  const dek = await openDek(t?.dek_wrapped);
+  const nameFrom = nameReader(dek);
 
   // 이탈 판정은 설정(판정 기준)을 따른다 → 홈 '챙길 고객'·신호에서 제외
   const lapsed = (c: Cust) => isLapsed(c, settings);

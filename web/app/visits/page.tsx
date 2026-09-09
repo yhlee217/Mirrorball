@@ -1,9 +1,7 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import { redirect } from 'next/navigation';
-import { supabaseServer } from '@/lib/supabase/server';
-import { unwrapDek, decryptPII } from '@/lib/crypto';
+import { nameReader, openDek, requireTenant } from '@/lib/tenant';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
@@ -22,15 +20,7 @@ const DAY = 86400000;
 const KST = 9 * 3600000;
 
 export default async function VisitsPage() {
-  const supabase = supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-
-  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
-  if (!mem) redirect('/');
-  const tenantId = (mem as { tenant_id: string }).tenant_id;
+  const { supabase, tenantId } = await requireTenant();
 
   const today = kstNow().date;
   const since = new Date(Date.now() + KST - 13 * DAY).toISOString().slice(0, 10); // 최근 14일
@@ -74,23 +64,8 @@ export default async function VisitsPage() {
   const cmap = new Map(custs.map((c) => [c.id, c]));
 
   const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
-  let dek: Uint8Array | null = null;
-  if (dw) {
-    try {
-      dek = await unwrapDek(dw);
-    } catch {
-      dek = null;
-    }
-  }
-  const nameFrom = async (pii: string | null): Promise<string> => {
-    if (!dek || !pii) return '고객';
-    try {
-      const p = await decryptPII(pii, dek);
-      return typeof p.name === 'string' && p.name ? p.name : '고객';
-    } catch {
-      return '고객';
-    }
-  };
+  const dek = await openDek(dw);
+  const nameFrom = nameReader(dek);
 
   const items = await Promise.all(
     visits
