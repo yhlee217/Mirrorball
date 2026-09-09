@@ -136,7 +136,36 @@ export function PrepaidCard({
   );
 }
 
-/** 시술 이력 — 충전 이력이 있는 고객에게만 '사비 결제' 토글을 붙인다. */
+/**
+ * 시술 이력 — 손님 앞에서 필요한 건 '지난번에 뭘 했나'지 전체 이력이 아니다.
+ * 최근 몇 건만 펼치고 나머지는 접는다(단골은 100건이 넘어 화면이 통째로 이력이 된다).
+ */
+const RECENT_N = 5;
+
+function HistoryRow({ h, hasCharges }: { h: Carte['history'][number]; hasCharges: boolean }) {
+  return (
+    <div className="li" style={{ alignItems: 'flex-start' }}>
+      <div className="bd">
+        <div className="nm" style={{ fontWeight: 600 }}>{h.service ?? '시술'}</div>
+        <div className="sub">
+          {h.date}
+          {h.time ? ' ' + h.time : ''}
+        </div>
+        {h.memo ? <div className="tip">{h.memo}</div> : null}
+      </div>
+      <div className="rt">
+        {won(h.amount_won)}
+        {/* 충전 이력이 있는 고객만 — 없으면 어차피 전부 사비라 물을 이유가 없다 */}
+        {hasCharges ? (
+          <div style={{ marginTop: 4 }}>
+            <PocketToggle id={h.id} initial={!!h.paid_out_of_pocket} />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function HistoryCard({
   history,
   hasCharges,
@@ -144,31 +173,25 @@ export function HistoryCard({
   history: Carte['history'];
   hasCharges: boolean;
 }) {
+  const recent = history.slice(0, RECENT_N);
+  const rest = history.slice(RECENT_N);
   return (
     <div className="card">
       <div className="ch">시술 이력{history.length ? ' · ' + history.length + '건' : ''}</div>
       {history.length ? (
-        history.map((h) => (
-          <div className="li" key={h.id} style={{ alignItems: 'flex-start' }}>
-            <div className="bd">
-              <div className="nm" style={{ fontWeight: 600 }}>{h.service ?? '시술'}</div>
-              <div className="sub">
-                {h.date}
-                {h.time ? ' ' + h.time : ''}
-              </div>
-              {h.memo ? <div className="tip">{h.memo}</div> : null}
-            </div>
-            <div className="rt">
-              {won(h.amount_won)}
-              {/* 충전 이력이 있는 고객만 — 없으면 어차피 전부 사비라 물을 이유가 없다 */}
-              {hasCharges ? (
-                <div style={{ marginTop: 4 }}>
-                  <PocketToggle id={h.id} initial={!!h.paid_out_of_pocket} />
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ))
+        <>
+          {recent.map((h) => (
+            <HistoryRow key={h.id} h={h} hasCharges={hasCharges} />
+          ))}
+          {rest.length > 0 && (
+            <details className="moreh">
+              <summary>이전 {rest.length}건 더 보기</summary>
+              {rest.map((h) => (
+                <HistoryRow key={h.id} h={h} hasCharges={hasCharges} />
+              ))}
+            </details>
+          )}
+        </>
       ) : (
         <div className="empty">시술 이력이 없어요</div>
       )}

@@ -64,16 +64,6 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           </div>
         )}
 
-        <ChurnToggle id={cust.id} churnedAt={cust.churned_at} />
-
-        {/* 시술명 추정이 못 가른 고객을 사람이 채운다. 저장은 gender_manual 로 가서
-            주간 재계산에 덮이지 않는다. */}
-        <GenderPicker
-          id={cust.id}
-          manual={cust.gender_manual === 'M' || cust.gender_manual === 'F' ? cust.gender_manual : null}
-          inferred={cust.gender === 'M' || cust.gender === 'F' ? cust.gender : null}
-        />
-
         <div className="stat-grid">
           <div className="stat"><div className="sn">{cust.visit_count}</div><div className="sl">방문</div></div>
           <div className="stat"><div className="sn">{won(cust.total_won)}</div><div className="sl">누적 매출</div></div>
@@ -81,15 +71,27 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           <div className="stat"><div className="sn">{cust.revisit_cycle_days ? cust.revisit_cycle_days + '일' : '-'}</div><div className="sl">재방문 주기</div></div>
         </div>
 
-        <FamilyCard list={familyList} />
+        {/* 손님 앞에서 먼저 필요한 것: 다음에 언제 오시는지 → 지난번에 뭘 했는지 */}
         <NextBookingCard bk={nextBk} />
+        <HistoryCard history={history} hasCharges={charges.length > 0} />
 
         <CustomerNote id={cust.id} initMemo={cust.memo ?? ''} initTags={cust.prefer_tags ?? []} />
 
         <TopServicesCard top={topSvc} />
+        <FamilyCard list={familyList} />
         <PrepaidCard charges={charges} chargedTotal={chargedTotal} balance={balance} />
-        <HistoryCard history={history} hasCharges={charges.length > 0} />
         <OtherItemsCard items={others} />
+
+        {/* 관리 — 응대 중에는 쓸 일이 없는 것들. 위쪽 자리를 차지하면 정작 필요한 게 밀린다. */}
+        <div className="admin-sec">
+          <div className="admin-h">관리</div>
+          <GenderPicker
+            id={cust.id}
+            manual={cust.gender_manual === 'M' || cust.gender_manual === 'F' ? cust.gender_manual : null}
+            inferred={cust.gender === 'M' || cust.gender === 'F' ? cust.gender : null}
+          />
+          <ChurnToggle id={cust.id} churnedAt={cust.churned_at} />
+        </div>
       </div>
     </main>
   );
