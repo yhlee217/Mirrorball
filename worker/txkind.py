@@ -7,22 +7,24 @@
 
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 
-RE_REFUND = re.compile(r"환불")
-RE_CHARGE = re.compile(r"충전|선불|정액|상품권")
-RE_PRODUCT = re.compile(r"제품|판매|펌제|약제|기장추가")
+# 판정 어휘는 웹과 공유한다 — 규칙이 두 언어에 복사돼 있으면 한쪽에만 메뉴를 추가하는 순간
+# 화면과 집계가 어긋난다. 계산 방법(원장)만 각자 구현하고, '무엇으로 분류하는가'는 한 파일에서 읽는다.
+_RULES_PATH = Path(__file__).resolve().parent.parent / "web" / "lib" / "tx-rules.json"
+_RULES = json.loads(_RULES_PATH.read_text(encoding="utf-8"))
+_ORDER = _RULES["order"]
+_RE = {k: re.compile("|".join(map(re.escape, v))) for k, v in _RULES["patterns"].items()}
 
 
 def classify(service: str | None) -> str:
     """service | charge | product | refund. 시술명이 없으면 시술로 본다(대다수)."""
     s = service or ""
-    if RE_REFUND.search(s):
-        return "refund"
-    if RE_CHARGE.search(s):
-        return "charge"
-    if RE_PRODUCT.search(s):
-        return "product"
+    for kind in _ORDER:          # 순서가 의미를 갖는다(환불이 충전보다 앞)
+        if _RE[kind].search(s):
+            return kind
     return "service"
 
 
