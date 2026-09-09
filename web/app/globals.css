@@ -275,3 +275,18 @@ a.hs:active{background:var(--soft)}
 .gp-b.on{color:#fff;background:var(--accent);border-color:var(--accent)}
 .gp-b:disabled{opacity:.5}
 .gp-s{font-size:11px;color:var(--muted);margin-left:auto}
+
+/* 성별 채우기 — '성별 미상' 필터를 켰을 때만 나타나는 한 줄 지정 버튼.
+   목록을 훑으며 엄지로 누르는 동작이라 버튼을 크게 잡고 오른쪽에 몰아둔다. */
+.gsweep{border-bottom:1px solid var(--line)}
+.gsweep:last-child{border-bottom:0}
+.gsweep .li{border-top:none}
+.gsweep-b{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:0 15px 11px 64px}
+.gs{flex:0 0 auto;min-width:74px;font-size:13px;font-weight:700;color:var(--accent-d);
+  background:var(--soft);border:1px solid var(--line);border-radius:20px;padding:8px 14px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent}
+.gs:active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.gs:disabled{opacity:.5}
+.gsweep.done{opacity:.55}
+.gs-ok{font-size:12px;color:var(--accent);font-weight:700}
+.sweep-hint{font-size:12px;color:var(--muted);line-height:1.5;margin:0 2px 10px}

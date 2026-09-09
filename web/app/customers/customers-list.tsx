@@ -15,6 +15,7 @@ type Row = {
   hasBooking: boolean;
   hasPhone: boolean;
   churned: boolean;
+  gender: 'M' | 'F' | null;
   visits_90d: number | null; // VIP 판정(최근 자주 오심)용 — 워커가 미리 집계
   visits_180d: number | null;
   visits_365d: number | null;
@@ -41,7 +42,35 @@ export default function CustomersList({
   const [recF, setRecF] = useState('');
   const [svcF, setSvcF] = useState('');
   const [sort, setSort] = useState('recent');
+  // 방금 지정한 것들. 저장하자마자 목록에서 빼면 '내가 뭘 눌렀는지'가 사라져 흐름이 끊긴다.
+  // 화면에 남겨 두고 표시만 바꾼다(다음 진입 때 필터가 자연히 걸러낸다).
+  const [picked, setPicked] = useState<Record<string, 'M' | 'F'>>({});
+  const [saving, setSaving] = useState<string | null>(null);
 
+  const pickGender = async (id: string, g: 'M' | 'F') => {
+    if (saving) return;
+    setSaving(id);
+    setPicked((p) => ({ ...p, [id]: g }));
+    try {
+      const r = await fetch('/api/customer-gender', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_id: id, gender: g }),
+      });
+      if (!r.ok) throw new Error();
+    } catch {
+      setPicked((p) => {
+        const n = { ...p };
+        delete n[id];
+        return n;
+      });
+      alert('저장하지 못했어요. 잠시 후 다시 눌러주세요.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const sweeping = chips.has('nogender'); // 성별 채우는 중인가
   const vip = (r: Row) => isVipS(r, settings);
   const manH = Math.round(settings.revenue_high / 10000);
   const manM = Math.round(settings.revenue_mid / 10000);
@@ -66,6 +95,9 @@ export default function CustomersList({
     if (chips.has('new')) f = f.filter((r) => r.state === 'new' && !r.churned);
     if (chips.has('vip')) f = f.filter((r) => isVipS(r, settings) && !r.churned);
     if (chips.has('churned')) f = f.filter((r) => r.churned);
+    // 성별 미상만 모아 한 번에 채우기 위한 필터. 이 칩이 켜져 있을 때만 각 줄에
+    // 지정 버튼이 나타난다 — 평소에도 달아두면 목록이 지저분해진다.
+    if (chips.has('nogender')) f = f.filter((r) => !r.gender && !picked[r.id]);
     if (chips.has('booking')) f = f.filter((r) => r.hasBooking);
     if (chips.has('nophone')) f = f.filter((r) => !r.hasPhone);
     if (visitF === 'reg') f = f.filter((r) => r.visit_count >= 10);
@@ -110,6 +142,7 @@ export default function CustomersList({
         <Chip k="booking" label="예약있음" />
         <Chip k="nophone" label="전화없음" />
         <Chip k="churned" label="이탈" />
+        <Chip k="nogender" label="성별 미상" />
       </div>
 
       <div className="fsel">
@@ -151,27 +184,56 @@ export default function CustomersList({
         </select>
       </div>
 
-      <div className="sec-h">{filtered.length}명</div>
+      {sweeping ? (
+        <p className="sweep-hint">
+          시술명으로 성별을 알 수 없는 고객이에요. 아는 분만 눌러서 채워주세요 —
+          통계에 바로 반영됩니다. <b>방문순</b>으로 정렬하면 자주 오시는 분부터 나와요.
+        </p>
+      ) : null}
+      <div className="sec-h">{filtered.length}명{sweeping ? ' 남음' : ''}</div>
       <div className="card">
         {filtered.length ? (
-          filtered.map((r) => (
-            <Link key={r.id} href={`/customer/${r.id}`} className="li li-link">
-              <div className="av">{r.name.charAt(0)}</div>
-              <div className="bd">
-                <div className="nm">
-                  {r.name} 님{vip(r) ? <span className="tag-vip">VIP</span> : null}
-                  {r.churned ? <span className="tag-off">이탈</span> : null}
+          filtered.map((r) => {
+            const row = (
+              <Link href={`/customer/${r.id}`} className="li li-link">
+                <div className="av">{r.name.charAt(0)}</div>
+                <div className="bd">
+                  <div className="nm">
+                    {r.name} 님{vip(r) ? <span className="tag-vip">VIP</span> : null}
+                    {r.churned ? <span className="tag-off">이탈</span> : null}
+                  </div>
+                  <div className="sub">
+                    {r.visit_count}회 · {won(r.total_won)}{r.last_visit ? ' · 마지막 ' + r.last_visit : ''}
+                  </div>
                 </div>
-                <div className="sub">
-                  {r.visit_count}회 · {won(r.total_won)}{r.last_visit ? ' · 마지막 ' + r.last_visit : ''}
+                <div className="rt">
+                  {/* 이탈로 확정한 고객에게 '이탈 위험'(=아직 붙잡을 수 있다) 추정을 띄우지 않는다 */}
+                  {r.churned ? '' : r.state === 'overdue' ? '이탈 위험' : r.state === 'due' ? '재방문 도래' : r.hasBooking ? '예약 있음' : ''}
+                </div>
+              </Link>
+            );
+            // 성별 채우는 중이 아니면 평소 목록 그대로 — 버튼을 늘 달아두면 지저분해진다.
+            if (!sweeping) return <div key={r.id}>{row}</div>;
+            const done = picked[r.id];
+            return (
+              <div key={r.id} className={'gsweep' + (done ? ' done' : '')}>
+                {row}
+                {/* 링크 밖에 둬야 눌렀을 때 카르테로 넘어가지 않는다 */}
+                <div className="gsweep-b">
+                  {done ? (
+                    <span className="gs-ok">{done === 'M' ? '남성' : '여성'}으로 저장됨</span>
+                  ) : (
+                    <>
+                      <button type="button" className="gs" disabled={saving === r.id}
+                        onClick={() => pickGender(r.id, 'M')}>남성</button>
+                      <button type="button" className="gs" disabled={saving === r.id}
+                        onClick={() => pickGender(r.id, 'F')}>여성</button>
+                    </>
+                  )}
                 </div>
               </div>
-              <div className="rt">
-                {/* 이탈로 확정한 고객에게 '이탈 위험'(=아직 붙잡을 수 있다) 추정을 띄우지 않는다 */}
-                {r.churned ? '' : r.state === 'overdue' ? '이탈 위험' : r.state === 'due' ? '재방문 도래' : r.hasBooking ? '예약 있음' : ''}
-              </div>
-            </Link>
-          ))
+            );
+          })
         ) : (
           <div className="empty">조건에 맞는 고객이 없어요</div>
         )}

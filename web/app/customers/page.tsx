@@ -20,6 +20,8 @@ type Cust = {
   first_visit: string | null;
   total_won: number;
   churned_at: string | null;
+  gender: string | null;
+  gender_manual: string | null;
   visits_90d: number | null;
   visits_180d: number | null;
   visits_365d: number | null;
@@ -51,7 +53,7 @@ export default async function CustomersPage({
     fetchAllRows<Cust>((from, to) =>
       supabase
         .from('customers')
-        .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d')
+        .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d,gender,gender_manual')
         .order('id')
         .range(from, to)),
     // 지난 예약까지 '예약 있음'으로 세지 않도록 오늘 이후만. 수집이 주 1회라 DB 에는
@@ -111,6 +113,9 @@ export default async function CustomersPage({
     hasBooking: bookingSet.has(c.id),
     hasPhone: decoded[i].hasPhone,
     churned: !!c.churned_at, // 디자이너가 직접 이탈로 표시한 고객
+    // 사람이 지정한 값이 추정보다 우선한다(통계와 같은 기준).
+    gender: (c.gender_manual === 'M' || c.gender_manual === 'F' ? c.gender_manual
+             : c.gender === 'M' || c.gender === 'F' ? c.gender : null) as 'M' | 'F' | null,
     visits_90d: c.visits_90d,
     visits_180d: c.visits_180d,
     visits_365d: c.visits_365d,
