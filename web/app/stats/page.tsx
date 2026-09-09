@@ -23,7 +23,7 @@ export default async function StatsPage() {
     fetchAllRows<{ date: string; service: string | null; amount_won: number; kind: string | null; covered_won: number | null }>((from, to) =>
       supabase.from('transactions').select('date,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
   ]);
-  // '손님' 등 미식별 워크인은 관리 대상이 아니다 — 홈·알림·고객목록과 같은 기준으로 뺀다.
+  // '손님' 등 미식별 워크인은 관리 대상이 아니다 — 홈·챙길 고객·고객목록과 같은 기준으로 뺀다.
   // 통계만 포함하고 있어서 고객수·재방문율·객단가가 부풀고, 성별은 전부 '미상'으로 쌓였다.
   const cs = customers.filter((c) => isRealCustomer(c.ext_id));
   const tx = txs;

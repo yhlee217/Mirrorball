@@ -10,7 +10,7 @@ import { lastSynced, syncLine } from '@/lib/sync';
 import { txKind } from '@/lib/tx';
 import VisitsList from './visits-list';
 
-// 방문 관리 — '다녀가신 분'을 챙기는 화면(알림 탭이 '아직 안 오신 분'을 챙기는 것과 짝).
+// 방문 관리 — '다녀가신 분'을 챙기는 화면('챙길 고객' 탭이 '아직 안 오신 분'을 맡는 것과 짝).
 // 리뷰 요청은 종용하는 느낌이라 이 화면에서 빼고 노출(콘텐츠 코치) 탭에만 둔다.
 
 type Tx = { customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null; kind: string | null };
