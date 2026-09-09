@@ -37,9 +37,7 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
-import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -55,12 +53,9 @@ load_env()
 import supa  # noqa: E402
 
 MAX_MEMOS = 40          # 한 고객당 최근 메모 상한(프롬프트 길이 방어)
-CLI_TIMEOUT = 180
 # 단순 요약이 아니다 — "지난번엔 밝게, 최근엔 어둡게"처럼 시간에 따라 뒤집히는 걸 정리하고,
 # 지속되는 선호와 한 번뿐인 잡담을 갈라내야 한다. 판단이 필요한 일이라 작은 모델은 쓰지 않는다.
-MODEL = os.environ.get("MODEL", "sonnet")
 # 프롬프트가 바뀌면 기존 요약은 형식이 달라 못 쓴다. 해시에 섞어 자동으로 다시 만들게 한다.
-PROMPT_VERSION = "2-sections"
 # claude -p 는 단순 모델 호출이 아니라 Claude Code 에이전트를 띄운다. 실측 결과 프롬프트가
 # 10토큰이어도 시스템 프롬프트·툴 정의로 호출당 약 3만 토큰이 붙는다(대부분 캐시 읽기).
 # 즉 비용은 '메모 길이'가 아니라 '호출 횟수'가 정한다 — 1,300명을 1명씩 부르면 4천만 토큰,
@@ -74,219 +69,8 @@ BATCH = max(1, int(os.environ.get("BATCH") or 12))
 ACTIVE_MONTHS = int(os.environ.get("ACTIVE_MONTHS") or 0)
 
 
-# claude CLI 는 ANTHROPIC_API_KEY 가 있으면 그걸 우선 쓰고 claude.ai 로그인(구독)을 무시한다.
-# 이 리포는 voicenote 용으로 키를 둘 수 있고, _load_env() 가 web/.env.local 을 통째로 환경에
-# 올리기까지 해서, 크레딧 없는 키가 잡히면 "Credit balance is too low" 로 전부 실패한다.
-# 요약은 구독 로그인으로 도는 게 맞으므로 자식 프로세스에서만 인증 변수를 걷어낸다.
-# 정말 API 키로 청구하고 싶으면 USE_API_KEY=1.
-_AUTH_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
-              "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX")
-
-
-def cli_env() -> dict:
-    env = dict(os.environ)
-    if os.environ.get("USE_API_KEY"):
-        return env
-    for k in _AUTH_VARS:
-        env.pop(k, None)
-    return env
-
-
-def stripped_vars() -> list[str]:
-    return [] if os.environ.get("USE_API_KEY") else [k for k in _AUTH_VARS if os.environ.get(k)]
-
-
-USAGE = {"calls": 0, "in": 0, "cache_read": 0, "cache_write": 0, "out": 0}
-_usage_lock = __import__("threading").Lock()
-
-
-def run_claude(prompt: str) -> tuple[str | None, str]:
-    """Claude CLI 호출. (출력, 실패사유).
-
-    --output-format json 으로 받아 본문과 함께 토큰 사용량도 집계한다.
-    호출당 고정비가 큰 구조라, 얼마나 쓰고 있는지 눈으로 봐야 판단이 선다.
-    """
-    base = ["claude", "-p", prompt, "--output-format", "json"]
-    attempts = [base + (["--model", MODEL] if MODEL else [])]
-    if MODEL:
-        attempts.append(base)
-
-    why = "알 수 없음"
-    for cmd in attempts:
-        try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT, env=cli_env())
-        except FileNotFoundError:
-            print("❌ claude CLI 가 없습니다. 설치 후 로그인하세요: https://claude.com/claude-code",
-                  file=sys.stderr)
-            raise SystemExit(1)
-        except subprocess.TimeoutExpired:
-            why = f"타임아웃 {CLI_TIMEOUT}s"
-            continue
-
-        raw = (r.stdout or "").strip()
-        if raw:
-            try:
-                d = json.loads(raw)
-                u = d.get("usage") or {}
-                with _usage_lock:
-                    USAGE["calls"] += 1
-                    USAGE["in"] += u.get("input_tokens") or 0
-                    USAGE["cache_read"] += u.get("cache_read_input_tokens") or 0
-                    USAGE["cache_write"] += u.get("cache_creation_input_tokens") or 0
-                    USAGE["out"] += u.get("output_tokens") or 0
-                text = (d.get("result") or "").strip()
-                if text:
-                    return text, ""
-                why = f"빈 결과 (subtype={d.get('subtype')})"
-                continue
-            except json.JSONDecodeError:
-                return raw, ""      # json 이 아니면 본문으로 취급
-        err = (r.stderr or "").strip()
-        why = (err.splitlines()[0][:160] if err else f"빈 응답 (exit={r.returncode})")
-    return None, why
-
-
-def print_usage() -> None:
-    u = USAGE
-    if not u["calls"]:
-        return
-    billed = u["in"] + u["cache_write"] + u["cache_read"]
-    print(f"\n토큰 사용 · 호출 {u['calls']}회 · 입력 {u['in']:,} + 캐시읽기 {u['cache_read']:,}"
-          f" + 캐시쓰기 {u['cache_write']:,} · 출력 {u['out']:,}")
-    print(f"  호출당 평균 {billed // u['calls']:,} 토큰"
-          f" (대부분 Claude Code 기본 장착분 — 묶을수록 1인당 비용이 준다)")
-
-
-def check_cli() -> int:
-    """CHECK=1 — 한 번만 불러보고 무슨 일이 일어나는지 그대로 보여준다."""
-    print(f"claude CLI 점검 · 모델 {MODEL or '기본'}")
-    dropped = stripped_vars()
-    if dropped:
-        print(f"인증 변수 제외(구독 로그인 사용): {', '.join(dropped)}")
-    cmd = ["claude", "-p", "한 단어로 답해: 안녕"] + (["--model", MODEL] if MODEL else [])
-    print("실행:", " ".join(cmd[:3]), "…")
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT, env=cli_env())
-    except FileNotFoundError:
-        print("❌ claude 명령을 찾을 수 없음 — 설치/PATH 확인")
-        return 1
-    print(f"exit={r.returncode}")
-    print("--- stdout ---\n" + (r.stdout or "(비어 있음)"))
-    print("--- stderr ---\n" + (r.stderr or "(비어 있음)"))
-    return 0 if (r.stdout or "").strip() else 1
-
-
-def summarize_one(job: dict) -> tuple[str, str | None, str | None, str]:
-    """한 고객 요약 — 스레드에서 실행. (customer_id, 선호, 근황, 실패사유)"""
-    out, why = run_claude(build_prompt(job["memos"]))
-    if not out:
-        return job["cid"], None, None, why
-    pref, recent = parse_sections(out)
-    return job["cid"], pref, recent, ("" if pref else "형식에 맞지 않는 응답")
-
-
-def build_batch_prompt(blocks: list[list[str]]) -> str:
-    """여러 고객의 메모를 한 프롬프트로. blocks[i] = 그 고객의 '날짜 메모' 줄들."""
-    body = "\n\n".join(
-        f"--- 고객 {i + 1} ---\n" + "\n".join(lines) for i, lines in enumerate(blocks)
-    )
-    return (
-        f"너는 미용실 디자이너를 돕는 조수다. 아래에 고객 {len(blocks)}명의 매장 메모가 있다"
-        "(고객마다 날짜 오름차순). 각 고객을 두 덩이로 정리해라.\n\n"
-        "[선호] — 시술에 계속 반영할 것\n"
-        "- 반복되는 선호·주의사항, 모발·두피 상태.\n"
-        "- 시간에 따라 뒤집히면 날짜를 보고 최근 것을 따르되 '최근에는 ~' 으로 적어라.\n"
-        "- 2~4개. 각 줄 25자 내외.\n\n"
-        "[근황] — 다음에 만나면 먼저 물어볼 이야기\n"
-        "- 개인 근황·대화거리(가족, 일, 이사, 여행, 행사, 건강 등). 시술과 무관해도 좋다.\n"
-        "- 한 번만 나온 이야기라도 담아라. 이게 이 항목의 목적이다.\n"
-        "- 최근 것 위주로 최대 3개. 각 줄 앞에 (YYYY-MM) 을 붙여라.\n"
-        "- 오래돼 지금 꺼내기 어색한 이야기는 빼라. 해당 없으면 아무 줄도 쓰지 마라.\n\n"
-        "공통: 메모에 실제로 있는 내용만. 없는 사실을 지어내지 마라.\n"
-        "고객 번호를 절대 섞지 마라 — 각자 자기 메모만 보고 정리한다.\n"
-        "인사말·설명 없이 아래 형식 그대로, 고객 수만큼 반복해서 출력:\n"
-        "### 1\n[선호]\n- ...\n[근황]\n- (2026-07) ...\n### 2\n[선호]\n- ...\n\n"
-        f"{body}\n"
-    )
-
-
-def parse_batch(text: str, n: int) -> dict[int, tuple[str | None, str | None]]:
-    """'### i' 로 나뉜 응답을 고객 번호별로 파싱. 일부가 깨져도 나머지는 살린다."""
-    out: dict[int, tuple[str | None, str | None]] = {}
-    cur: int | None = None
-    buf: list[str] = []
-
-    def flush() -> None:
-        if cur is not None and 1 <= cur <= n:
-            out[cur] = parse_sections("\n".join(buf))
-
-    for raw in text.splitlines():
-        line = raw.strip()
-        if line.startswith("###"):
-            flush()
-            digits = "".join(ch for ch in line if ch.isdigit())
-            cur, buf = (int(digits) if digits else None), []
-            continue
-        buf.append(raw)
-    flush()
-    return out
-
-
-def summarize_batch(jobs: list[dict]) -> list[tuple[str, str | None, str | None, str]]:
-    """한 번의 호출로 여러 고객 처리. 반환은 고객별 (cid, 선호, 근황, 실패사유)."""
-    out, why = run_claude(build_batch_prompt([j["memos"] for j in jobs]))
-    if not out:
-        return [(j["cid"], None, None, why) for j in jobs]
-    parsed = parse_batch(out, len(jobs))
-    res = []
-    for i, j in enumerate(jobs, start=1):
-        pref, recent = parsed.get(i, (None, None))
-        res.append((j["cid"], pref, recent, "" if pref else "응답에서 이 고객 항목을 못 찾음"))
-    return res
-
-
-def build_prompt(lines: list[str]) -> str:
-    """lines: '2026-06-01 컬 약하게' 처럼 날짜가 붙은 메모들(오래된 순).
-    날짜가 있어야 '최근에는 ~' 판단과 근황의 시점 표기가 가능하다."""
-    joined = "\n".join(lines)
-    return (
-        "너는 미용실 디자이너를 돕는 조수다. 아래는 한 고객에 대해 매장에서 방문마다 적어둔 메모다(날짜 오름차순).\n"
-        "디자이너가 이 고객을 다시 맞을 때 3초 안에 파악하도록 두 덩이로 정리해라.\n\n"
-        "[선호] — 시술에 계속 반영할 것\n"
-        "- 반복되는 선호·주의사항, 모발·두피 상태.\n"
-        "- 시간에 따라 뒤집히면 날짜를 보고 최근 것을 따르되 '최근에는 ~' 으로 적어라.\n"
-        "- 2~4개. 각 줄 25자 내외.\n\n"
-        "[근황] — 다음에 만나면 먼저 물어볼 이야기\n"
-        "- 개인 근황·대화거리(가족, 일, 이사, 여행, 행사, 건강 등). 시술과 무관해도 좋다.\n"
-        "- 한 번만 나온 이야기라도 담아라. 이게 이 항목의 목적이다.\n"
-        "- 최근 것 위주로 최대 3개. 각 줄 앞에 (YYYY-MM) 을 붙여라.\n"
-        "- 오래돼 지금 꺼내기 어색한 이야기는 빼라. 해당 없으면 아무 줄도 쓰지 마라.\n\n"
-        "공통: 메모에 실제로 있는 내용만. 없는 사실을 지어내지 마라.\n"
-        "인사말·설명 없이 아래 형식 그대로만 출력:\n"
-        "[선호]\n- ...\n[근황]\n- (2026-07) ...\n\n"
-        f"메모:\n{joined}\n"
-    )
-
-
-def parse_sections(text: str) -> tuple[str | None, str | None]:
-    """모델 출력에서 [선호]/[근황] 두 덩이를 뽑는다. 서두·코드펜스는 버린다."""
-    pref: list[str] = []
-    recent: list[str] = []
-    cur: list[str] | None = None
-    for raw in text.splitlines():
-        line = raw.strip().strip("`").strip()
-        if not line:
-            continue
-        if line.startswith("[선호]"):
-            cur = pref
-            continue
-        if line.startswith("[근황]"):
-            cur = recent
-            continue
-        if line.startswith(("- ", "• ", "* ")) and cur is not None:
-            cur.append("- " + line[2:].strip())
-    return ("\n".join(pref[:4]) or None, "\n".join(recent[:3]) or None)
-
+from claude_cli import MODEL, check_cli, print_usage  # noqa: E402
+from memo_prompt import PROMPT_VERSION, summarize_batch  # noqa: E402
 
 def preflight_columns() -> None:
     """쓸 컬럼이 실제로 있는지 먼저 확인한다.
