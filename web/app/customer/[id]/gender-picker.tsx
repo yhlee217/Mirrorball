@@ -1,6 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { MSG } from '@/lib/copy';
 
 // 성별 지정 — 추정이 못 가른 고객을 디자이너가 직접 채운다.
 // 저장은 gender_manual 로 가고, 지우면 다시 추정값을 따른다.
@@ -35,7 +36,7 @@ export default function GenderPicker({
       startTransition(() => router.refresh());
     } catch {
       setCur(manual);
-      alert('저장하지 못했어요. 잠시 후 다시 눌러주세요.');
+      alert(MSG.saveFail);
     } finally {
       setSaving(false);
     }

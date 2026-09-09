@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Empty } from '@/components/empty';
 
 // 이탈로 표시한 고객 모아보기 + 해제. 표시는 여러 화면에서 하지만 '되돌리기'는 여기 모아둔다
 // (실수로 표시했을 때 어디서 찾아야 할지 헤매지 않도록).
@@ -26,7 +27,13 @@ export default function ChurnedList({ rows }: { rows: Row[] }) {
     setBusy('');
   };
 
-  if (!rows.length) return <div className="empty">이탈로 표시한 고객이 없어요</div>;
+  if (!rows.length)
+    return (
+      <Empty
+        title="이탈로 표시한 고객이 없어요"
+        hint="챙길 고객 목록에서 ‘이탈 처리’를 누르면 여기로 모여요. 이력은 지워지지 않아요."
+      />
+    );
 
   return (
     <>

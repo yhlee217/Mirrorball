@@ -6,6 +6,7 @@ import { won } from '@/lib/format';
 import { requireTenant } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
+import { Empty } from '@/components/empty';
 import { txKind } from '@/lib/tx';
 import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
 import { isLapsed, mergeSettings } from '@/lib/settings';
@@ -363,7 +364,7 @@ export default async function StatsPage() {
               </div>
             ))
           ) : (
-            <div className="empty">시술 데이터가 없어요</div>
+            <Empty title="시술 데이터가 없어요" hint="수집된 거래가 아직 없어요. 첫 수집이 끝나면 채워져요." />
           )}
         </div>
 

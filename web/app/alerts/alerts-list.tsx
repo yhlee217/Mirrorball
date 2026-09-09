@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Empty } from '@/components/empty';
+import { MSG } from '@/lib/copy';
 
 type Item = { id: string; name: string; state: string; why: string; draft: string };
 
@@ -48,14 +50,21 @@ export default function AlertsList({ items }: { items: Item[] }) {
       if (r.ok) {
         flash(`${name} 님을 이탈로 표시했어요`);
         router.refresh();
-      } else flash('처리 실패');
+      } else flash(MSG.saveFailShort);
     } catch {
-      flash('처리 실패');
+      flash(MSG.saveFailShort);
     }
     setBusy('');
   }
 
-  if (!items.length) return <div className="empty">지금 챙길 고객이 없어요</div>;
+  if (!items.length)
+    return (
+      <Empty
+        title="지금 챙길 고객이 없어요"
+        hint="재방문 시기가 지난 분이 없다는 뜻이에요. 시기가 된 분이 생기면 여기에 먼저 올라와요."
+        action={<Link href="/visits">최근 다녀가신 분 보기 ›</Link>}
+      />
+    );
 
   return (
     <>

@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MSG } from '@/lib/copy';
 import { isVip, isLapsed, type TenantSettings } from '@/lib/settings';
 
 // 판정 기준은 숫자만 보면 감이 안 온다("20회가 적당한가?"의 근거는 사실 인원수다).
@@ -86,11 +87,11 @@ export default function SettingsForm({
         body: JSON.stringify({ settings: draft, designer_name: dn, salon_name: sn }),
       });
       if (r.ok) {
-        setMsg('저장됐어요 ✓');
+        setMsg(MSG.saved);
         router.refresh();
-      } else setMsg('저장 실패');
+      } else setMsg(MSG.saveFailShort);
     } catch {
-      setMsg('저장 실패');
+      setMsg(MSG.saveFailShort);
     }
     setSaving(false);
   };
@@ -100,7 +101,7 @@ export default function SettingsForm({
       await navigator.clipboard.writeText(`${window.location.origin}/p/${slug}`);
       setMsg('공개 소개 링크 복사됨 ✓');
     } catch {
-      setMsg('복사 실패');
+      setMsg(MSG.copyFail);
     }
   };
 

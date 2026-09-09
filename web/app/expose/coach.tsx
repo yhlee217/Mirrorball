@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { captionFor, reviewRequestFor } from '@/lib/coach';
 import { friendlyService } from '@/lib/service-name';
+import { Empty } from '@/components/empty';
+import { MSG } from '@/lib/copy';
 
 // 'AI로 다듬기'는 지금 같은 템플릿을 되돌려줘 눌러도 변화가 없었다(가짜 버튼) → 제거.
 // 실제 Workers AI 를 붙일 때 다시 살린다(/api/ai 라우트와 buildPrompt 는 그대로 둠).
@@ -19,7 +21,7 @@ function DraftCard({ title, sub, initial }: { title: string; sub?: string; initi
       await navigator.clipboard.writeText(text);
       setMsg('복사됐어요 ✓');
     } catch {
-      setMsg('복사 실패');
+      setMsg(MSG.copyFail);
     }
     setTimeout(() => setMsg(''), 1800);
   };
@@ -58,7 +60,7 @@ export default function Coach({
           />
         ))
       ) : (
-        <div className="empty">최근 시술 데이터가 없어요</div>
+        <Empty title="최근 30일 시술 기록이 없어요" hint="시술이 쌓이면 그중 많이 나간 것으로 콘텐츠를 제안해요." />
       )}
 
       <div className="sec-h" style={{ marginTop: 18 }}>리뷰 요청</div>
@@ -72,7 +74,7 @@ export default function Coach({
           />
         ))
       ) : (
-        <div className="empty">최근 방문 고객이 없어요</div>
+        <Empty title="최근 방문하신 고객이 없어요" hint="다녀가신 분이 생기면 리뷰를 부탁할 문구를 여기에 만들어 드려요." />
       )}
     </>
   );

@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MSG } from '@/lib/copy';
 
 const PRESETS = ['펌', '염색', '클리닉', '컷', '내추럴', '볼륨', '민감두피', '탈색모', '곱슬', '숱많음', '두피예민'];
 
@@ -29,11 +30,11 @@ export default function CustomerNote({ id, initMemo, initTags }: { id: string; i
         body: JSON.stringify({ customer_id: id, memo, prefer_tags: tags }),
       });
       if (r.ok) {
-        setMsg('저장됐어요 ✓');
+        setMsg(MSG.saved);
         router.refresh();
-      } else setMsg('저장 실패');
+      } else setMsg(MSG.saveFailShort);
     } catch {
-      setMsg('저장 실패');
+      setMsg(MSG.saveFailShort);
     }
     setSaving(false);
   };

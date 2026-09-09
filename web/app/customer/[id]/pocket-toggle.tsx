@@ -1,6 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { MSG } from '@/lib/copy';
 
 // '사비 결제' 표시 — 선불 잔액은 추정이라(POS 에 결제수단이 없다) 사람이 고칠 손잡이가 필요하다.
 // 표시하면 그 시술은 잔액에서 차감하지 않고 매출로 잡는다.
@@ -28,7 +29,7 @@ export default function PocketToggle({ id, initial }: { id: string; initial: boo
       startTransition(() => router.refresh()); // 잔액 다시 계산해 표시
     } catch {
       setOn(!next);
-      alert('저장하지 못했어요. 잠시 후 다시 눌러주세요.');
+      alert(MSG.saveFail);
     } finally {
       setSaving(false);
     }

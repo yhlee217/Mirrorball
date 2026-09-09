@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { won } from '@/lib/format';
 import PocketToggle from './pocket-toggle';
+import { Empty } from '@/components/empty';
 import type { Carte } from './data';
 
 /**
@@ -193,7 +194,7 @@ export function HistoryCard({
           )}
         </>
       ) : (
-        <div className="empty">시술 이력이 없어요</div>
+        <Empty title="시술 이력이 없어요" hint="첫 방문 전이거나, 아직 수집되지 않은 고객이에요." />
       )}
     </div>
   );

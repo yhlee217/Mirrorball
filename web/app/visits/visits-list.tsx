@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { won } from '@/lib/format';
+import { Empty } from '@/components/empty';
 
 // 방문 관리 — 리뷰 요청 '복사 버튼'은 강요처럼 보여서 뺐다. 홈케어 팁도 손님께 전할 말투라
 // 모든 줄에 펼쳐두니 목록이 지저분했다 → 기본은 접고 누를 때만 편다(네이티브 details, JS 없음).
@@ -56,7 +57,13 @@ export default function VisitsList({
   today: string;
   yesterday: string;
 }) {
-  if (!items.length) return <div className="empty">최근 2주 방문 기록이 없어요</div>;
+  if (!items.length)
+    return (
+      <Empty
+        title="최근 2주 방문 기록이 없어요"
+        hint="수집은 주 1회예요. 방금 다녀가신 분은 다음 수집 뒤에 여기 나타나요."
+      />
+    );
 
   const label = (d: string) => (d === today ? '오늘' : d === yesterday ? '어제' : d);
   const groups: { key: string; rows: Item[] }[] = [];

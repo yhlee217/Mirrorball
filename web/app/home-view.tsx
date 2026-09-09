@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { syncLine } from '@/lib/sync';
 import { isCancelled } from '@/lib/bookings';
+import { Empty } from '@/components/empty';
 
 type Booking = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; status: string | null; name?: string };
 type Care = { id: string; name: string; state: string; visit_count: number; last_visit: string | null };
@@ -97,7 +98,11 @@ export default function HomeView({
               </Link>
             ))
           ) : (
-            <div className="empty">지금 챙길 고객이 없어요</div>
+            <Empty
+              title="지금 챙길 고객이 없어요"
+              hint="재방문 시기가 지난 분이 없다는 뜻이에요. 시기가 된 분이 생기면 여기에 먼저 올라와요."
+              action={<Link href="/visits">최근 다녀가신 분 보기 ›</Link>}
+            />
           )}
         </div>
 
@@ -141,7 +146,10 @@ export default function HomeView({
               );
             })
           ) : (
-            <div className="empty">수집 시점 기준으로 잡힌 예약이 없어요</div>
+            <Empty
+              title="잡힌 예약이 없어요"
+              hint="수집 시점 이후에 들어온 예약은 다음 수집 때 반영돼요."
+            />
           )}
         </div>
 

@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { won } from '@/lib/format';
 import Link from 'next/link';
 import { isVip as isVipS, isLapsed, type TenantSettings } from '@/lib/settings';
+import { Empty } from '@/components/empty';
+import { MSG } from '@/lib/copy';
 
 type Row = {
   id: string;
@@ -64,10 +66,22 @@ export default function CustomersList({
         delete n[id];
         return n;
       });
-      alert('저장하지 못했어요. 잠시 후 다시 눌러주세요.');
+      alert(MSG.saveFail);
     } finally {
       setSaving(null);
     }
+  };
+
+  // 검색·칩·셀렉트 중 하나라도 걸려 있으면 '0명'은 데이터가 없는 게 아니라 걸러진 것이다.
+  // 정렬(sort)은 목록을 줄이지 않으므로 세지 않는다.
+  const narrowed = !!q.trim() || chips.size > 0 || !!visitF || !!revF || !!recF || !!svcF;
+  const clearFilters = () => {
+    setQ('');
+    setChips(new Set());
+    setVisitF('');
+    setRevF('');
+    setRecF('');
+    setSvcF('');
   };
 
   const sweeping = chips.has('nogender'); // 성별 채우는 중인가
@@ -234,8 +248,24 @@ export default function CustomersList({
               </div>
             );
           })
+        ) : sweeping ? (
+          // 훑기를 끝낸 자리 — '없다'가 아니라 '다 채웠다'는 뜻이라 문구가 달라야 한다.
+          <Empty
+            title="성별 미상 고객이 남지 않았어요"
+            hint="아는 분을 다 채우셨어요. 통계의 성별 비교가 그만큼 정확해졌어요."
+            action={<Link href="/stats">통계에서 확인하기 ›</Link>}
+          />
+        ) : narrowed ? (
+          <Empty
+            title="조건에 맞는 고객이 없어요"
+            hint={`고객 ${rows.length}명 중 지금 조건에 걸리는 분이 없어요.`}
+            action={<button type="button" onClick={clearFilters}>필터 지우기</button>}
+          />
         ) : (
-          <div className="empty">조건에 맞는 고객이 없어요</div>
+          <Empty
+            title="아직 고객이 없어요"
+            hint="주 1회 수집이라, 첫 수집이 끝나면 여기에 고객이 채워져요."
+          />
         )}
       </div>
     </>

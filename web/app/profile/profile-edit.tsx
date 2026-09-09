@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { MSG } from '@/lib/copy';
+import { Empty } from '@/components/empty';
 
 type Spec = { name: string; desc: string };
 type Faq = { q: string; a: string };
@@ -31,7 +33,7 @@ export default function ProfileEdit({ initial }: { initial: P }) {
       ok = false;
     }
     setSaving(false);
-    setMsg(ok ? '저장됐어요' : '저장 실패');
+    setMsg(ok ? MSG.saved : MSG.saveFailShort);
     setTimeout(() => setMsg(''), 2200);
   }
 
@@ -55,7 +57,7 @@ export default function ProfileEdit({ initial }: { initial: P }) {
         손님이 궁금해할 대표 시술 2~3개면 충분해요.
       </p>
       {p.services.length === 0 && (
-        <div className="empty" style={{ marginBottom: 8 }}>예: 뿌리볼륨펌 — 뿌리만 살려 자연스럽게, 유지 2개월</div>
+        <Empty title="아직 등록한 시술이 없어요" hint="예: 뿌리볼륨펌 — 뿌리만 살려 자연스럽게, 유지 2개월" />
       )}
       {p.services.map((s, i) => (
         <div className="card" style={{ padding: '12px 13px', marginBottom: 8 }} key={i}>
@@ -75,7 +77,7 @@ export default function ProfileEdit({ initial }: { initial: P }) {
         예약·주차·시술 시간처럼 자주 받는 질문을 적어두면 문의가 줄어요.
       </p>
       {p.faq.length === 0 && (
-        <div className="empty" style={{ marginBottom: 8 }}>예: 주차 되나요? — 건물 뒤편에 2시간 무료 주차 가능해요.</div>
+        <Empty title="아직 등록한 질문이 없어요" hint="예: 주차 되나요? — 건물 뒤편에 2시간 무료 주차 가능해요." />
       )}
       {p.faq.map((f, i) => (
         <div className="card" style={{ padding: '12px 13px', marginBottom: 8 }} key={i}>
