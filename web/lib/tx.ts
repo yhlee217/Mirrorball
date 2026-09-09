@@ -12,7 +12,6 @@ export function txKind(kind: string | null | undefined, service: string | null |
   return 'service';
 }
 
-export const won = (n: number) => (n >= 10000 ? Math.round(n / 10000) + '만' : n.toLocaleString()) + '원';
 
 /**
  * 선불 원장 — worker/txkind.py 의 ledger 와 같은 규칙을 화면에서도 쓴다.

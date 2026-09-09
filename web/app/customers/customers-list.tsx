@@ -1,5 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
+import { won } from '@/lib/format';
 import Link from 'next/link';
 import { isVip as isVipS, isLapsed, type TenantSettings } from '@/lib/settings';
 
@@ -22,7 +23,6 @@ type Row = {
 
 const DAY = 86400000;
 const daysSince = (d: string | null) => (d ? Math.floor((Date.now() - new Date(d).getTime()) / DAY) : Infinity);
-const won = (n: number) => (n >= 10000 ? Math.round(n / 10000) + '만' : String(n));
 
 export default function CustomersList({
   rows,
@@ -163,7 +163,7 @@ export default function CustomersList({
                   {r.churned ? <span className="tag-off">이탈</span> : null}
                 </div>
                 <div className="sub">
-                  {r.visit_count}회 · {won(r.total_won)}원{r.last_visit ? ' · 마지막 ' + r.last_visit : ''}
+                  {r.visit_count}회 · {won(r.total_won)}{r.last_visit ? ' · 마지막 ' + r.last_visit : ''}
                 </div>
               </div>
               <div className="rt">

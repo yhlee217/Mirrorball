@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { won } from '@/lib/format';
 
 // 방문 관리 — 리뷰 요청 '복사 버튼'은 강요처럼 보여서 뺐다. 홈케어 팁도 손님께 전할 말투라
 // 모든 줄에 펼쳐두니 목록이 지저분했다 → 기본은 접고 누를 때만 편다(네이티브 details, JS 없음).
@@ -16,7 +17,6 @@ type Item = {
   tip: string;
 };
 
-const won = (n: number) => (n >= 10000 ? Math.round(n / 10000) + '만' : n.toLocaleString()) + '원';
 
 function Row({ it }: { it: Item }) {
   return (

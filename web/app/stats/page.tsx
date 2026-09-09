@@ -2,18 +2,12 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
+import { won } from '@/lib/format';
 import { requireTenant } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { txKind } from '@/lib/tx';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
-
-function won(n: number): string {
-  if (!n) return '0원';
-  if (n >= 100000000) return (n / 100000000).toFixed(1) + '억원';
-  if (n >= 10000) return Math.round(n / 10000).toLocaleString() + '만원';
-  return n.toLocaleString() + '원';
-}
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 

@@ -2,6 +2,7 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
+import { won } from '@/lib/format';
 import { notFound } from 'next/navigation';
 import { nameReader, openDek, requireUser } from '@/lib/tenant';
 import { mergeSettings, isVip } from '@/lib/settings';
@@ -42,10 +43,6 @@ type Bk = { date: string; time: string | null; service: string | null; note: str
 
 const SIGNAL: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', new: '신규' };
 
-function won(n: number): string {
-  if (!n) return '0원';
-  return (n >= 10000 ? Math.round(n / 10000) + '만' : n.toLocaleString()) + '원';
-}
 function monthsAgo(d: string | null): number | null {
   if (!d) return null;
   return Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000));
