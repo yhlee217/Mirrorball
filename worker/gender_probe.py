@@ -9,26 +9,14 @@
 
 from __future__ import annotations
 
-import os
 from collections import Counter, defaultdict
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from env import load_env
 
-
-def _load_env() -> None:
-    p = ROOT / "web" / ".env.local"
-    if p.exists():
-        for line in p.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                os.environ.setdefault(k, v.strip().strip('"').strip("'"))
-    if not os.environ.get("SUPABASE_URL") and os.environ.get("NEXT_PUBLIC_SUPABASE_URL"):
-        os.environ["SUPABASE_URL"] = os.environ["NEXT_PUBLIC_SUPABASE_URL"]
+load_env()
 
 
-_load_env()
+
 
 import supa      # noqa: E402
 import gender    # noqa: E402

@@ -8,12 +8,13 @@
 
 from __future__ import annotations
 
-import os
 import re
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from env import load_env
+
+load_env()
+
 
 # 거래 ext_id = "{고객번호}-{YYYY}-{MM}-{DD}-{순번}". 고객번호에 '-' 가 있어도 정확히 복원하려면
 # 첫 '-' 로 자르면 안 되고(코드리뷰 M4), 뒤쪽 '-날짜-순번' 패턴만 벗겨야 한다.
@@ -25,19 +26,6 @@ def custno_of(ext_id: str) -> str:
     return _TX_SUFFIX.sub("", ext_id or "")
 
 
-def _load_env() -> None:
-    p = ROOT / "web" / ".env.local"
-    if p.exists():
-        for line in p.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                os.environ.setdefault(k, v.strip().strip('"').strip("'"))
-    if not os.environ.get("SUPABASE_URL") and os.environ.get("NEXT_PUBLIC_SUPABASE_URL"):
-        os.environ["SUPABASE_URL"] = os.environ["NEXT_PUBLIC_SUPABASE_URL"]
-
-
-_load_env()
 
 import supa  # noqa: E402
 from sync_tenant import _recompute_aggregates  # noqa: E402
