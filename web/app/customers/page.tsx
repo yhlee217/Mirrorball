@@ -38,7 +38,7 @@ function svcCat(s: string | null): string | null {
 }
 
 // 홈의 신호 타일(이탈위험/재방문도래/신규/VIP)에서 넘어올 때 초기 필터를 받는다.
-const FILTERS = new Set(['overdue', 'due', 'new', 'vip', 'booking', 'nophone', 'churned']);
+const FILTERS = new Set(['overdue', 'due', 'new', 'vip', 'booking', 'nophone', 'churned', 'nogender']);
 
 export default async function CustomersPage({
   searchParams,

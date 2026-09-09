@@ -304,3 +304,17 @@ a.hs:active{background:var(--soft)}
 .admin-sec{margin-top:22px;padding-top:14px;border-top:1px dashed var(--line)}
 .admin-h{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:1px;
   text-transform:uppercase;margin:0 2px 9px}
+
+/* 이번 달 — 절대값 옆에 증감을 붙여야 '그래서 어떤데'가 읽힌다 */
+.mth{display:flex;gap:22px;flex-wrap:wrap}
+.mth>div{display:flex;flex-direction:column;gap:2px}
+.mth .ml{font-size:10.5px;color:var(--muted)}
+.mth b{font-size:19px;font-weight:800}
+.mth .delta{font-size:11px;color:var(--muted);font-weight:600}
+.mth .delta.up{color:var(--sage)}
+.mth .delta.down{color:var(--rose)}
+
+/* 지금 할 일 — 통계에서 바로 그 화면으로 건너가는 자리 */
+.todo{border-color:var(--accent)}
+.todo .ch{color:var(--accent)}
+.todo .nm{font-weight:700;font-size:14.5px}

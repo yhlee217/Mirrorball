@@ -7,24 +7,30 @@ import { requireTenant } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { txKind } from '@/lib/tx';
-import { fetchAllRows, isRealCustomer } from '@/lib/customers';
+import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
+import { isLapsed, mergeSettings } from '@/lib/settings';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
 export default async function StatsPage() {
   const { supabase, tenantId } = await requireTenant();
 
-  const [customers, txs] = await Promise.all([
+  const [{ data: tenant }, customers, txs] = await Promise.all([
+    supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<{ ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
-                   age_band: string | null; gender_src: string | null; gender_manual: string | null; revisit_cycle_days: number | null }>((from, to) =>
+                   age_band: string | null; gender_src: string | null; gender_manual: string | null; revisit_cycle_days: number | null;
+                   revisit_state: string | null; churned_at: string | null; last_visit: string | null;
+                   visits_90d: number | null; visits_180d: number | null; visits_365d: number | null }>((from, to) =>
       supabase.from('customers')
-        .select('ext_id,total_won,visit_count,gender,gender_manual,age_band,gender_src,revisit_cycle_days')
+        .select('ext_id,total_won,visit_count,gender,gender_manual,age_band,gender_src,revisit_cycle_days,revisit_state,churned_at,last_visit,visits_90d,visits_180d,visits_365d')
         .eq('tenant_id', tenantId).order('id').range(from, to)),
     fetchAllRows<{ date: string; service: string | null; amount_won: number; kind: string | null; covered_won: number | null }>((from, to) =>
       supabase.from('transactions').select('date,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
   ]);
   // '손님' 등 미식별 워크인은 관리 대상이 아니다 — 홈·챙길 고객·고객목록과 같은 기준으로 뺀다.
   // 통계만 포함하고 있어서 고객수·재방문율·객단가가 부풀고, 성별은 전부 '미상'으로 쌓였다.
+  // 이탈 판정 기준(설정)을 따라야 홈 신호와 숫자가 어긋나지 않는다.
+  const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
   const cs = customers.filter((c) => isRealCustomer(c.ext_id));
   const tx = txs;
 
@@ -104,6 +110,34 @@ export default async function StatsPage() {
   };
   const perVisit = (g: G) => (gStat[g].visits ? Math.round(gStat[g].rev / gStat[g].visits) : 0);
 
+  // ── 이번 달 (지난달 같은 기간과 비교) ──
+  // 누적 매출은 평생 수치라 보고 나서 할 게 없다. 진행 중인 달을 지난달 '같은 날짜까지'와
+  // 견줘야 늘었는지 줄었는지가 판단이 된다(달 전체와 비교하면 월초엔 늘 줄어 보인다).
+  const kToday = kstNow().date;
+  const dayOfMonth = Number(kToday.slice(8, 10));
+  const thisMonth = kToday.slice(0, 7);
+  const prevMonth = (() => {
+    const [y, m] = thisMonth.split('-').map(Number);
+    return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+  })();
+  const period = { now: { rev: 0, visits: 0 }, prev: { rev: 0, visits: 0 } };
+  for (const t of tx) {
+    if (!t.date) continue;
+    const mm = t.date.slice(0, 7);
+    const dd = Number(t.date.slice(8, 10));
+    if (dd > dayOfMonth) continue;               // 지난달도 같은 날짜까지만
+    if (mm === thisMonth) { period.now.rev += net(t); period.now.visits++; }
+    else if (mm === prevMonth) { period.prev.rev += net(t); period.prev.visits++; }
+  }
+  const revDelta = period.prev.rev ? Math.round(((period.now.rev - period.prev.rev) / period.prev.rev) * 100) : null;
+
+  // ── 지금 할 일 ── 홈 신호와 같은 기준으로 센다(숫자가 다르면 어느 쪽을 믿을지 모른다)
+  let careCount = 0;
+  for (const c of cs) {
+    if (isChurned(c)) continue;
+    if ((c.revisit_state === 'overdue' || c.revisit_state === 'due') && !isLapsed(c, settings)) careCount++;
+  }
+
   const synced = await lastSynced(supabase);
 
   // 요일별 방문
@@ -115,6 +149,9 @@ export default async function StatsPage() {
     }
   }
   const maxDow = Math.max(1, ...days.map((d) => d.count));
+  // 막대만 보고 '그래서 뭘 하지'를 떠올리긴 어렵다 — 가장 붐비는/한산한 요일을 말로 짚어준다.
+  const busiest = days.reduce((a, b) => (b.count > a.count ? b : a));
+  const quietest = days.filter((d) => d.count > 0).reduce((a, b) => (b.count < a.count ? b : a), days[0]);
 
   // 시술별(건수 + 매출)
   const svc = new Map<string, { n: number; rev: number }>();
@@ -136,6 +173,55 @@ export default async function StatsPage() {
         <div className="ttl" style={{ marginLeft: 10 }}>기록 · 통계</div>
       </div>
       <div className="body">
+        {/* 이번 달 — 누적 수치는 보고 나서 할 게 없다. 지난달 같은 날짜까지와 견줘야 판단이 된다. */}
+        <div className="card" style={{ padding: '14px 15px' }}>
+          <div className="ch" style={{ padding: 0, marginBottom: 8 }}>
+            이번 달 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>
+              · {dayOfMonth}일까지 · 지난달 같은 기간과 비교</span>
+          </div>
+          <div className="mth">
+            <div>
+              <span className="ml">매출</span>
+              <b>{won(period.now.rev)}</b>
+              {revDelta !== null && (
+                <span className={'delta ' + (revDelta >= 0 ? 'up' : 'down')}>
+                  {revDelta >= 0 ? '▲' : '▼'} {Math.abs(revDelta)}%
+                </span>
+              )}
+            </div>
+            <div>
+              <span className="ml">방문</span>
+              <b>{period.now.visits.toLocaleString()}건</b>
+              <span className="delta">지난달 {period.prev.visits.toLocaleString()}건</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 지금 할 일 — 통계를 보고 '그래서 뭘 하지'로 이어지게. 숫자는 홈 신호와 같은 기준. */}
+        {(careCount > 0 || gNoClue + gProxy > 0) && (
+          <div className="card todo">
+            <div className="ch">지금 할 일</div>
+            {careCount > 0 && (
+              <Link href="/alerts" className="li li-link">
+                <div className="bd">
+                  <div className="nm">챙길 고객 {careCount.toLocaleString()}명</div>
+                  <div className="sub">재방문 시기가 됐거나 오래 안 오신 분들이에요</div>
+                </div>
+                <span className="rt" style={{ fontSize: 18, color: '#B4B2A9' }} aria-hidden>›</span>
+              </Link>
+            )}
+            {gNoClue + gProxy > 0 && (
+              <Link href="/customers?filter=nogender" className="li li-link">
+                <div className="bd">
+                  <div className="nm">성별 미상 {(gNoClue + gProxy).toLocaleString()}명</div>
+                  <div className="sub">아는 분만 채우면 아래 성별 비교가 정확해져요</div>
+                </div>
+                <span className="rt" style={{ fontSize: 18, color: '#B4B2A9' }} aria-hidden>›</span>
+              </Link>
+            )}
+          </div>
+        )}
+
         <div className="stat-grid">
           <div className="stat"><div className="sn">{won(totalRevenue)}</div><div className="sl">누적 매출</div></div>
           <div className="stat"><div className="sn">{totalVisits.toLocaleString()}</div><div className="sl">누적 방문</div></div>
@@ -258,6 +344,12 @@ export default async function StatsPage() {
               </div>
             ))}
           </div>
+          {busiest.count > 0 && busiest.label !== quietest.label && (
+            <p className="note">
+              <b>{busiest.label}요일</b>이 가장 붐비고 <b>{quietest.label}요일</b>이 가장 한산해요.
+              한산한 날로 예약을 옮겨드릴 수 있는 분이 있는지 살펴보세요.
+            </p>
+          )}
         </div>
 
         <div className="card" style={{ padding: '14px 15px' }}>
