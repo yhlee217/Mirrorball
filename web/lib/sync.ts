@@ -21,9 +21,17 @@ export async function lastSynced(
   return kstStamp((data as { finished_at: string | null } | null)?.finished_at);
 }
 
-/** 수집 주기(7일)를 한 번 놓친 수준 — 조용히 멈춘 걸 몇 주씩 모르는 게 주 1회의 진짜 위험. */
+/**
+ * 예정된 수집을 한 번 걸렀는가 — 조용히 멈춘 걸 몇 주씩 모르는 게 주 1회의 진짜 위험.
+ *
+ * 수집은 일요일 14:00 에 한 번이다. 정상이라면 '며칠 전'은 일요일 0 에서 토요일 6 까지만
+ * 오간다. 일요일 새벽(그날 수집 전)에 7 이 잠깐 나올 수 있으니, **8 이상이면 예정된
+ * 일요일이 통째로 비었다는 뜻**이다 — 예외 없이.
+ *
+ * 전에는 10 이었다. 그래서 실제로 한 주를 거른 상태(8~9일)가 아무 경고 없이 지나갔다.
+ */
 export function isSyncStale(s: { daysAgo: number } | null): boolean {
-  return !!s && s.daysAgo >= 10;
+  return !!s && s.daysAgo >= 8;
 }
 
 /** '8월 30일 수집 기준 · 3일 전' — 화면 상단에 한 줄로 붙이는 표기. */

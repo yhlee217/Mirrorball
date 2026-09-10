@@ -15,11 +15,13 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin:$HO
 PY="$ROOT/.venv/bin/python"
 ts() { date '+%F %T'; }
 
-# 영업시간(KST 10~21시)만 수집 — 그 외엔 조용히 종료(로그인 절약). FORCE=1 이면 무시.
-H=$(date +%H)
-if [ "${FORCE:-0}" != "1" ] && { [ "$H" -lt 10 ] || [ "$H" -gt 21 ]; }; then
-  exit 0
-fi
+# ⚠ 영업시간(KST 10~21시) 밖이면 조용히 종료하던 가드를 뺐다(2026-09-10).
+#    30분마다 돌던 시절엔 밤에 한 번 거르는 게 공짜였다. 주 1회로 바뀐 뒤로는 정반대다:
+#    launchd 는 예약 시각에 맥이 자고 있으면 '깨어난 뒤'에 밀린 잡을 실행하는데,
+#    그 시각이 밤 10시거나 아침 9시면 여기서 exit 0 으로 끝났다. 로그 한 줄 없이
+#    일주일치가 통째로 사라지고, 앱에는 '8일 전' 같은 숫자만 남는다.
+#    예약 시각(일 14:00)은 어차피 영업시간 안이라, 이 가드가 실제로 걸리는 경우는
+#    '밀린 실행' 뿐이었다 — 즉 절대 걸러선 안 되는 바로 그 경우.
 
 # 시크릿: web/.env.local 재사용(SUPABASE_SERVICE_ROLE_KEY, MIRRORBALL_KEK, NEXT_PUBLIC_SUPABASE_URL)
 if [ -f "$ROOT/web/.env.local" ]; then
