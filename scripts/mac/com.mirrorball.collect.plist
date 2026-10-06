@@ -4,10 +4,17 @@
   Mirrorball v2 수집 (macOS launchd). 주 1회(일요일 14:00 KST) run_mac.sh 호출 — 저빈도 재개(2026-07-23).
   고객 관리 용도. HandSOS 약관 19조1항17호 리스크는 LAUNCH.md 참조(빈도와 무관한 금지).
   국내 IP 필요 → 반드시 이 맥에서 실행(GitHub 해외러너는 HandSOS 차단).
-  설치/재적용:  cp scripts/mac/com.mirrorball.collect.plist ~/Library/LaunchAgents/
-                launchctl unload ~/Library/LaunchAgents/com.mirrorball.collect.plist 2>/dev/null
-                launchctl load   ~/Library/LaunchAgents/com.mirrorball.collect.plist
-  주기 변경: 아래 StartCalendarInterval 에서 Weekday 삭제=매일, Hour/Minute 조정. 매일 원하면 Weekday 줄만 제거.
+
+  ⚠ 경로를 직접 적지 말 것. {PROJECT}/{LOGS} 는 install_schedule.sh 가 채운다.
+     2026-08~10, 저장소가 ~/Desktop 에 있어서 수집이 1392번 연속 실패했다.
+     macOS 는 Desktop·Documents·Downloads 를 TCC 로 보호하고, launchd 는 그 안으로
+     chdir 하거나 로그를 열지 못해 posix_spawn(/bin/bash) 이 EPERM 으로 죽는다.
+     11ms 만에 죽으니 스크립트가 한 줄도 안 돌고, 그래서 로그도 알림도 남지 않는다.
+     → 저장소는 TCC 보호 폴더 밖에 둔다(scripts/mac/relocate.sh).
+     → launchd 의 stdout/stderr 는 저장소 위치와 무관하게 ~/Library/Logs 에 둔다.
+
+  설치:  bash scripts/mac/install_schedule.sh collect
+  주기 변경: 아래 StartCalendarInterval 에서 Weekday 삭제=매일, Hour/Minute 조정.
 -->
 <plist version="1.0">
 <dict>
@@ -15,9 +22,9 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/eyonghwi/Desktop/Dev/Mirrorball/worker/run_mac.sh</string>
+    <string>{PROJECT}/worker/run_mac.sh</string>
   </array>
-  <key>WorkingDirectory</key><string>/Users/eyonghwi/Desktop/Dev/Mirrorball</string>
+  <key>WorkingDirectory</key><string>{PROJECT}</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
@@ -28,7 +35,7 @@
     <key>Hour</key><integer>14</integer>
     <key>Minute</key><integer>0</integer>
   </dict>
-  <key>StandardOutPath</key><string>/Users/eyonghwi/Desktop/Dev/Mirrorball/runs/collect.out.log</string>
-  <key>StandardErrorPath</key><string>/Users/eyonghwi/Desktop/Dev/Mirrorball/runs/collect.err.log</string>
+  <key>StandardOutPath</key><string>{LOGS}/collect.out.log</string>
+  <key>StandardErrorPath</key><string>{LOGS}/collect.err.log</string>
 </dict>
 </plist>

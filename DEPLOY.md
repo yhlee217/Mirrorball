@@ -29,10 +29,8 @@ git pull origin claude/charming-planck-hmgazi
 # 다만 플레이라이트 자체를 올렸다면 한 번 돌려두는 게 빠르다.
 .venv/bin/python -m playwright install chromium
 
-# 수집 주기 plist(주 1회)를 아직 안 걸었다면 한 번만
-cp scripts/mac/com.mirrorball.collect.plist ~/Library/LaunchAgents/
-launchctl unload ~/Library/LaunchAgents/com.mirrorball.collect.plist 2>/dev/null
-launchctl load   ~/Library/LaunchAgents/com.mirrorball.collect.plist
+# 수집 주기 plist(주 1회) 등록·갱신. plist 에 경로를 직접 적지 않는다(아래 ⚠ 참조)
+bash scripts/mac/install_schedule.sh collect
 
 # 즉시 1회 — 이걸 돌려야 sync_jobs 에 기록이 남아 앱에 '수집 기준일'이 뜬다
 FORCE=1 bash worker/run_mac.sh
@@ -41,10 +39,33 @@ FORCE=1 bash worker/run_mac.sh
 확인:
 
 ```bash
-launchctl list | grep mirrorball          # 등록됐는지
+launchctl list | grep mirrorball          # 2번째 칸이 종료코드 — 0 이어야 정상
 .venv/bin/python worker/gap_check.py      # 어디까지 모았는지
 .venv/bin/python worker/sync_log.py       # 예정된 일요일이 실제로 돌았는지
 ```
+
+> ### ⚠ 저장소를 `~/Desktop`·`~/Documents`·`~/Downloads` 에 두지 말 것
+>
+> 2026-08~10, 저장소가 `~/Desktop` 에 있어서 주간 수집이 **1392번 연속 실패**했다.
+> macOS 는 이 세 폴더를 TCC 로 보호하고, launchd 는 그 안으로 `chdir` 하거나 로그를
+> 열 수 없어 `posix_spawn(/bin/bash)` 이 `EPERM` 으로 죽는다. **11ms 만에, 스크립트가
+> 한 줄도 돌지 않고** — 그래서 로그도 알림도 종료코드도 남지 않았다. 두 달을 날렸다.
+>
+> 터미널에서 `bash worker/run_mac.sh` 를 직접 돌리면 Terminal 의 권한을 쓰므로 **잘 된다.**
+> "수동은 되는데 자동은 안 된다"가 이 증상의 모양이다.
+>
+> 옮기기(`.venv` 재생성·plist 재등록·실제 spawn 확인까지 한 번에):
+> ```bash
+> bash scripts/mac/relocate.sh          # → ~/Dev/Mirrorball
+> ```
+> `install_schedule.sh` 는 보호 폴더에서 실행하면 등록을 거부한다. launchd 로그는
+> 저장소 위치와 무관하게 `~/Library/Logs/Mirrorball/` 에 쓴다.
+>
+> 그래도 78(EX_CONFIG)이 남으면 **시스템 설정 → 일반 → 로그인 항목 및 확장 →
+> '백그라운드에서 허용'** 에서 Mirrorball 항목이 켜져 있는지 확인한다. 사유는:
+> ```bash
+> log show --predicate 'process == "launchd"' --last 10m --info | grep -i mirrorball
+> ```
 
 > **수집이 조용히 멈추는 걸 두 번 당했다.** 둘 다 로그 파일에만 흔적이 있었다.
 > 지금은 실패하면 ① 맥 알림센터에 뜨고 ② `sync_jobs` 에 error 행이 남아
