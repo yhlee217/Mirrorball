@@ -51,6 +51,27 @@ launchctl list | grep mirrorball          # 등록됐는지
 > `sync_log.py` 와 앱이 '안 돌았다/돌다가 실패했다'를 구분한다. 그래도 가장 확실한
 > 점검은 위 세 줄이니, 배포 때마다 돌려볼 것.
 
+### A-2.5. 수집 감시 — 최초 1회만 (GitHub Actions)
+
+맥 밖에서 수집 지연을 감시한다. 맥이 꺼져 있어도, 크로미움이 없어도, 맥 알림을 놓쳐도
+걸린다. **한 번만 설정하면 이후엔 손댈 일이 없다.**
+
+1. Supabase SQL Editor 에서 `supabase/migrations/0022_sync_health.sql` 실행
+2. GitHub → 저장소 → **Settings → Secrets and variables → Actions → New repository secret**
+   | 이름 | 값 |
+   |---|---|
+   | `SUPABASE_URL` | `https://<ref>.supabase.co` |
+   | `SUPABASE_ANON_KEY` | anon 키 (`NEXT_PUBLIC_SUPABASE_ANON_KEY` 와 같은 값) |
+   | `ALERT_WEBHOOK` | *(선택)* 슬랙·디스코드 웹훅 URL |
+3. **Actions → sync-health → Run workflow** 로 지금 한 번 돌려 확인
+
+> anon 키면 충분하다 — 감시자는 `sync_health()` 함수만 호출하고, 그 함수는 수집
+> 시각만 돌려준다(고객 정보에 구조적으로 닿을 수 없다). service_role 키는 주지 않는다.
+>
+> 지연이면 실행이 **실패**로 끝나고 GitHub 가 소유자에게 메일을 보낸다.
+> 곁따라오는 효과로 이 일일 호출이 **Supabase 무료 플랜의 비활성 일시정지 타이머를
+> 매일 리셋**한다 — 주 1회 수집은 그 기준과 간격이 거의 같아 여유가 없었다.
+
 ### A-3. DB 마이그레이션 — 이번엔 불필요
 
 수집 시각은 기존 `sync_jobs` 테이블을 재사용한다. **적용할 SQL 없음.**

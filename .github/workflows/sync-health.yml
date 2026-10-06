@@ -1,0 +1,39 @@
+name: sync-health
+
+# 맥 밖에서 수집을 감시한다. 맥이 꺼져 있어도, 크로미움이 없어도, 맥 알림을 놓쳐도 걸린다.
+# 수집이 조용히 멈춘 걸 두 번 당한 뒤에 만들었다(2026-08 로그 파일 / 2026-09~10 크로미움 5주).
+#
+# 지연이면 이 실행이 '실패'로 끝나고, GitHub 가 저장소 소유자에게 메일을 보낸다.
+# 비공개 알림 경로가 필요하면 ALERT_WEBHOOK 시크릿(슬랙/디스코드 웹훅 등)만 추가하면 된다.
+#
+# ⚠ 스케줄 워크플로는 '기본 브랜치'에서만 돈다(현재 claude/charming-planck-hmgazi).
+# ⚠ 저장소에 60일간 활동이 없으면 GitHub 가 스케줄을 자동 비활성화한다.
+#
+# 곁따라오는 효과: 이 일일 호출이 Supabase 무료 플랜의 '비활성 일시정지' 타이머를 리셋한다.
+# 주 1회 수집은 그 기준과 간격이 거의 같아 여유가 없었다.
+
+"on":
+  schedule:
+    - cron: '0 1 * * *'      # 매일 01:00 UTC = 10:00 KST
+  workflow_dispatch: {}
+
+permissions:
+  contents: read             # 더 줄 이유가 없다 — 판정만 하고 아무것도 쓰지 않는다
+
+concurrency:
+  group: sync-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: 수집 지연 확인
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          ALERT_WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          STALE_DAYS: '8'
+        run: python3 scripts/sync_health_check.py
