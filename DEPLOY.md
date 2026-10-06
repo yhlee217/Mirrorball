@@ -25,7 +25,8 @@ Cloudflare Pages가 `claude/charming-planck-hmgazi` 브랜치에 연결돼 있�
 cd ~/Desktop/Dev/Mirrorball
 git pull origin claude/charming-planck-hmgazi
 
-# 크로미움이 없으면 수집이 통째로 실패한다(주 1회라 놓치면 일주일 손해)
+# 크로미움은 이제 run_mac.sh 가 없으면 스스로 설치한다(2026-10-06). 수동 설치는 불필요.
+# 다만 플레이라이트 자체를 올렸다면 한 번 돌려두는 게 빠르다.
 .venv/bin/python -m playwright install chromium
 
 # 수집 주기 plist(주 1회)를 아직 안 걸었다면 한 번만
@@ -42,7 +43,13 @@ FORCE=1 bash worker/run_mac.sh
 ```bash
 launchctl list | grep mirrorball          # 등록됐는지
 .venv/bin/python worker/gap_check.py      # 어디까지 모았는지
+.venv/bin/python worker/sync_log.py       # 예정된 일요일이 실제로 돌았는지
 ```
+
+> **수집이 조용히 멈추는 걸 두 번 당했다.** 둘 다 로그 파일에만 흔적이 있었다.
+> 지금은 실패하면 ① 맥 알림센터에 뜨고 ② `sync_jobs` 에 error 행이 남아
+> `sync_log.py` 와 앱이 '안 돌았다/돌다가 실패했다'를 구분한다. 그래도 가장 확실한
+> 점검은 위 세 줄이니, 배포 때마다 돌려볼 것.
 
 ### A-3. DB 마이그레이션 — 이번엔 불필요
 

@@ -23,31 +23,56 @@ ts() { date '+%F %T'; }
 #    예약 시각(일 14:00)은 어차피 영업시간 안이라, 이 가드가 실제로 걸리는 경우는
 #    '밀린 실행' 뿐이었다 — 즉 절대 걸러선 안 되는 바로 그 경우.
 
+# 실패를 '보이게' 하는 두 경로. 로그 파일만으로는 안 된다 — 2026-09-02~10-06 사이
+# 크로미움이 사라져 매주 프리플라이트에서 죽었는데, 그 사실이 runs/collect.out.log
+# 안에만 있어서 5주를 날렸다. 조용한 실패를 막겠다고 만든 점검이 조용히 실패했다.
+#   1) 맥 알림센터 — 앱을 안 열어도 보인다
+#   2) sync_jobs 에 error 행 — '안 돌았다'와 '돌다가 실패했다'를 앱·sync_log.py 가 구분
+notify() {  # $1=본문
+  /usr/bin/osascript -e "display notification \"$1\" with title \"Mirrorball 수집 실패\"" 2>/dev/null || true
+}
+fail() {    # $1=사유. 로그 + 알림 + DB 기록 후 종료
+  echo "[$(ts)] X $1"
+  notify "$1"
+  "$PY" worker/record_fail.py "$1" 2>/dev/null || true
+  exit 1
+}
+
 # 시크릿: web/.env.local 재사용(SUPABASE_SERVICE_ROLE_KEY, MIRRORBALL_KEK, NEXT_PUBLIC_SUPABASE_URL)
+# (여기서 실패하면 DB 기록도 불가능하니 fail 대신 직접 알린다)
 if [ -f "$ROOT/web/.env.local" ]; then
   set -a; . "$ROOT/web/.env.local"; set +a
 else
-  echo "[$(ts)] X web/.env.local 없음 — 시크릿 미로드"; exit 1
+  echo "[$(ts)] X web/.env.local 없음 — 시크릿 미로드"
+  notify "web/.env.local 없음 — 시크릿 미로드"
+  exit 1
 fi
 export SUPABASE_URL="${SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}"
 
-# Playwright 크로미움 확인 — 주 1회 배치라 한 번 실패하면 일주일을 통째로 놓친다.
-# 브라우저가 없으면(플레이라이트 업데이트 후 흔함) 트레이스백 대신 고치는 법 한 줄로 끝낸다.
-if ! "$PY" - >/dev/null 2>&1 <<'PYCHK'
+# Playwright 크로미움 — 플레이라이트가 올라가면 브라우저 경로가 바뀌어 조용히 사라진다.
+# 주 1회 배치에서 이건 '일주일 손실'이라, 사람에게 설치법을 알려주는 대신 직접 설치한다.
+# install 은 멱등이고 30초쯤 걸린다. 주에 한 번 쓰는 비용이면 자동 복구가 맞다.
+have_chromium() {
+  "$PY" - >/dev/null 2>&1 <<'PYCHK'
 import os, sys
 from playwright.sync_api import sync_playwright
 with sync_playwright() as p:
     sys.exit(0 if os.path.exists(p.chromium.executable_path) else 1)
 PYCHK
-then
-  echo "[$(ts)] X Playwright 크로미움 없음 → 설치 후 재시도:  $PY -m playwright install chromium"
-  exit 1
+}
+if ! have_chromium; then
+  echo "[$(ts)] ! 크로미움 없음 → 자동 설치 시도"
+  "$PY" -m playwright install chromium || true
+  have_chromium || fail "크로미움 설치 실패 — 수동: $PY -m playwright install chromium"
+  echo "[$(ts)] 크로미움 설치 완료"
 fi
 
 echo "[$(ts)] collect 시작"
 # 주 1회 실행이라 한 번 걸러도 누락 없게 14일 겹침 창으로 수집(증분·과거 백필분은 보존).
 SYNC_ALL=1 SYNC_DAYS="${SYNC_DAYS:-14}" "$PY" worker/run.py; rc=$?
 echo "[$(ts)] collect 종료(exit=$rc)"
+# run.py 안에서 테넌트별 error 는 이미 sync_jobs 에 남는다. 여기선 알림만 더한다.
+[ "$rc" -ne 0 ] && notify "수집 실패(exit=$rc) — runs/collect.err.log 확인"
 
 # 매장 메모 AI 정리 — 수집으로 메모가 늘었을 수 있으니 이어서 한 번 돌린다.
 # 메모가 그대로인 고객은 건너뛰므로 보통 몇 명만 처리된다. 실패해도 수집 결과는 유효하다.
