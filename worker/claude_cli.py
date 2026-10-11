@@ -1,4 +1,4 @@
-"""Claude CLI 호출 계층 — 인증 격리·사용량 집계·점검.
+"""Claude CLI 호출 계층 — 인증·설정 격리·사용량 집계·점검.
 
 `claude -p` 는 단순 모델 호출이 아니라 Claude Code 에이전트를 띄운다. 실측상 프롬프트가
 10토큰이어도 시스템 프롬프트·툴 정의로 호출당 약 3만 토큰이 붙는다(대부분 캐시 읽기).
@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 
 CLI_TIMEOUT = 180
@@ -42,6 +43,18 @@ def stripped_vars() -> list[str]:
     return [] if os.environ.get("USE_API_KEY") else [k for k in _AUTH_VARS if os.environ.get(k)]
 
 
+# 저장소 '밖'에서 실행한다. claude CLI 는 실행 위치의 .claude/settings.json 을 읽는데,
+# 이 저장소에는 Stop hook(.claude/hooks/auto_continue.py)이 있다. 저장소 안에서 돌리면
+# 배치 호출마다 hook 이 '다음 작업을 이어서 하라'며 멈춤을 막고, 모델이 '완료'로 답하면
+# 그게 마지막 답이 된다 → result 가 JSON 요약이 아니라 '완료'가 되어 파싱이 깨지고,
+# 호출마다 턴이 늘어 사용량도 는다. 프롬프트는 인자로 다 넘기므로 저장소 파일은 필요 없다.
+# 전용 폴더를 고정해 쓴다(임시 폴더 루트엔 뭐가 있을지 모르고, 매번 새로 만들면 쌓인다).
+def cli_cwd() -> str:
+    d = os.path.join(tempfile.gettempdir(), "mirrorball-claude-cli")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 USAGE = {"calls": 0, "in": 0, "cache_read": 0, "cache_write": 0, "out": 0}
 _usage_lock = threading.Lock()   # 여러 배치를 동시에 돌리므로 집계는 잠그고 더한다
 
@@ -60,7 +73,8 @@ def run_claude(prompt: str) -> tuple[str | None, str]:
     why = "알 수 없음"
     for cmd in attempts:
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT, env=cli_env())
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT,
+                               env=cli_env(), cwd=cli_cwd())
         except FileNotFoundError:
             print("❌ claude CLI 가 없습니다. 설치 후 로그인하세요: https://claude.com/claude-code",
                   file=sys.stderr)
@@ -111,14 +125,18 @@ def check_cli() -> int:
         print(f"인증 변수 제외(구독 로그인 사용): {', '.join(dropped)}")
     cmd = ["claude", "-p", "한 단어로 답해: 안녕"] + (["--model", MODEL] if MODEL else [])
     print("실행:", " ".join(cmd[:3]), "…")
+    print("실행 위치:", cli_cwd(), "(저장소 밖 — 프로젝트 hook 이 끼지 않게)")
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT, env=cli_env())
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=CLI_TIMEOUT,
+                           env=cli_env(), cwd=cli_cwd())
     except FileNotFoundError:
         print("❌ claude 명령을 찾을 수 없음 — 설치/PATH 확인")
         return 1
     print(f"exit={r.returncode}")
     print("--- stdout ---\n" + (r.stdout or "(비어 있음)"))
     print("--- stderr ---\n" + (r.stderr or "(비어 있음)"))
+    if (r.stdout or "").strip().strip("'\"`*.! ") == "완료":
+        print("⚠ 답이 '완료' — Stop hook 이 끼어든 것 같습니다. 실행 위치에 .claude/settings.json 이 있는지 확인")
     return 0 if (r.stdout or "").strip() else 1
 
 
