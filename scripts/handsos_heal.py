@@ -16,9 +16,11 @@ clients/{slug}/_raw/heal_prompt.txt 로 떨궈 사람이 직접 Claude 에 붙�
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -85,10 +87,22 @@ def build_prompt(slug: str, html: str, error: str) -> str:
     )
 
 
+# claude CLI 는 저장소 '밖'에서 부른다. 실행 위치의 .claude/settings.json 을 읽기 때문에
+# 저장소 안에서 부르면 Stop hook(.claude/hooks/auto_continue.py)이 끼어들어 마지막 답이
+# '완료'로 바뀔 수 있다 → YAML 이 없어 '제안 파싱 실패'로 끝난다. 프롬프트에 현재 셀렉터와
+# 실패 HTML 을 다 담아 넘기므로 저장소 파일은 필요 없다. 이유와 폴더는 worker/claude_cli.py 의
+# cli_cwd 와 같다 — 같은 전용 폴더를 쓴다.
+def _cli_cwd() -> str:
+    d = os.path.join(tempfile.gettempdir(), "mirrorball-claude-cli")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def run_claude(prompt: str, timeout: int = 180) -> str | None:
     """Claude CLI(`claude -p`) 호출. 없으면 None."""
     try:
-        r = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True,
+                           timeout=timeout, cwd=_cli_cwd())
         return r.stdout.strip() or None
     except FileNotFoundError:
         return None

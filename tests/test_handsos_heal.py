@@ -49,3 +49,36 @@ def test_find_latest_fail_picks_newest(tmp_path, monkeypatch):
 def test_find_latest_fail_none(tmp_path, monkeypatch):
     monkeypatch.setattr(heal, "ROOT", tmp_path)
     assert heal.find_latest_fail("nope") is None
+
+
+# ── claude CLI 실행 위치 ────────────────────────────────────────────────
+# 저장소 안에서 부르면 Stop hook(.claude/settings.json)이 끼어들어 답이 '완료'로 바뀌고,
+# YAML 이 없어 '제안 파싱 실패'로 끝난다. 실제 CLI 는 안 부르고 subprocess 만 가로챈다.
+
+def test_run_claude_runs_outside_repo(monkeypatch, tmp_path):
+    monkeypatch.setattr(heal.tempfile, "gettempdir", lambda: str(tmp_path))
+    seen = []
+
+    def fake_run(cmd, **kw):
+        seen.append(kw)
+        return heal.subprocess.CompletedProcess(cmd, 0, stdout="```yaml\nreport: {}\n```", stderr="")
+
+    monkeypatch.setattr(heal.subprocess, "run", fake_run)
+    assert heal.run_claude("셀렉터 찾아줘").startswith("```yaml")
+    cwd = Path(seen[0]["cwd"]).resolve()
+    assert cwd == (tmp_path / "mirrorball-claude-cli").resolve() and cwd.is_dir()
+    assert ROOT.resolve() not in [cwd, *cwd.parents]
+
+
+def test_same_dedicated_dir_as_worker(monkeypatch, tmp_path):
+    """자가치유와 워커가 같은 전용 폴더를 쓴다 — 여러 벌이라 한쪽만 바뀌는 걸 막는다."""
+    import sys
+    sys.path.insert(0, str(ROOT / "worker"))
+    import claude_cli
+    monkeypatch.setattr(heal.tempfile, "gettempdir", lambda: str(tmp_path))
+    assert heal._cli_cwd() == claude_cli.cli_cwd()
+
+
+def test_hijacked_answer_is_reported_not_applied():
+    """hook 이 끼어 '완료'만 돌아오면 셀렉터를 바꾸지 않고 파싱 실패로 끝나야 한다."""
+    assert heal.parse_selectors("완료") == {}
