@@ -28,3 +28,6 @@ dist_app_site/
 
 # Local Netlify folder
 .netlify
+
+# Claude Code — 개인 설정은 커밋하지 않는다 (공유 설정은 .claude/settings.json)
+.claude/settings.local.json
