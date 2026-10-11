@@ -132,3 +132,36 @@ def test_mentioned_and_competitors():
     comps = ec._competitors(txt, names)
     assert "박승철헤어" not in comps or True       # 휴리스틱(접미사 기준)
     assert any("헤어" in c for c in comps) and "살롱톤" not in comps
+
+
+# ── claude CLI 실행 위치 ────────────────────────────────────────────────
+# 저장소 안에서 부르면 Stop hook(.claude/settings.json)이 끼어들어 답이 '완료'로 바뀐다.
+# 여기선 답을 부분일치·숫자로만 읽어서 에러 없이 측정값만 틀어진다. 실제 CLI 는 안 부른다.
+
+def _fake_cli(monkeypatch, tmp_path, answer):
+    monkeypatch.setattr(ec.tempfile, "gettempdir", lambda: str(tmp_path))
+    seen = []
+
+    def fake_run(cmd, **kw):
+        seen.append(kw)
+        return ec.subprocess.CompletedProcess(cmd, 0, stdout=answer, stderr="")
+
+    monkeypatch.setattr(ec.subprocess, "run", fake_run)
+    return seen
+
+
+def test_claude_runs_outside_repo(monkeypatch, tmp_path):
+    seen = _fake_cli(monkeypatch, tmp_path, "살롱톤을 추천해요")
+    assert ec._claude("질문") == "살롱톤을 추천해요"
+    cwd = Path(seen[0]["cwd"]).resolve()
+    assert cwd == (tmp_path / "mirrorball-claude-cli").resolve() and cwd.is_dir()
+    assert ROOT.resolve() not in [cwd, *cwd.parents]
+
+
+def test_same_dedicated_dir_as_worker(monkeypatch, tmp_path):
+    """측정기와 워커가 같은 전용 폴더를 쓴다 — 두 벌이라 한쪽만 바뀌는 걸 막는다."""
+    import sys
+    sys.path.insert(0, str(ROOT / "worker"))
+    import claude_cli
+    monkeypatch.setattr(ec.tempfile, "gettempdir", lambda: str(tmp_path))
+    assert ec._cli_cwd() == claude_cli.cli_cwd()

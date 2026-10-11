@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -71,9 +72,21 @@ def _competitors(text: str, names: list[str]) -> list[str]:
     return out[:5]
 
 
+# claude CLI 는 저장소 '밖'에서 부른다. 실행 위치의 .claude/settings.json 을 읽기 때문에
+# 저장소 안에서 부르면 Stop hook(.claude/hooks/auto_continue.py)이 끼어들어 마지막 답이
+# '완료'로 바뀔 수 있다. 여기선 답을 이름 부분일치·숫자로만 읽어서 깨져도 에러가 안 나고
+# 측정값만 조용히 틀어진다(AI 언급 없음으로 기록, 업종 필터 무력화). 이유와 폴더는
+# worker/claude_cli.py 의 cli_cwd 와 같다 — 같은 전용 폴더를 쓴다.
+def _cli_cwd() -> str:
+    d = os.path.join(tempfile.gettempdir(), "mirrorball-claude-cli")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def _claude(prompt: str, timeout: int = 150) -> str:
     try:
-        r = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True,
+                           timeout=timeout, cwd=_cli_cwd())
         return (r.stdout or "").strip()
     except Exception:
         return ""
