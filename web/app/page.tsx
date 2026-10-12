@@ -2,9 +2,10 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import { requireUser, getTenantId, openDek, nameReader } from '@/lib/tenant';
-import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
-import { mergeSettings, isVip, isLapsed } from '@/lib/settings';
-import { kstDatePlus, isUpcoming } from '@/lib/kst';
+import { fetchAllRows, isRealCustomer, isChurned, needsCare } from '@/lib/customers';
+import { mergeSettings, isVip } from '@/lib/settings';
+import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
+import { bookedCustomerIds } from '@/lib/bookings';
 import { lastSynced } from '@/lib/sync';
 import { txKind } from '@/lib/tx';
 import HomeView from './home-view';
@@ -42,17 +43,20 @@ export default async function Page() {
     );
   }
 
-  const [{ data: tenant }, { data: bookings }, customers, synced] = await Promise.all([
+  const [{ data: tenant }, { data: bookings }, customers, synced, booked] = await Promise.all([
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
+    // 오늘부터 — 날짜 조건 없이 오름차순 200건을 받으면 지난 예약이 쌓일 때 앞으로 올 예약이 잘린다
     supabase
       .from('bookings')
       .select('id,date,time,service,customer_id,pii_enc,staff,status')
+      .gte('date', kstNow().date)
       .order('date', { ascending: true })
       .order('time', { ascending: true, nullsFirst: false })
       .limit(200),
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select('id,ext_id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit,churned_at,visits_90d,visits_180d,visits_365d').order('id').range(from, to)),
     lastSynced(supabase), // 주 1회라 '이 화면이 언제 기준인지'를 밝혀야 한다
+    bookedCustomerIds(supabase, tenantId), // 이미 예약한 손님은 챙길 고객이 아니다
   ]);
 
   const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null; settings: unknown } | null;
@@ -63,15 +67,16 @@ export default async function Page() {
   const dek = await openDek(t?.dek_wrapped);
   const nameFrom = nameReader(dek);
 
-  // 이탈 판정은 설정(판정 기준)을 따른다 → 홈 '챙길 고객'·신호에서 제외
-  const lapsed = (c: Cust) => isLapsed(c, settings);
+  // 이탈위험·재방문도래 신호와 '챙길 고객' 목록은 needsCare 하나로 센다 — 설정의 이탈 판정,
+  // 이탈 표시, 이미 잡힌 예약을 모두 뺀다. 타일·칩·카드·탭 숫자가 같아야 믿을 수 있다.
+  const isCareTarget = (c: Cust) => needsCare(c, { settings, churned: isChurned(c), booked: booked.has(c.id) });
 
   const signals = { overdue: 0, due: 0, new: 0, vip: 0 };
   for (const c of cust) {
     if (!isRealCustomer(c.ext_id)) continue; // '손님' 등 미식별 워크인 집계는 관리대상 제외
     if (isChurned(c)) continue; // 디자이너가 직접 이탈로 표시 — 모든 신호에서 제외
     if (c.revisit_state === 'overdue' || c.revisit_state === 'due') {
-      if (!lapsed(c)) (signals as Record<string, number>)[c.revisit_state]++;
+      if (isCareTarget(c)) (signals as Record<string, number>)[c.revisit_state]++;
     } else if (c.revisit_state === 'new') {
       signals.new++;
     }
@@ -80,7 +85,7 @@ export default async function Page() {
 
   const rank: Record<string, number> = { overdue: 0, due: 1 };
   const careBase = cust
-    .filter((c) => isRealCustomer(c.ext_id) && !isChurned(c) && (c.revisit_state === 'overdue' || c.revisit_state === 'due') && !lapsed(c))
+    .filter((c) => isRealCustomer(c.ext_id) && isCareTarget(c))
     .sort((a, b) => rank[a.revisit_state as string] - rank[b.revisit_state as string] || b.visit_count - a.visit_count)
     .slice(0, 20);
   const careNames = await Promise.all(careBase.map((c) => nameFrom(c.pii_enc)));

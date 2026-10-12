@@ -53,8 +53,9 @@ export default async function CustomerPage({ params }: { params: { id: string } 
 
         <MemoAiCard cust={cust} />
 
-        {/* 이탈로 표시한 고객은 '이탈 위험' 추정을 띄우지 않는다 — 이미 확정된 걸 재촉하는 꼴이라. */}
-        {!cust.churned_at && (overdue || due) && (
+        {/* 이탈로 표시한 고객은 '이탈 위험' 추정을 띄우지 않는다 — 이미 확정된 걸 재촉하는 꼴이라.
+            다음 예약이 잡힌 손님도 마찬가지 — 바로 아래 '다음 예약'과 서로 다른 말을 하게 된다. */}
+        {!cust.churned_at && !nextBk && (overdue || due) && (
           <div className={'signal-card ' + (overdue ? 'x' : 'd')}>
             <div className="sig-t">{SIGNAL[cust.revisit_state as string]}</div>
             <div className="sig-w">

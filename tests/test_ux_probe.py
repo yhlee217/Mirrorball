@@ -86,9 +86,9 @@ PHONES = {"c1": True, "c2": False, "c6": True, "c7": True}
 def test_measure_counts_like_the_screen():
     m = up.measure(CUSTOMERS, TXS, BOOKINGS, PHONES, S, NOW)
     assert m["customers"] == 6                       # 워크인 제외
-    assert m["care"] == 2                            # c1·c2 (이탈 표시·이탈 판정·워크인 제외)
+    assert m["care"] == 1                            # c2 — c1 은 이미 예약해서 빠진다(P0 1번)
     assert m["care_booked"] == 1                     # c1 만 활성 예약 — 지난·취소 예약은 안 셈
-    assert m["care_phone"] == (1, 2)
+    assert m["care_phone"] == (0, 1)                 # 연락할 사람(c2) 기준
     assert m["phone"] == (3, 6)
     assert m["tx_time"] == (3, 4)                    # 빈 시각 1건, 12개월 밖 1건 제외
     assert m["repeat"] == (5, 6)
@@ -102,7 +102,7 @@ def test_measure_counts_like_the_screen():
 def test_verdicts_flag_booked_customers():
     m = up.measure(CUSTOMERS, TXS, BOOKINGS, PHONES, S, NOW)
     v = "\n".join(up.verdicts([m]))
-    assert "이미 예약 1명" in v and "P0 1번" in v
+    assert "챙길 고객 1명 — 이미 예약해서 빠진 1명" in v
     assert "노쇼 기록 1건" in v
 
 
@@ -111,4 +111,4 @@ def test_report_only_prints_counts():
     m = up.measure(CUSTOMERS, TXS, BOOKINGS, PHONES, S, NOW)
     lines = up.report("daunbu", "살롱톤", m)
     assert lines[0] == "[daunbu] 살롱톤"
-    assert any("1-1 챙길 고객 2명 중 이미 예약 있음 1명" in ln for ln in lines)
+    assert any("1-1 챙길 고객 1명 — 이미 예약해서 빠진 1명" in ln for ln in lines)

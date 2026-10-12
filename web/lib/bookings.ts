@@ -1,4 +1,6 @@
-import { isUpcoming } from './kst';
+import { isUpcoming, kstNow } from './kst';
+import { fetchAllRows } from './customers';
+import type { supabaseServer } from './supabase/server';
 
 /**
  * 예약 판정 한 곳. 화면마다 따로 짜다가 고객 목록만 날짜를 안 걸러서,
@@ -22,4 +24,19 @@ export function isActiveBooking(b: {
   status?: string | null;
 }): boolean {
   return !isCancelled(b.status) && isUpcoming(b.date, b.time);
+}
+
+/**
+ * 앞으로 올 예약이 있는 고객 id — '챙길 고객'에서 빼는 데 쓴다(needsCare).
+ * 오늘부터만 가져오고, 오늘 이미 지난 시각·취소·노쇼는 isActiveBooking 이 거른다.
+ */
+export async function bookedCustomerIds(
+  supabase: ReturnType<typeof supabaseServer>,
+  tenantId: string,
+): Promise<Set<string>> {
+  const rows = await fetchAllRows<{ customer_id: string | null; date: string | null; time: string | null; status: string | null }>(
+    (from, to) => supabase.from('bookings').select('customer_id,date,time,status')
+      .eq('tenant_id', tenantId).gte('date', kstNow().date).order('id').range(from, to),
+  );
+  return new Set(rows.filter((b) => b.customer_id && isActiveBooking(b)).map((b) => b.customer_id as string));
 }

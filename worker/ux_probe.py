@@ -70,11 +70,13 @@ def is_lapsed(c: dict, s: dict, today: dt.date) -> bool:
         days > s["lapsed_soft_months"] * 30 and (c.get("visit_count") or 0) < s["lapsed_soft_visits"])
 
 
-def care_list(customers: list[dict], s: dict, today: dt.date) -> list[dict]:
-    """챙길 고객 — 홈·탭과 같은 기준."""
-    return [c for c in customers
-            if is_real(c.get("ext_id")) and not c.get("churned_at")
-            and c.get("revisit_state") in ("overdue", "due") and not is_lapsed(c, s, today)]
+def needs_care(c: dict, s: dict, today: dt.date, booked: bool) -> bool:
+    """web/lib/customers.ts needsCare — 이탈 표시·이미 예약·설정의 이탈 판정이면 챙길 고객이 아니다."""
+    if c.get("churned_at") or booked:
+        return False
+    if c.get("revisit_state") not in ("overdue", "due"):
+        return False
+    return not is_lapsed(c, s, today)
 
 
 def last_n_months(today: dt.date, n: int) -> list[str]:
@@ -94,8 +96,10 @@ def measure(customers: list[dict], txs: list[dict], bookings: list[dict],
             has_phone: dict, settings: dict, now: dt.datetime) -> dict:
     today = now.date()
     real = [c for c in customers if is_real(c.get("ext_id"))]
-    care = care_list(customers, settings, today)
     active = {b["customer_id"] for b in bookings if b.get("customer_id") and is_active_booking(b, now)}
+    # 화면의 챙길 고객 = 예약 확인 전 후보에서 이미 예약한 분을 뺀 것(2026-10-12 P0 1번)
+    cand = [c for c in real if needs_care(c, settings, today, booked=False)]
+    care = [c for c in real if needs_care(c, settings, today, booked=c["id"] in active)]
 
     since = (today - dt.timedelta(days=365)).isoformat()
     recent = [t for t in txs if (t.get("date") or "") >= since]
@@ -118,7 +122,7 @@ def measure(customers: list[dict], txs: list[dict], bookings: list[dict],
         "phone": (sum(1 for c in real if has_phone.get(c["id"])), len(real)),
         "care": len(care),
         "care_phone": (sum(1 for c in care if has_phone.get(c["id"])), len(care)),
-        "care_booked": sum(1 for c in care if c["id"] in active),
+        "care_booked": len(cand) - len(care),
         "tx_time": (sum(1 for t in recent if (t.get("time") or "").strip()), len(recent)),
         "repeat": (sum(1 for c in real if (c.get("visit_count") or 0) >= 2), len(real)),
         "cycle": (sum(1 for c in real if c.get("revisit_cycle_days")), len(real)),
@@ -148,7 +152,7 @@ def report(slug: str, salon: str, m: dict) -> list[str]:
         f"[{slug}] {salon}",
         f"  고객 {m['customers']:,}명",
         f"  C1  전화번호        {pct(*m['phone'])} · 챙길 고객 중 {pct(*m['care_phone'])}",
-        f"  1-1 챙길 고객 {m['care']}명 중 이미 예약 있음 {m['care_booked']}명",
+        f"  1-1 챙길 고객 {m['care']}명 — 이미 예약해서 빠진 {m['care_booked']}명",
         f"  D4  시술 시각       채움 {pct(*m['tx_time'])} — 최근 12개월 거래",
         f"  B2  방문 2회 이상   {pct(*m['repeat'])} · 주기 계산됨 {pct(*m['cycle'])}",
         f"  A3  선불 잔액       남은 손님 {n}명 · 합계 {won(total)} (추정)",
@@ -178,8 +182,7 @@ def verdicts(ms: list[dict]) -> list[str]:
         return t[0] / t[1] if t[1] else 0
 
     out = []
-    out.append(f"1-1 챙길 고객 {care}명 중 이미 예약 {booked}명"
-               + (" → P0 1번이 바로 필요하다" if booked else " → 지금은 0명. 그래도 막아둔다(예약이 생기면 바로 섞인다)"))
+    out.append(f"1-1 챙길 고객 {care}명 — 이미 예약해서 빠진 {booked}명(앱 숫자도 같다)")
     r = rate(ph)
     out.append(f"C1  전화번호 {round(r * 100)}%"
                + (" → 문자·전화 버튼 효과가 크다" if r >= 0.7 else

@@ -6,8 +6,7 @@ import { openDek, requireTenant } from '@/lib/tenant';
 import { decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
-import { kstNow } from '@/lib/kst';
-import { isActiveBooking } from '@/lib/bookings';
+import { bookedCustomerIds } from '@/lib/bookings';
 import CustomersList from './customers-list';
 
 type Cust = {
@@ -48,7 +47,7 @@ export default async function CustomersPage({
   const initialFilter = searchParams?.filter && FILTERS.has(searchParams.filter) ? searchParams.filter : null;
   const { supabase, tenantId } = await requireTenant();
 
-  const [{ data: tenant }, customers, bookings, txs] = await Promise.all([
+  const [{ data: tenant }, customers, bookingSet, txs] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
       supabase
@@ -56,11 +55,8 @@ export default async function CustomersPage({
         .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d,gender,gender_manual')
         .order('id')
         .range(from, to)),
-    // 지난 예약까지 '예약 있음'으로 세지 않도록 오늘 이후만. 수집이 주 1회라 DB 에는
-    // 이미 지나간 예약이 최대 일주일 남아 있다(수집 주기에 기대면 안 된다).
-    fetchAllRows<{ customer_id: string | null; date: string | null; time: string | null; status: string | null }>((from, to) =>
-      supabase.from('bookings').select('customer_id,date,time,status')
-        .gte('date', kstNow().date).order('id').range(from, to)),
+    // 앞으로 올 예약만 — 지난 예약·취소·노쇼는 빠진다. 홈·챙길 고객과 같은 판정이다.
+    bookedCustomerIds(supabase, tenantId),
     fetchAllRows<{ customer_id: string | null; service: string | null }>((from, to) =>
       supabase.from('transactions').select('customer_id,service').order('id').range(from, to)),
   ]);
@@ -69,12 +65,6 @@ export default async function CustomersPage({
   const settings = mergeSettings(tRow?.settings);
   const dek = await openDek(tRow?.dek_wrapped);
 
-  const bookingSet = new Set(
-    (bookings as { customer_id: string | null; date: string | null; time: string | null; status: string | null }[])
-      .filter((b) => isActiveBooking(b)) // 오늘 지난 시간·취소·노쇼 제외
-      .map((b) => b.customer_id)
-      .filter(Boolean) as string[],
-  );
   const svcMap = new Map<string, Set<string>>();
   for (const t of txs as { customer_id: string | null; service: string | null }[]) {
     if (!t.customer_id) continue;

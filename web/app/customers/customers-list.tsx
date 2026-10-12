@@ -2,7 +2,8 @@
 import { useMemo, useState } from 'react';
 import { won } from '@/lib/format';
 import Link from 'next/link';
-import { isVip as isVipS, isLapsed, type TenantSettings } from '@/lib/settings';
+import { isVip as isVipS, type TenantSettings } from '@/lib/settings';
+import { needsCare } from '@/lib/customers';
 import { Empty } from '@/components/empty';
 import { MSG } from '@/lib/copy';
 
@@ -104,8 +105,13 @@ export default function CustomersList({
     // 이탈위험·재방문도래는 홈 신호와 같은 기준으로 — '이탈 판정'(설정: N개월 초과 미방문 등)
     // 고객과 디자이너가 직접 이탈 표시한 고객은 홈 숫자에서 빠지므로 여기서도 빼야
     // '눌렀더니 인원이 다른' 불일치가 안 생긴다.
-    if (chips.has('overdue')) f = f.filter((r) => r.state === 'overdue' && !isLapsed(r, settings) && !r.churned);
-    if (chips.has('due')) f = f.filter((r) => r.state === 'due' && !isLapsed(r, settings) && !r.churned);
+    // needsCare 는 이미 예약한 분도 뺀다 — 예약이 잡혔으면 더 챙길 대상이 아니다.
+    const care = (r: Row) => needsCare(
+      { revisit_state: r.state, last_visit: r.last_visit, visit_count: r.visit_count },
+      { settings, churned: r.churned, booked: r.hasBooking },
+    );
+    if (chips.has('overdue')) f = f.filter((r) => r.state === 'overdue' && care(r));
+    if (chips.has('due')) f = f.filter((r) => r.state === 'due' && care(r));
     if (chips.has('new')) f = f.filter((r) => r.state === 'new' && !r.churned);
     if (chips.has('vip')) f = f.filter((r) => isVipS(r, settings) && !r.churned);
     if (chips.has('churned')) f = f.filter((r) => r.churned);
@@ -222,7 +228,8 @@ export default function CustomersList({
                 </div>
                 <div className="rt">
                   {/* 이탈로 확정한 고객에게 '이탈 위험'(=아직 붙잡을 수 있다) 추정을 띄우지 않는다 */}
-                  {r.churned ? '' : r.state === 'overdue' ? '이탈 위험' : r.state === 'due' ? '재방문 도래' : r.hasBooking ? '예약 있음' : ''}
+                  {/* 예약이 잡혔으면 '이탈 위험'보다 '예약 있음'이 지금의 사실이다 */}
+                  {r.churned ? '' : r.hasBooking ? '예약 있음' : r.state === 'overdue' ? '이탈 위험' : r.state === 'due' ? '재방문 도래' : ''}
                 </div>
               </Link>
             );

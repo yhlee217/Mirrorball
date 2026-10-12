@@ -8,25 +8,27 @@ import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { Empty } from '@/components/empty';
 import { txKind } from '@/lib/tx';
-import { fetchAllRows, isRealCustomer, isChurned } from '@/lib/customers';
-import { isLapsed, mergeSettings } from '@/lib/settings';
+import { fetchAllRows, isRealCustomer, isChurned, needsCare } from '@/lib/customers';
+import { mergeSettings } from '@/lib/settings';
+import { bookedCustomerIds } from '@/lib/bookings';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
 export default async function StatsPage() {
   const { supabase, tenantId } = await requireTenant();
 
-  const [{ data: tenant }, customers, txs] = await Promise.all([
+  const [{ data: tenant }, customers, txs, booked] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle(),
-    fetchAllRows<{ ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
+    fetchAllRows<{ id: string; ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
                    age_band: string | null; gender_src: string | null; gender_manual: string | null; revisit_cycle_days: number | null;
                    revisit_state: string | null; churned_at: string | null; last_visit: string | null;
                    visits_90d: number | null; visits_180d: number | null; visits_365d: number | null }>((from, to) =>
       supabase.from('customers')
-        .select('ext_id,total_won,visit_count,gender,gender_manual,age_band,gender_src,revisit_cycle_days,revisit_state,churned_at,last_visit,visits_90d,visits_180d,visits_365d')
+        .select('id,ext_id,total_won,visit_count,gender,gender_manual,age_band,gender_src,revisit_cycle_days,revisit_state,churned_at,last_visit,visits_90d,visits_180d,visits_365d')
         .eq('tenant_id', tenantId).order('id').range(from, to)),
     fetchAllRows<{ date: string; service: string | null; amount_won: number; kind: string | null; covered_won: number | null }>((from, to) =>
       supabase.from('transactions').select('date,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
+    bookedCustomerIds(supabase, tenantId),
   ]);
   // '손님' 등 미식별 워크인은 관리 대상이 아니다 — 홈·챙길 고객·고객목록과 같은 기준으로 뺀다.
   // 통계만 포함하고 있어서 고객수·재방문율·객단가가 부풀고, 성별은 전부 '미상'으로 쌓였다.
@@ -133,11 +135,7 @@ export default async function StatsPage() {
   const revDelta = period.prev.rev ? Math.round(((period.now.rev - period.prev.rev) / period.prev.rev) * 100) : null;
 
   // ── 지금 할 일 ── 홈 신호와 같은 기준으로 센다(숫자가 다르면 어느 쪽을 믿을지 모른다)
-  let careCount = 0;
-  for (const c of cs) {
-    if (isChurned(c)) continue;
-    if ((c.revisit_state === 'overdue' || c.revisit_state === 'due') && !isLapsed(c, settings)) careCount++;
-  }
+  const careCount = cs.filter((c) => needsCare(c, { settings, churned: isChurned(c), booked: booked.has(c.id) })).length;
 
   const synced = await lastSynced(supabase);
 
