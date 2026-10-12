@@ -217,7 +217,11 @@ a.hs:active{background:var(--soft)}
 .fchip{font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;border:1px solid var(--line);background:var(--paper);color:var(--muted);cursor:pointer;font-family:inherit}
 .fchip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .fsel{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-.fsel select{font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);font-family:inherit}
+.fsel select,.fbar select{font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);font-family:inherit}
+/* 필터 접기 — 늘 보이는 칩 넷 아래 한 줄에 '필터' 손잡이와 정렬. 펼치면 나머지 조건이 연한 판 위에 */
+.fbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 12px}
+.fmore{background:var(--soft);border-radius:12px;padding:10px 10px 3px;margin:-4px 0 12px}
+.fmore .fsel{margin-bottom:7px}
 /* 성별 채우기 — '성별 미상' 필터를 켰을 때만 나타나는 한 줄 지정 버튼.
    목록을 훑으며 엄지로 누르는 동작이라 버튼을 크게 잡고 오른쪽에 몰아둔다. */
 .gsweep{border-bottom:1px solid var(--line)}

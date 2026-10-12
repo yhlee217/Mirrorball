@@ -4,6 +4,7 @@ import { won } from '@/lib/format';
 import Link from 'next/link';
 import { isVip as isVipS, type TenantSettings } from '@/lib/settings';
 import { needsCare } from '@/lib/customers';
+import { matchesQuery } from '@/lib/contact';
 import { Empty } from '@/components/empty';
 import { MSG } from '@/lib/copy';
 
@@ -17,6 +18,7 @@ type Row = {
   state: string | null;
   hasBooking: boolean;
   hasPhone: boolean;
+  tail: string; // 전화번호 뒷자리 4자리(검색용) — 전체 번호는 받지 않는다
   churned: boolean;
   gender: 'M' | 'F' | null;
   visits_90d: number | null; // VIP 판정(최근 자주 오심)용 — 워커가 미리 집계
@@ -27,6 +29,9 @@ type Row = {
 
 const DAY = 86400000;
 const daysSince = (d: string | null) => (d ? Math.floor((Date.now() - new Date(d).getTime()) / DAY) : Infinity);
+
+// '필터' 안에 접어 두는 칩. 늘 보이는 건 홈 타일과 같은 넷(이탈위험·재방문도래·신규·VIP)뿐이다.
+const FOLDED = ['booking', 'nophone', 'churned', 'nogender'];
 
 export default function CustomersList({
   rows,
@@ -40,6 +45,8 @@ export default function CustomersList({
   const [q, setQ] = useState('');
   // 홈 신호 타일(이탈위험/재방문도래/신규/VIP 등)에서 넘어온 초기 필터를 켠 상태로 시작.
   const [chips, setChips] = useState<Set<string>>(() => new Set(initialFilter ? [initialFilter] : []));
+  // 통계의 '성별 미상'처럼 접힌 조건으로 들어오면 펼친 채로 시작한다 — 켜진 조건이 안 보이면 헷갈린다.
+  const [more, setMore] = useState(() => !!initialFilter && FOLDED.includes(initialFilter));
   const [visitF, setVisitF] = useState('');
   const [revF, setRevF] = useState('');
   const [recF, setRecF] = useState('');
@@ -101,7 +108,7 @@ export default function CustomersList({
   const filtered = useMemo(() => {
     const term = q.trim();
     let f = rows;
-    if (term) f = f.filter((r) => r.name.includes(term));
+    if (term) f = f.filter((r) => matchesQuery(r, term)); // 숫자면 전화번호 뒷자리, 아니면 이름
     // 이탈위험·재방문도래는 홈 신호와 같은 기준으로 — '이탈 판정'(설정: N개월 초과 미방문 등)
     // 고객과 디자이너가 직접 이탈 표시한 고객은 홈 숫자에서 빠지므로 여기서도 빼야
     // '눌렀더니 인원이 다른' 불일치가 안 생긴다.
@@ -144,6 +151,9 @@ export default function CustomersList({
     return arr;
   }, [rows, q, chips, visitF, revF, recF, svcF, sort, settings]);
 
+  // 접힌 조건 중 켜진 수 — 손잡이에 보여야 '왜 목록이 줄었지'가 안 생긴다.
+  const hiddenOn = FOLDED.filter((k) => chips.has(k)).length + [visitF, revF, recF, svcF].filter(Boolean).length;
+
   const Chip = ({ k, label }: { k: string; label: string }) => (
     <button type="button" className={'fchip' + (chips.has(k) ? ' on' : '')} onClick={() => toggle(k)}>
       {label}
@@ -152,49 +162,21 @@ export default function CustomersList({
 
   return (
     <>
-      <input className="search" placeholder="이름 검색" value={q} onChange={(e) => setQ(e.target.value)} />
+      <input className="search" placeholder="이름 또는 전화번호 뒷자리" value={q} onChange={(e) => setQ(e.target.value)} />
 
+      {/* 늘 보이는 건 자주 쓰는 넷. 나머지 조건 13개 중 9개는 '필터' 안에 접는다 — 폰 화면 절반이 필터였다. */}
       <div className="fchips">
         <Chip k="overdue" label="이탈위험" />
         <Chip k="due" label="재방문도래" />
         <Chip k="new" label="신규" />
         <Chip k="vip" label="VIP" />
-        <Chip k="booking" label="예약있음" />
-        <Chip k="nophone" label="전화없음" />
-        <Chip k="churned" label="이탈" />
-        <Chip k="nogender" label="성별 미상" />
       </div>
 
-      <div className="fsel">
-        <select value={visitF} onChange={(e) => setVisitF(e.target.value)}>
-          <option value="">방문 전체</option>
-          <option value="reg">단골 10회+</option>
-          <option value="rep">재방문 3~9회</option>
-          <option value="new">신규 1~2회</option>
-        </select>
-        <select value={revF} onChange={(e) => setRevF(e.target.value)}>
-          <option value="">매출 전체</option>
-          <option value="100">{manH}만+</option>
-          <option value="50">
-            {manM}~{manH}만
-          </option>
-          <option value="lo">{manM}만 미만</option>
-        </select>
-        <select value={recF} onChange={(e) => setRecF(e.target.value)}>
-          <option value="">방문시기 전체</option>
-          <option value="1m">1개월 이내</option>
-          <option value="3m">3개월 이내</option>
-          <option value="6m">6개월 이내</option>
-          <option value="1y">1년+ 미방문</option>
-        </select>
-        <select value={svcF} onChange={(e) => setSvcF(e.target.value)}>
-          <option value="">시술 전체</option>
-          <option value="펌">펌</option>
-          <option value="염색">염색</option>
-          <option value="클리닉">클리닉</option>
-          <option value="컷">컷</option>
-        </select>
-        <select value={sort} onChange={(e) => setSort(e.target.value)}>
+      <div className="fbar">
+        <button type="button" className={'fchip' + (hiddenOn ? ' on' : '')} aria-expanded={more} onClick={() => setMore((m) => !m)}>
+          필터{hiddenOn ? ` ${hiddenOn}` : ''} {more ? '▴' : '▾'}
+        </button>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="정렬">
           <option value="recent">최근 방문순</option>
           <option value="revenue">매출순</option>
           <option value="visits">방문순</option>
@@ -203,6 +185,47 @@ export default function CustomersList({
           <option value="name">이름순</option>
         </select>
       </div>
+
+      {more ? (
+        <div className="fmore">
+          <div className="fchips">
+            <Chip k="booking" label="예약있음" />
+            <Chip k="nophone" label="전화없음" />
+            <Chip k="churned" label="이탈" />
+            <Chip k="nogender" label="성별 미상" />
+          </div>
+          <div className="fsel">
+            <select value={visitF} onChange={(e) => setVisitF(e.target.value)}>
+              <option value="">방문 전체</option>
+              <option value="reg">단골 10회+</option>
+              <option value="rep">재방문 3~9회</option>
+              <option value="new">신규 1~2회</option>
+            </select>
+            <select value={revF} onChange={(e) => setRevF(e.target.value)}>
+              <option value="">매출 전체</option>
+              <option value="100">{manH}만+</option>
+              <option value="50">
+                {manM}~{manH}만
+              </option>
+              <option value="lo">{manM}만 미만</option>
+            </select>
+            <select value={recF} onChange={(e) => setRecF(e.target.value)}>
+              <option value="">방문시기 전체</option>
+              <option value="1m">1개월 이내</option>
+              <option value="3m">3개월 이내</option>
+              <option value="6m">6개월 이내</option>
+              <option value="1y">1년+ 미방문</option>
+            </select>
+            <select value={svcF} onChange={(e) => setSvcF(e.target.value)}>
+              <option value="">시술 전체</option>
+              <option value="펌">펌</option>
+              <option value="염색">염색</option>
+              <option value="클리닉">클리닉</option>
+              <option value="컷">컷</option>
+            </select>
+          </div>
+        </div>
+      ) : null}
 
       {sweeping ? (
         <p className="sweep-hint">

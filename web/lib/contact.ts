@@ -42,6 +42,27 @@ export function phoneDigits(phone: string | null | undefined): string | null {
 export const telHref = (digits: string): string => `tel:${digits}`;
 
 /**
+ * 전화번호 뒷자리 4자리 — 고객 목록 검색용. 목록은 전 고객을 화면으로 내려보내므로 전체 번호
+ * 대신 뒷자리만 보낸다. 전화가 오거나 "뒷자리 1234요" 할 때 찾는 용도면 이걸로 충분하다.
+ */
+export function phoneTail(phone: string | null | undefined): string {
+  const d = (phone ?? '').replace(/\D/g, '');
+  return d.length >= 4 ? d.slice(-4) : '';
+}
+
+/**
+ * 고객 검색 — 숫자만 넣으면 전화번호 뒷자리로, 아니면 이름으로 찾는다. 하이픈·띄어쓰기는 무시.
+ * 번호를 통째로 넣어도 뒤 4자리로 비교한다(화면엔 뒷자리만 있다).
+ */
+export function matchesQuery(r: { name: string; tail: string }, query: string): boolean {
+  const q = query.trim();
+  if (!q) return true;
+  const digits = q.replace(/[\s-]/g, '');
+  if (/^\d+$/.test(digits)) return !!r.tail && r.tail.endsWith(digits.slice(-4));
+  return r.name.includes(q);
+}
+
+/**
  * 문자 앱을 문구가 채워진 채로 연다. iOS 는 'sms:번호&body=', 안드로이드는 'sms:번호?body=' 를
  * 읽는다. '?&body=' 는 두 쪽이 다 읽는 형태다.
  */

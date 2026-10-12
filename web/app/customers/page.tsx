@@ -7,6 +7,7 @@ import { decryptPII } from '@/lib/crypto';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookedCustomerIds } from '@/lib/bookings';
+import { phoneTail } from '@/lib/contact';
 import CustomersList from './customers-list';
 
 type Cust = {
@@ -79,16 +80,18 @@ export default async function CustomersPage({
     list.map(async (c) => {
       let name = '고객';
       let hasPhone = false;
+      let tail = ''; // 전화번호 뒷자리 4자리만 — 전체 번호는 화면으로 보내지 않는다
       if (dek && c.pii_enc) {
         try {
           const p = await decryptPII(c.pii_enc, dek);
           if (typeof p.name === 'string' && p.name) name = p.name;
           hasPhone = !!p.phone;
+          tail = phoneTail(typeof p.phone === 'string' ? p.phone : null);
         } catch {
           /* noop */
         }
       }
-      return { name, hasPhone };
+      return { name, hasPhone, tail };
     }),
   );
 
@@ -102,6 +105,7 @@ export default async function CustomersPage({
     state: c.revisit_state,
     hasBooking: bookingSet.has(c.id),
     hasPhone: decoded[i].hasPhone,
+    tail: decoded[i].tail,
     churned: !!c.churned_at, // 디자이너가 직접 이탈로 표시한 고객
     // 사람이 지정한 값이 추정보다 우선한다(통계와 같은 기준).
     gender: (c.gender_manual === 'M' || c.gender_manual === 'F' ? c.gender_manual
