@@ -9,6 +9,7 @@ import ChurnToggle from './churn-toggle';
 import { loadCarte } from './data';
 import {
   MemoAiCard,
+  StatTiles,
   FamilyCard,
   NextBookingCard,
   TopServicesCard,
@@ -31,6 +32,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     chargedTotal, balance,
     familyList, nextBk, topSvc,
     overdue, due, reason,
+    sinceLast, next, top,
   } = await loadCarte(params.id);
 
   return (
@@ -65,12 +67,16 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           </div>
         )}
 
-        <div className="stat-grid">
-          <div className="stat"><div className="sn">{cust.visit_count}</div><div className="sl">방문</div></div>
-          <div className="stat"><div className="sn">{won(cust.total_won)}</div><div className="sl">누적 매출</div></div>
-          <div className="stat"><div className="sn">{won(avg)}</div><div className="sl">객단가</div></div>
-          <div className="stat"><div className="sn">{cust.revisit_cycle_days ? cust.revisit_cycle_days + '일' : '-'}</div><div className="sl">재방문 주기</div></div>
-        </div>
+        {/* 방문 수·누적 매출은 바로 위 머리말에 있다 — 타일은 그 다음 질문에 답한다 */}
+        <StatTiles
+          lastVisit={cust.last_visit}
+          sinceLast={sinceLast}
+          next={next}
+          prepaid={chargedTotal > 0}
+          balance={balance}
+          avg={avg}
+          top={top}
+        />
 
         {/* 손님 앞에서 먼저 필요한 것: 다음에 언제 오시는지 → 지난번에 뭘 했는지 */}
         <NextBookingCard bk={nextBk} />

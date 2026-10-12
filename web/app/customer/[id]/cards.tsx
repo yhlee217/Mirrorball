@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { won } from '@/lib/format';
+import { spanWords } from '@/lib/briefing';
+import { agoWords, shortDate } from '@/lib/carte-stats';
 import PocketToggle from './pocket-toggle';
 import { Empty } from '@/components/empty';
 import type { Carte } from './data';
@@ -36,6 +38,72 @@ export function MemoAiCard({ cust }: { cust: Carte['cust'] }) {
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * 숫자 타일 — 머리말('N회 방문 · 누적 X')과 겹치지 않는, 손님 앞에서 바로 묻게 되는 넷.
+ * 잔액은 선불 충전 이력이 있는 손님만 의미가 있어서, 없으면 그 자리에 객단가를 둔다.
+ * 계산은 lib/carte-stats.ts.
+ */
+export function StatTiles({
+  lastVisit,
+  sinceLast,
+  next,
+  prepaid,
+  balance,
+  avg,
+  top,
+}: {
+  lastVisit: string | null;
+  sinceLast: Carte['sinceLast'];
+  next: Carte['next'];
+  prepaid: boolean;
+  balance: number;
+  avg: number;
+  top: Carte['top'];
+}) {
+  return (
+    <div className="stat-grid">
+      <div className="stat">
+        <div className="sn">{sinceLast === null ? '-' : agoWords(sinceLast)}</div>
+        <div className="sl">마지막 방문{lastVisit ? ' · ' + shortDate(lastVisit) : ''}</div>
+      </div>
+      <NextTile next={next} />
+      {prepaid ? (
+        <div className="stat"><div className="sn">{won(balance)}</div><div className="sl">선불 잔액 · 추정</div></div>
+      ) : (
+        <div className="stat"><div className="sn">{won(avg)}</div><div className="sl">객단가</div></div>
+      )}
+      <div className="stat">
+        <div className="sn">{top ? `상위 ${top}%` : '-'}</div>
+        <div className="sl">누적 매출 순위</div>
+      </div>
+    </div>
+  );
+}
+
+/** 다음 방문 — 잡힌 예약 > 평소 주기 > 시술 기준 추정. 예상일이 지났으면 지난 만큼을 보인다. */
+function NextTile({ next }: { next: Carte['next'] }) {
+  if (!next) {
+    return <div className="stat"><div className="sn">-</div><div className="sl">다음 방문</div></div>;
+  }
+  if (next.kind === 'booked') {
+    return <div className="stat"><div className="sn">{shortDate(next.date)}</div><div className="sl">다음 예약</div></div>;
+  }
+  if (next.overdueDays > 0) {
+    return (
+      <div className="stat">
+        <div className="sn late">{spanWords(next.overdueDays)} 지남</div>
+        <div className="sl">예상 {shortDate(next.date)} · {next.basis}</div>
+      </div>
+    );
+  }
+  return (
+    <div className="stat">
+      <div className="sn">{shortDate(next.date)}쯤</div>
+      <div className="sl">다음 예상 · {next.basis}</div>
     </div>
   );
 }

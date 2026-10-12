@@ -3,7 +3,10 @@ import { requireUser, openDek, nameReader } from '@/lib/tenant';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { isActiveBooking } from '@/lib/bookings';
+import { isRealCustomer } from '@/lib/customers';
 import { txKind, ledger } from '@/lib/tx';
+import { daysBetween } from '@/lib/briefing';
+import { nextVisit, rankPercent } from '@/lib/carte-stats';
 
 /**
  * 카르테가 화면에 뿌릴 것들을 한 번에 모은다.
@@ -15,6 +18,7 @@ import { txKind, ledger } from '@/lib/tx';
 type Cust = {
   id: string;
   tenant_id: string;
+  ext_id: string | null;
   pii_enc: string | null;
   visit_count: number;
   first_visit: string | null;
@@ -53,7 +57,7 @@ export async function loadCarte(id: string) {
   const { data: c } = await supabase
     .from('customers')
     .select(
-      'id,tenant_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d,memo_ai,memo_ai_recent,memo_ai_at,prepaid_balance,gender,gender_manual',
+      'id,tenant_id,ext_id,pii_enc,visit_count,first_visit,last_visit,total_won,revisit_state,revisit_cycle_days,prefer_tags,memo,family_ext_id,churned_at,visits_90d,visits_180d,visits_365d,memo_ai,memo_ai_recent,memo_ai_at,prepaid_balance,gender,gender_manual',
     )
     .eq('id', id)
     .maybeSingle();
@@ -61,7 +65,13 @@ export async function loadCarte(id: string) {
   const cust = c as Cust;
 
   const today = kstNow().date; // KST 기준(엣지는 UTC라 새벽에 하루 밀림)
-  const [{ data: tenant }, { data: tx }, { data: bk }] = await Promise.all([
+  // 매출 순위(상위 N%)는 실고객끼리 센다 — 워크인 집계('손님')는 여러 사람 매출이 합쳐져 있어
+  // 순위를 흐린다(통계와 같은 기준). 숫자만 세고(head) 행은 받지 않는다.
+  const ranked = isRealCustomer(cust.ext_id) && cust.total_won > 0;
+  const realCount = () =>
+    supabase.from('customers').select('id', { count: 'exact', head: true })
+      .eq('tenant_id', cust.tenant_id).filter('ext_id', 'match', '^[0-9]+$');
+  const [{ data: tenant }, { data: tx }, { data: bk }, above, total] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', cust.tenant_id).maybeSingle(),
     supabase
       .from('transactions')
@@ -77,6 +87,8 @@ export async function loadCarte(id: string) {
       .order('date', { ascending: true })
       .order('time', { ascending: true, nullsFirst: false })
       .limit(5),
+    ranked ? realCount().gt('total_won', cust.total_won) : null,
+    ranked ? realCount() : null,
   ]);
 
   const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
@@ -159,11 +171,25 @@ export async function loadCarte(id: string) {
   const due = cust.revisit_state === 'due';
   const reason = overdue && cust.last_visit ? `${monthsAgo(cust.last_visit)}개월 미방문` : due ? '재방문 시기예요' : '';
 
+  // 숫자 타일 — 머리말과 겹치지 않게 '마지막 방문 · 다음 방문 · 잔액(객단가) · 매출 순위'.
+  // 순위 조회가 실패하면(count 없음) 타일만 '-'로 두고 화면은 그대로 뜬다.
+  const sinceLast = cust.last_visit ? daysBetween(cust.last_visit, today) : null;
+  const next = nextVisit({
+    today,
+    lastVisit: cust.last_visit,
+    visitCount: cust.visit_count,
+    cycleDays: cust.revisit_cycle_days,
+    lastServices: history.filter((h) => h.date === cust.last_visit).map((h) => h.service),
+    bookedDate: nextBk?.date ?? null,
+  });
+  const top = above?.count != null && total?.count ? rankPercent(above.count, total.count) : null;
+
   return {
     cust, name, settings, vip, avg,
     history, charges, others,
     chargedTotal, balance,
     familyList, nextBk, topSvc,
     overdue, due, reason,
+    sinceLast, next, top,
   };
 }
