@@ -24,6 +24,7 @@ export type Brief = {
   prefer: string[]; // 매장 메모 정리 — 선호(최대 2줄)
   recent: string | null; // 매장 메모 정리 — 근황 중 가장 최근 한 줄
   prepaid: number; // 선불 잔액(추정)
+  rec: { label: string; short: string } | null; // 권해볼 것(lib/recommend) — 추정, 하나만
 };
 type Later = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; status: string | null; name: string; off: boolean };
 
@@ -214,6 +215,11 @@ function BriefRow({ b }: { b: Brief }) {
         {b.prepaid > 0 ? (
           <div className="bf-f">
             선불 잔액 {won(b.prepaid)} <span className="dim">· 추정</span>
+          </div>
+        ) : null}
+        {b.rec ? (
+          <div className="bf-f">
+            권해볼 것 <b>{b.rec.label}</b> <span className="dim">· {b.rec.short}</span>
           </div>
         ) : null}
       </div>

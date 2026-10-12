@@ -3,7 +3,9 @@ import { requireUser, openDek, nameReader } from '@/lib/tenant';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { isActiveBooking } from '@/lib/bookings';
-import { careState, isRealCustomer } from '@/lib/customers';
+import { careState, fetchAllRows, isRealCustomer } from '@/lib/customers';
+import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
+import { addDays } from '@/lib/week';
 import { lastSynced } from '@/lib/sync';
 import { awayDays } from '@/lib/offdays';
 import { txKind, ledger } from '@/lib/tx';
@@ -73,7 +75,8 @@ export async function loadCarte(id: string) {
   const realCount = () =>
     supabase.from('customers').select('id', { count: 'exact', head: true })
       .eq('tenant_id', cust.tenant_id).filter('ext_id', 'match', '^[0-9]+$');
-  const [{ data: tenant }, { data: tx }, { data: bk }, above, total, synced] = await Promise.all([
+  type StoreTx = { customer_id: string | null; date: string | null; service: string | null; kind: string | null };
+  const [{ data: tenant }, { data: tx }, { data: bk }, above, total, synced, storeTx] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', cust.tenant_id).maybeSingle(),
     supabase
       .from('transactions')
@@ -92,6 +95,10 @@ export async function loadCarte(id: string) {
     ranked ? realCount().gt('total_won', cust.total_won) : null,
     ranked ? realCount() : null,
     lastSynced(supabase), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다
+    // 다음 시술 추천의 '함께 권할 것' 근거 — 이 매장 최근 1년 시술(lib/recommend pairStats)
+    fetchAllRows<StoreTx>((from, to) =>
+      supabase.from('transactions').select('customer_id,date,service,kind')
+        .eq('tenant_id', cust.tenant_id).gte('date', addDays(today, -365)).order('id').range(from, to)),
   ]);
 
   const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
@@ -194,12 +201,17 @@ export async function loadCarte(id: string) {
   });
   const top = above?.count != null && total?.count ? rankPercent(above.count, total.count) : null;
 
+  // 다음에 권해볼 것 — 오늘 기준(손님 앞에서 보는 화면). 다음 예약에 이미 잡힌 시술의 갈래는 뺀다.
+  const mine = visitsByCustomer(all.map((h) => ({ customer_id: cust.id, date: h.date, service: h.service, kind: h.kind })));
+  const recs = recommend(mine.get(cust.id) ?? [], pairStats(visitsByCustomer(storeTx), today), today, settings,
+    catsOf(nextBk?.service));
+
   return {
     cust, name, settings, vip, avg,
     history, charges, others,
     chargedTotal, balance,
     familyList, nextBk, topSvc,
     overdue, due, reason,
-    sinceLast, next, top,
+    sinceLast, next, top, recs,
   };
 }

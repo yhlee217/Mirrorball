@@ -6,6 +6,8 @@ import PocketToggle from './pocket-toggle';
 import { Empty } from '@/components/empty';
 import type { Carte } from './data';
 
+const muted = { fontWeight: 400, color: 'var(--muted)', fontSize: 10 } as const;
+
 /**
  * 카르테를 이루는 카드들.
  *
@@ -24,7 +26,7 @@ export function MemoAiCard({ cust }: { cust: Carte['cust'] }) {
   return (
     <div className="card memo-ai">
       <div className="ch" style={{ padding: 0, marginBottom: 6 }}>
-        한눈에 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>· 매장 메모 정리</span>
+        한눈에 <span style={muted}>· 매장 메모 정리</span>
       </div>
       {(cust.memo_ai ?? '').split('\n').filter(Boolean).map((line, i) => (
         <div className="ai-line" key={i}>{line.replace(/^-\s*/, '')}</div>
@@ -109,6 +111,27 @@ function NextTile({ next }: { next: Carte['next'] }) {
 }
 
 /**
+ * 다음에 권해볼 것(lib/recommend) — 때가 된 시술과, 이 매장 손님들이 함께 많이 받는 것. 추정이라
+ * '권해볼 만한 것'으로만 쓰고, 왜 그런지 한 줄을 붙인다. 판단은 디자이너 몫.
+ */
+export function RecommendCard({ items }: { items: Carte['recs'] }) {
+  if (!items.length) return null;
+  return (
+    <div className="card" style={{ padding: '13px 15px' }}>
+      <div className="ch" style={{ padding: 0, marginBottom: 4 }}>
+        다음에 권해볼 것 <span style={muted}>· 추정</span>
+      </div>
+      {items.map((r) => (
+        <div className="rec" key={r.kind + r.label}>
+          <b>{r.label}</b>
+          <span className="rec-w">{r.reason}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
  * 같은 tenant 안의 가족만 보인다 — 담당 디자이너가 다른 가족원은 다른 tenant 라
  * 여기 안 나온다(멀티테넌트 격리 유지).
  */
@@ -184,7 +207,7 @@ export function PrepaidCard({
   return (
     <div className="card" style={{ padding: '13px 15px' }}>
       <div className="ch" style={{ padding: 0, marginBottom: 6 }}>
-        선불 충전 <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>· 잔액은 추정</span>
+        선불 충전 <span style={muted}>· 잔액은 추정</span>
       </div>
       <div className="prepaid">
         <div><span className="pl">충전 합계</span><b>{won(chargedTotal)}</b></div>

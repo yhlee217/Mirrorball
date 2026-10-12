@@ -12,13 +12,15 @@ from tsnode import run_ts
 
 WON = [0, 5000, 33000, 65000, 3_120_000, 99_999_999, 123_456_789]
 PRICE = [0, 5000, 9999, 10000, 30000, 33000, 65000, 99_400, 99_960, 180_000]
+RANGES = [[21_800_000, 23_900_000], [98_000_000, 110_000_000], [5000, 8000], [8000, 30000]]
 
 
 @pytest.fixture(scope="module")
 def ts():
     got = run_ts(["lib/format.ts"], "const F = require('./format.js');\n"
-                 "out({ won: D.won.map(F.won), price: D.price.map(F.price) });\n",
-                 {"won": WON, "price": PRICE})
+                 "out({ won: D.won.map(F.won), price: D.price.map(F.price),"
+                 " range: D.range.map((r) => F.wonRange(r[0], r[1])) });\n",
+                 {"won": WON, "price": PRICE, "range": RANGES})
     if got is None:
         pytest.skip("node/npx 또는 web/node_modules 가 없다 — TS 실행 생략")
     return got
@@ -31,3 +33,7 @@ def test_won_totals(ts):
 def test_price_keeps_one_decimal_under_100k(ts):
     assert ts["price"] == ["0원", "5,000원", "9,999원", "1만원", "3만원", "3.3만원", "6.5만원",
                            "9.9만원", "10만원", "18만원"]
+
+
+def test_range_shares_the_unit(ts):
+    assert ts["range"] == ["2,180~2,390만원", "9,800만원~1.1억원", "5,000~8,000원", "8,000원~3만원"]

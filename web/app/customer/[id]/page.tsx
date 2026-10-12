@@ -9,6 +9,7 @@ import ChurnToggle from './churn-toggle';
 import { loadCarte } from './data';
 import {
   MemoAiCard,
+  RecommendCard,
   StatTiles,
   FamilyCard,
   NextBookingCard,
@@ -32,7 +33,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     chargedTotal, balance,
     familyList, nextBk, topSvc,
     overdue, due, reason,
-    sinceLast, next, top,
+    sinceLast, next, top, recs,
   } = await loadCarte(params.id);
 
   return (
@@ -80,6 +81,8 @@ export default async function CustomerPage({ params }: { params: { id: string } 
 
         {/* 손님 앞에서 먼저 필요한 것: 다음에 언제 오시는지 → 지난번에 뭘 했는지 */}
         <NextBookingCard bk={nextBk} />
+        {/* 이번에 뭘 권할지 — 지난 이력보다 먼저 본다(응대 중에 바로 쓸 것) */}
+        <RecommendCard items={recs} />
         <HistoryCard history={history} hasCharges={charges.length > 0} />
 
         <CustomerNote id={cust.id} initMemo={cust.memo ?? ''} initTags={cust.prefer_tags ?? []} />

@@ -2,23 +2,28 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { price, won } from '@/lib/format';
+import { price, won, wonRange } from '@/lib/format';
 import { requireTenant } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { fetchAllRows, isRealCustomer, isChurned, onCareList } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
-import { bookedCustomerIds } from '@/lib/bookings';
+import { bookedCustomerIds, isActiveBooking } from '@/lib/bookings';
 import { recentlyContactedIds } from '@/lib/contact';
 import { addDays } from '@/lib/week';
 import { activeTrend, datesByCustomer, newcomerCohorts, serviceTable, toVisits, weekHeat } from '@/lib/trends';
 import { hasOffDays, workedDays } from '@/lib/offdays';
-import { ActiveTile, CohortCard, HeatCard, ServiceCard } from './cards';
+import { MIN_WORKED, monthForecast } from '@/lib/forecast';
+import { backtest, pairStats, visitsByCustomer } from '@/lib/recommend';
+import { ActiveTile, CohortCard, HeatCard, RecommendHitCard, ServiceCard } from './cards';
 
 export default async function StatsPage() {
   const { supabase, tenantId } = await requireTenant();
 
-  const [{ data: tenant }, customers, txs, booked, contacted, synced] = await Promise.all([
+  const kToday = kstNow().date;
+  const [y0, m0] = kToday.split('-').map(Number);
+  const monthLast = new Date(Date.UTC(y0, m0, 0)).toISOString().slice(0, 10);
+  const [{ data: tenant }, customers, txs, booked, contacted, synced, { data: bkLeftRows }] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<{ id: string; ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
                    age_band: string | null; gender_src: string | null; gender_manual: string | null; revisit_cycle_days: number | null;
@@ -34,6 +39,9 @@ export default async function StatsPage() {
     bookedCustomerIds(supabase, tenantId),
     recentlyContactedIds(supabase, tenantId),
     lastSynced(supabase),
+    // 이번 달 남은 기간에 잡힌 예약 — 마감 예상 옆에 참고로만(예상 금액에는 섞지 않는다)
+    supabase.from('bookings').select('date,time,status').eq('tenant_id', tenantId)
+      .gte('date', kToday).lte('date', monthLast).limit(1000),
   ]);
   // '손님' 등 미식별 워크인은 관리 대상이 아니다 — 홈·챙길 고객·고객목록과 같은 기준으로 뺀다.
   // 통계만 포함하고 있어서 고객수·재방문율·객단가가 부풀고, 성별은 전부 '미상'으로 쌓였다.
@@ -142,7 +150,6 @@ export default async function StatsPage() {
   // 누적 매출은 평생 수치라 보고 나서 할 게 없다. 진행 중인 달을 지난달 '같은 날짜까지'와
   // 견줘야 늘었는지 줄었는지가 판단이 된다(달 전체와 비교하면 월초엔 늘 줄어 보인다).
   // 그 '같은 날짜'는 오늘이 아니라 마지막 수집일 — 수집 뒤 날짜는 아직 비어 있어 이번 달만 손해를 본다.
-  const kToday = kstNow().date;
   const thisMonth = kToday.slice(0, 7);
   const dayOfMonth = Number((asOf.slice(0, 7) === thisMonth ? asOf : kToday).slice(8, 10));
   const prevMonth = (() => {
@@ -179,6 +186,17 @@ export default async function StatsPage() {
     period.prev.rev > 0 && work.now > 0 && work.prev > 0
       ? Math.round(((period.now.rev / work.now - period.prev.rev / work.prev) / (period.prev.rev / work.prev)) * 100)
       : null;
+
+  // ── 마감 예상 ── 이 속도면 이번 달 얼마(lib/forecast). 예약은 수집 때까지 잡힌 것뿐이라 금액에 섞지 않고
+  // 남은 기간 잡힌 수만 곁에 둔다.
+  const fc = monthForecast(tx, thisMonth, asOf, settings, visitedDays);
+  const bkLeft = ((bkLeftRows as { date: string; time: string | null; status: string | null }[] | null) ?? [])
+    .filter((b) => isActiveBooking(b)).length;
+
+  // ── 다음 시술 추천이 맞았나 ── 최근 1년 방문마다 그 전 기록만으로 권했다면(lib/recommend backtest)
+  // 1년을 되짚되 그 앞 1년 이력까지만 있으면 된다 — 2년치만 넘긴다(큰 매장에서 화면이 느려지지 않게)
+  const recVisits = visitsByCustomer(tx.filter((t) => t.date >= addDays(asOf, -730)));
+  const hits = backtest(recVisits, pairStats(recVisits, asOf), realIds, addDays(asOf, -364), asOf, settings);
 
   // ── 지금 할 일 ── 홈 신호와 같은 기준으로 센다(숫자가 다르면 어느 쪽을 믿을지 모른다)
   // 누르면 챙길 고객 탭이 열린다 — 그 목록과 같은 '할 일' 기준(최근 연락한 분 제외)
@@ -220,6 +238,31 @@ export default async function StatsPage() {
               {work.now !== work.prev ? ' — 쉰 날이 달라 매출 증감은 영업한 날 하루 평균으로 견줬어요.' : '.'}
             </p>
           ) : null}
+          {/* 마감 예상 — 추정이라 범위를 곁에 둔다. 예약은 금액에 섞지 않고 참고로만. */}
+          <div className="fc">
+            {fc.show ? (
+              <>
+                <div className="fc-l">
+                  이 속도면 이번 달 <b>약 {won(fc.center)}</b>
+                  {fc.low !== null && fc.high !== null ? <span className="fc-r"> ({wonRange(fc.low, fc.high)})</span> : null}
+                </div>
+                <div className="fc-s">
+                  지난달 {won(fc.lastMonth)} · 남은 영업일 {fc.remaining}일
+                  {bkLeft ? ` · 남은 기간 잡힌 예약 ${bkLeft.toLocaleString()}건` : ''}
+                </div>
+                <p className="note">
+                  영업한 날 하루 평균(선불 충전 제외)에 남은 영업일을 곱하고, 충전은 들어온 만큼만 더했어요.
+                  {fc.low !== null
+                    ? ` 범위는 지난 ${fc.months}개월 같은 날짜에 이렇게 예상했을 때 실제와 어긋난 폭이에요.`
+                    : ' 범위는 지난 기록이 3개월 이상 쌓이면 보여요.'}
+                </p>
+              </>
+            ) : (
+              <div className="fc-s">
+                마감 예상은 이번 달 영업일이 {MIN_WORKED}일 지나면 보여요{fc.worked ? ` (지금 ${fc.worked}일)` : ''}.
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 지금 할 일 — 통계를 보고 '그래서 뭘 하지'로 이어지게. 숫자는 홈 신호와 같은 기준. */}
@@ -370,6 +413,9 @@ export default async function StatsPage() {
 
         {/* 건수·매출만 보던 시술별을 객단가·다시 오는 비율까지 */}
         <ServiceCard rows={svcRows} vacation={settings.off_dates.length > 0} />
+
+        {/* 다음 시술 추천(카르테·예약 브리핑)이 실제로 얼마나 맞았나 — 찍었을 때보다 높아야 쓸모가 있다 */}
+        <RecommendHitCard hits={hits} />
 
         <p className="note">
           거래 {tx.length.toLocaleString()}건 · 고객 {totalCustomers.toLocaleString()}명 기준.

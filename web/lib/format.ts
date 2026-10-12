@@ -20,6 +20,17 @@ export function won(n: number): string {
   return man.toLocaleString() + '만원';
 }
 
+/** won() 표기의 단위 — '만원'·'억원'도 '원'으로 끝나니 긴 것부터 본다. */
+const unitOf = (s: string) => (s.endsWith('억원') ? '억원' : s.endsWith('만원') ? '만원' : '원');
+
+/** 범위 — 단위가 같으면 한 번만: '2,180~2,390만원'. 다르면 '9,800만원~1.1억원'. */
+export function wonRange(a: number, b: number): string {
+  const x = won(a);
+  const y = won(b);
+  const u = unitOf(x);
+  return u === unitOf(y) ? `${x.slice(0, -u.length)}~${y}` : `${x}~${y}`;
+}
+
 /**
  * 객단가(방문 1회·시술 1건 가격) — 10만원 아래는 만원 아래 한 자리까지.
  * 합계는 만원 단위면 충분하지만 가격은 아니다: 65,000 이 won() 으로는 '7만원'이 된다.

@@ -38,6 +38,9 @@ const TABLE: { test: RegExp; care: Care }[] = [
       tip: '한 달쯤 지나 모양이 흐트러질 때 다듬으면 스타일이 오래 유지돼요.' } },
 ];
 
+/** 시술 종류(cat) → 표준 주기(일). 다음 시술 추천(lib/recommend)이 종류별로 때가 됐는지 볼 때 쓴다. */
+export const CYCLE_BY_CAT: Record<string, number> = Object.fromEntries(TABLE.map((r) => [r.care.cat, r.care.days]));
+
 /** 원본 메뉴명 → 표준 관리주기·표현. 매칭 안 되면 null(일반 문구로 폴백). */
 export function careFor(service?: string | null): Care | null {
   if (!service) return null;

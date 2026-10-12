@@ -1,6 +1,7 @@
 import { price } from '@/lib/format';
 import { BANDS, DOW_MON, type Cohort, type SvcRow, type weekHeat } from '@/lib/trends';
 import { Empty } from '@/components/empty';
+import type { Hit } from '@/lib/recommend';
 
 /**
  * 통계를 '변화'로(UX 계획 P2) 바꾼 카드들. 계산은 lib/trends.ts, 이 파일은 표시만.
@@ -246,6 +247,50 @@ export function ServiceCard({ rows, vacation }: { rows: SvcRow[]; vacation: bool
       ) : (
         <Empty title="시술 데이터가 없어요" hint="최근 1년 시술 기록이 없어요. 첫 수집이 끝나면 채워져요." />
       )}
+    </div>
+  );
+}
+
+/**
+ * 다음 시술 추천은 얼마나 맞나 — 최근 1년 방문마다, 그 전 기록만으로 권했다면 그날 실제로 받았나
+ * (lib/recommend backtest). '찍었을 때'는 아무 근거 없이 같은 것을 골랐을 때 맞을 확률이다 — 추천이
+ * 그보다 높아야 쓸모가 있다. 디자이너가 추천을 얼마나 믿을지 스스로 가늠하게 숫자를 드러낸다.
+ */
+export function RecommendHitCard({ hits }: { hits: { due: Hit; cross: Hit } }) {
+  const rows = [
+    { name: '때가 된 시술', h: hits.due },
+    { name: '함께 권할 것', h: hits.cross },
+  ].filter((r) => r.h.n > 0);
+  if (!rows.length) return null;
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  return (
+    <div className="card" style={{ padding: '14px 15px' }}>
+      <div className="ch" style={{ padding: 0, marginBottom: 6 }}>
+        다음 시술 추천은 얼마나 맞나 <span style={muted}>· 최근 1년</span>
+      </div>
+      <div className="tablewrap">
+        <table className="gtab svc-tab">
+          <thead>
+            <tr><th>추천</th><th>맞음</th><th>찍었을 때</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.name}>
+                <td>{r.name}</td>
+                <td>
+                  {pct(r.h.hit / r.h.n)}
+                  <span className="sub2">{r.h.n.toLocaleString()}번 중</span>
+                </td>
+                <td>{pct(r.h.base)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="note">
+        방문마다 그 전 기록만으로 이렇게 권했다면 그날 실제로 받았는지 셌어요. &lsquo;찍었을 때&rsquo;는 아무 근거 없이
+        같은 걸 골랐을 때예요 — 추천이 그보다 높아야 쓸모가 있어요. 추천은 카르테와 예약 브리핑에 &lsquo;추정&rsquo;으로 나와요.
+      </p>
     </div>
   );
 }

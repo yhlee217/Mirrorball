@@ -8,10 +8,11 @@ import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
 import { bookedCustomerIds, isCancelled } from '@/lib/bookings';
 import { recentlyContactedIds } from '@/lib/contact';
 import { lastSynced } from '@/lib/sync';
-import { lastWeek, spanLabel, weekNums, type WeekTx } from '@/lib/week';
+import { addDays, lastWeek, spanLabel, weekNums, type WeekTx } from '@/lib/week';
 import { gapLine, lastServices, latestRecent, memoLines, visitTag } from '@/lib/briefing';
 import { toVisits } from '@/lib/trends';
 import { hasOffDays, workedDays } from '@/lib/offdays';
+import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
 import HomeView, { type Brief } from './home-view';
 import OnboardButton from './onboard-button';
 
@@ -123,10 +124,11 @@ export default async function Page() {
   const lastDates = [...new Set(ids.map((id) => byId.get(id)?.last_visit).filter(Boolean) as string[])];
   const wk = lastWeek(asOf, today);
 
-  const [weekTx, details, lastTx] = await Promise.all([
+  // 최근 1년 거래 한 번에 — 이번 주 요약(그중 두 주)과 예약 브리핑의 '권해볼 것'(손님 이력 + 매장 데이터)이 같이 쓴다.
+  const [yearTx, details, lastTx] = await Promise.all([
     fetchAllRows<WeekTx>((from, to) =>
       supabase.from('transactions').select('customer_id,date,kind,service,amount_won,covered_won')
-        .eq('tenant_id', tenantId).gte('date', wk.prev.start).lte('date', wk.cur.end).order('id').range(from, to)),
+        .eq('tenant_id', tenantId).gte('date', addDays(asOf, -365)).lte('date', asOf).order('id').range(from, to)),
     ids.length
       ? supabase.from('customers').select('id,revisit_cycle_days,prepaid_balance,memo_ai,memo_ai_recent').in('id', ids)
           .then((r) => (r.data as Detail[] | null) ?? [])
@@ -141,11 +143,11 @@ export default async function Page() {
   // 지난 한 주 — 첫 방문은 실고객만 센다(워크인 집계는 '첫 방문'이 의미가 없다).
   const firsts = real.map((c) => c.first_visit);
   // 휴무를 정했으면 두 주에 영업한 날도 — 이틀 쉰 주를 전주와 그냥 견주면 손님이 준 것처럼 읽힌다.
-  const weekDays = new Set(toVisits(weekTx).map((v) => v.date));
+  const weekDays = new Set(toVisits(yearTx).map((v) => v.date));
   const week = {
     label: spanLabel(wk.cur),
-    cur: weekNums(weekTx, firsts, wk.cur),
-    prev: weekNums(weekTx, firsts, wk.prev),
+    cur: weekNums(yearTx, firsts, wk.cur),
+    prev: weekNums(yearTx, firsts, wk.prev),
     work: hasOffDays(settings)
       ? {
           cur: workedDays(wk.cur.start, wk.cur.end, settings, weekDays),
@@ -156,16 +158,21 @@ export default async function Page() {
 
   const det = new Map(details.map((d) => [d.id, d]));
   const lastSvc = lastServices(lastTx, (id) => byId.get(id)?.last_visit);
+  // 권해볼 것 — 예약일 기준으로, 이번에 예약한 시술의 갈래는 빼고 하나만(lib/recommend).
+  const recVisits = visitsByCustomer(yearTx);
+  const pairs = pairStats(recVisits, today);
   const toBrief = async (b: Booking): Promise<Brief> => {
     const name = await nameFrom(b.pii_enc);
     const off = isCancelled(b.status);
     const base = { id: b.id, date: b.date, time: b.time, service: b.service, customer_id: b.customer_id, status: b.status, name, off };
-    if (off) return { ...base, tag: null, gap: null, last: null, prefer: [], recent: null, prepaid: 0 };
+    const none = { gap: null, last: null, prefer: [], recent: null, prepaid: 0, rec: null };
+    if (off) return { ...base, ...none, tag: null };
     // 손님 기록에 연결되지 않은 예약 — 고객번호·전화·이름 어느 것으로도 못 찾았다는 뜻이라 첫 방문으로 본다
-    if (!b.customer_id) return { ...base, tag: '첫 방문', gap: null, last: null, prefer: [], recent: null, prepaid: 0 };
+    if (!b.customer_id) return { ...base, ...none, tag: '첫 방문' };
     const c = byId.get(b.customer_id);
     const d = det.get(b.customer_id);
-    if (!c || !known(b)) return { ...base, tag: null, gap: null, last: null, prefer: [], recent: null, prepaid: 0 };
+    if (!c || !known(b)) return { ...base, ...none, tag: null };
+    const rec = recommend(recVisits.get(c.id) ?? [], pairs, b.date, settings, catsOf(b.service))[0];
     return {
       ...base,
       tag: visitTag(c.visit_count),
@@ -174,6 +181,7 @@ export default async function Page() {
       prefer: memoLines(d?.memo_ai, 2),
       recent: latestRecent(d?.memo_ai_recent),
       prepaid: d?.prepaid_balance ?? 0,
+      rec: rec ? { label: rec.label, short: rec.short } : null,
     };
   };
   const [briefs, laterRows] = await Promise.all([
