@@ -1,0 +1,28 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "incremental": false,
+    "outDir": "./out/js",
+    "rootDir": "../..",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+    "isolatedModules": false,
+    "plugins": []
+  },
+  "include": [],
+  "files": [
+    "../../app/home-view.tsx",
+    "../../app/alerts/alerts-list.tsx",
+    "../../app/visits/visits-list.tsx",
+    "../../app/customers/customers-list.tsx",
+    "../../app/customer/[id]/cards.tsx",
+    "../../app/customer/[id]/customer-note.tsx",
+    "../../app/customer/[id]/gender-picker.tsx",
+    "../../app/customer/[id]/churn-toggle.tsx",
+    "../../app/stats/cards.tsx",
+    "../../app/settings/settings-form.tsx",
+    "../../components/sync-chip.tsx"
+  ]
+}
