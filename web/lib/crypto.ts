@@ -22,6 +22,19 @@ function kekBytes(): Uint8Array {
   return k;
 }
 
+/**
+ * 키 교체 중에만 있는 옛 KEK(MIRRORBALL_KEK_OLD) — 아직 옛 키로 감싸인 테넌트 키도 풀리게(개선 계획 v5 P0).
+ * 순서: 새 키를 MIRRORBALL_KEK, 지금 키를 MIRRORBALL_KEK_OLD 에 → worker/rotate_kek.py 로 다시 감쌈 →
+ * MIRRORBALL_KEK_OLD 삭제. 그 사이에도 손님 이름이 '고객'으로 보이는 순간이 없다(playbook/KEY_ROTATION.md).
+ */
+function kekOldBytes(): Uint8Array | null {
+  const b64 = process.env.MIRRORBALL_KEK_OLD;
+  if (!b64) return null;
+  const k = b64decode(b64);
+  if (k.length !== 32) throw new Error('MIRRORBALL_KEK_OLD 는 base64(32 bytes) 여야 함');
+  return k;
+}
+
 async function importKey(raw: Uint8Array): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
@@ -52,7 +65,13 @@ export async function wrapDek(dek: Uint8Array): Promise<string> {
   return seal(kekBytes(), dek);
 }
 export async function unwrapDek(wrappedB64: string): Promise<Uint8Array> {
-  return open(kekBytes(), wrappedB64);
+  try {
+    return await open(kekBytes(), wrappedB64);
+  } catch (e) {
+    const old = kekOldBytes();
+    if (!old) throw e;
+    return open(old, wrappedB64); // 교체 중 — 아직 옛 키로 감싸인 값
+  }
 }
 export async function encryptPII(obj: unknown, dek: Uint8Array): Promise<string> {
   return seal(dek, new TextEncoder().encode(JSON.stringify(obj)));

@@ -84,4 +84,10 @@ if [ "$rc" -eq 0 ]; then
   echo "[$(ts)] 메모 정리 종료"
 fi
 
+# 앱에만 있는 데이터(메모·태그·연락 기록·이탈·성별 지정·사비 표시·설정·프로필) 백업 — 수집 성패와 무관하게
+# 돈다(디자이너가 쌓은 기록은 HandSOS 에 없다). 실패하면 알림만 — 수집 결과는 그대로 유효하다.
+echo "[$(ts)] 백업 시작"
+"$PY" worker/backup.py || notify "앱 데이터 백업 실패 — runs/collect.out.log 확인"
+echo "[$(ts)] 백업 종료"
+
 exit $rc
