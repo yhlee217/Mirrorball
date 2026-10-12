@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { won } from '@/lib/format';
+import { price, won } from '@/lib/format';
 import { spanWords } from '@/lib/briefing';
 import { agoWords, shortDate } from '@/lib/carte-stats';
 import PocketToggle from './pocket-toggle';
@@ -74,7 +74,7 @@ export function StatTiles({
       {prepaid ? (
         <div className="stat"><div className="sn">{won(balance)}</div><div className="sl">선불 잔액 · 추정</div></div>
       ) : (
-        <div className="stat"><div className="sn">{won(avg)}</div><div className="sl">객단가</div></div>
+        <div className="stat"><div className="sn">{price(avg)}</div><div className="sl">객단가</div></div>
       )}
       <div className="stat">
         <div className="sn">{top ? `상위 ${top}%` : '-'}</div>

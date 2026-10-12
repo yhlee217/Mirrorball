@@ -19,3 +19,14 @@ export function won(n: number): string {
   if (Math.abs(man) >= 10000) return (man / 10000).toFixed(1) + '억원';
   return man.toLocaleString() + '만원';
 }
+
+/**
+ * 객단가(방문 1회·시술 1건 가격) — 10만원 아래는 만원 아래 한 자리까지.
+ * 합계는 만원 단위면 충분하지만 가격은 아니다: 65,000 이 won() 으로는 '7만원'이 된다.
+ * 33,000 → '3.3만원' · 30,000 → '3만원' · 5,000 → '5,000원' · 180,000 → '18만원'
+ */
+export function price(n: number): string {
+  const a = Math.abs(n);
+  if (a < 10000 || a >= 100000) return won(n);
+  return (Math.round(n / 1000) / 10).toString() + '만원';
+}

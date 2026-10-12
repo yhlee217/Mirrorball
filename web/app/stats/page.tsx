@@ -2,35 +2,37 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { won } from '@/lib/format';
+import { price, won } from '@/lib/format';
 import { requireTenant } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
-import { Empty } from '@/components/empty';
-import { txKind } from '@/lib/tx';
 import { fetchAllRows, isRealCustomer, isChurned, onCareList } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookedCustomerIds } from '@/lib/bookings';
 import { recentlyContactedIds } from '@/lib/contact';
-
-const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+import { addDays } from '@/lib/week';
+import { activeTrend, datesByCustomer, newcomerCohorts, serviceTable, toVisits, weekHeat } from '@/lib/trends';
+import { ActiveTile, CohortCard, HeatCard, ServiceCard } from './cards';
 
 export default async function StatsPage() {
   const { supabase, tenantId } = await requireTenant();
 
-  const [{ data: tenant }, customers, txs, booked, contacted] = await Promise.all([
+  const [{ data: tenant }, customers, txs, booked, contacted, synced] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<{ id: string; ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
                    age_band: string | null; gender_src: string | null; gender_manual: string | null; revisit_cycle_days: number | null;
-                   revisit_state: string | null; churned_at: string | null; last_visit: string | null;
+                   revisit_state: string | null; churned_at: string | null; first_visit: string | null; last_visit: string | null;
+                   prepaid_balance: number | null;
                    visits_90d: number | null; visits_180d: number | null; visits_365d: number | null }>((from, to) =>
       supabase.from('customers')
-        .select('id,ext_id,total_won,visit_count,gender,gender_manual,age_band,gender_src,revisit_cycle_days,revisit_state,churned_at,last_visit,visits_90d,visits_180d,visits_365d')
+        .select('id,ext_id,total_won,visit_count,gender,gender_manual,age_band,gender_src,revisit_cycle_days,revisit_state,churned_at,first_visit,last_visit,prepaid_balance,visits_90d,visits_180d,visits_365d')
         .eq('tenant_id', tenantId).order('id').range(from, to)),
-    fetchAllRows<{ date: string; service: string | null; amount_won: number; kind: string | null; covered_won: number | null }>((from, to) =>
-      supabase.from('transactions').select('date,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
+    fetchAllRows<{ customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number;
+                   kind: string | null; covered_won: number | null }>((from, to) =>
+      supabase.from('transactions').select('customer_id,date,time,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
     bookedCustomerIds(supabase, tenantId),
     recentlyContactedIds(supabase, tenantId),
+    lastSynced(supabase),
   ]);
   // '손님' 등 미식별 워크인은 관리 대상이 아니다 — 홈·챙길 고객·고객목록과 같은 기준으로 뺀다.
   // 통계만 포함하고 있어서 고객수·재방문율·객단가가 부풀고, 성별은 전부 '미상'으로 쌓였다.
@@ -41,13 +43,23 @@ export default async function StatsPage() {
 
   const totalRevenue = cs.reduce((s, c) => s + (c.total_won || 0), 0);
   const totalCustomers = cs.length;
-  const totalVisits = tx.length;
   const avgPer = totalCustomers ? Math.round(totalRevenue / totalCustomers / 10000) : 0;
-
-  // 리텐션(재방문율)
+  // 평생 두 번 이상 오신 고객 — 예전 '재방문율' 카드의 숫자. 이제는 신규 카드 아래 한 줄로만 둔다.
   const repeatCust = cs.filter((c) => c.visit_count >= 2).length;
-  const newCust = totalCustomers - repeatCust;
-  const retention = totalCustomers ? Math.round((repeatCust / totalCustomers) * 100) : 0;
+
+  // 방문 = 시술을 받은 (손님, 날짜). 충전·제품만 산 날은 방문이 아니다(홈·방문 관리와 같은 기준).
+  // '변화'를 재는 기준일은 마지막 수집일 — 그 뒤 날짜는 아직 비어 있다(lib/trends.ts).
+  const asOf = synced?.date ?? kstNow().date;
+  const visits = toVisits(tx);
+  const byCust = datesByCustomer(visits);
+  const realIds = new Set(cs.map((c) => c.id));
+  const cohort = newcomerCohorts(cs, byCust, asOf); // D2
+  const heat = weekHeat(visits, addDays(asOf, -182), asOf); // D4 — 최근 6개월(26주)
+  const svcRows = serviceTable(tx, byCust, realIds, addDays(asOf, -364), asOf); // D5 — 최근 1년
+  const active = activeTrend(byCust, realIds, asOf); // D3
+  // 선불 잔액(D6) — 손님별 추정 잔액의 합. 앞으로 시술로 갚을 돈이라 매출과 따로 본다.
+  const prepaidSum = cs.reduce((s, c) => s + Math.max(0, c.prepaid_balance || 0), 0);
+  const prepaidN = cs.filter((c) => (c.prepaid_balance || 0) > 0).length;
 
   // 실매출 = 결제 금액 − 선불 잔액으로 결제된 금액.
   // 충전과 그 충전금으로 한 시술을 둘 다 더하면 이중 계상이라, 한 규칙으로 걷어낸다.
@@ -126,13 +138,19 @@ export default async function StatsPage() {
     return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
   })();
   const period = { now: { rev: 0, visits: 0 }, prev: { rev: 0, visits: 0 } };
+  const which = (date: string) => {
+    if (Number(date.slice(8, 10)) > dayOfMonth) return null; // 지난달도 같은 날짜까지만
+    const mm = date.slice(0, 7);
+    return mm === thisMonth ? period.now : mm === prevMonth ? period.prev : null;
+  };
   for (const t of tx) {
-    if (!t.date) continue;
-    const mm = t.date.slice(0, 7);
-    const dd = Number(t.date.slice(8, 10));
-    if (dd > dayOfMonth) continue;               // 지난달도 같은 날짜까지만
-    if (mm === thisMonth) { period.now.rev += net(t); period.now.visits++; }
-    else if (mm === prevMonth) { period.prev.rev += net(t); period.prev.visits++; }
+    const b = t.date ? which(t.date) : null;
+    if (b) b.rev += net(t);
+  }
+  // 방문은 거래 건수가 아니라 시술 방문 수 — 충전 한 건·같은 날 두 시술이 방문을 부풀리지 않게
+  for (const v of visits) {
+    const b = which(v.date);
+    if (b) b.visits++;
   }
   const revDelta = period.prev.rev ? Math.round(((period.now.rev - period.prev.rev) / period.prev.rev) * 100) : null;
 
@@ -140,34 +158,6 @@ export default async function StatsPage() {
   // 누르면 챙길 고객 탭이 열린다 — 그 목록과 같은 '할 일' 기준(최근 연락한 분 제외)
   const careCount = cs.filter((c) =>
     onCareList(c, { settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id) })).length;
-
-  const synced = await lastSynced(supabase);
-
-  // 요일별 방문
-  const days = DOW.map((label) => ({ label, count: 0 }));
-  for (const t of tx) {
-    if (t.date) {
-      const g = new Date(t.date).getDay();
-      if (g >= 0 && g <= 6) days[g].count++;
-    }
-  }
-  const maxDow = Math.max(1, ...days.map((d) => d.count));
-  // 막대만 보고 '그래서 뭘 하지'를 떠올리긴 어렵다 — 가장 붐비는/한산한 요일을 말로 짚어준다.
-  const busiest = days.reduce((a, b) => (b.count > a.count ? b : a));
-  const quietest = days.filter((d) => d.count > 0).reduce((a, b) => (b.count < a.count ? b : a), days[0]);
-
-  // 시술별(건수 + 매출)
-  const svc = new Map<string, { n: number; rev: number }>();
-  for (const t of tx) {
-    const s = (t.service || '').trim();
-    if (!s) continue;
-    const e = svc.get(s) || { n: 0, rev: 0 };
-    e.n++;
-    e.rev += net(t);
-    svc.set(s, e);
-  }
-  const topSvc = [...svc.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 6);
-  const maxSvc = Math.max(1, ...topSvc.map(([, v]) => v.n));
 
   return (
     <main className="wrap">
@@ -225,25 +215,24 @@ export default async function StatsPage() {
           </div>
         )}
 
+        {/* 손님이 줄고 있나(활성 고객 추이)와 앞으로 시술로 갚을 돈(선불 잔액)을 앞에 — 누적 방문·고객당
+            평균은 보고 나서 할 게 없어 뺐다. 선불 손님이 없는 매장은 그 자리에 고객당 평균. */}
         <div className="stat-grid">
-          <div className="stat"><div className="sn">{won(totalRevenue)}</div><div className="sl">누적 매출</div></div>
-          <div className="stat"><div className="sn">{totalVisits.toLocaleString()}</div><div className="sl">누적 방문</div></div>
+          <ActiveTile trend={active} />
+          {prepaidN > 0 ? (
+            <div className="stat">
+              <div className="sn">{won(prepaidSum)}</div>
+              <div className="sl">선불 잔액 · {prepaidN.toLocaleString()}명 · 추정</div>
+            </div>
+          ) : (
+            <div className="stat"><div className="sn">{avgPer.toLocaleString()}만원</div><div className="sl">고객당 평균</div></div>
+          )}
           <div className="stat"><div className="sn">{totalCustomers.toLocaleString()}</div><div className="sl">전체 고객</div></div>
-          <div className="stat"><div className="sn">{avgPer.toLocaleString()}만원</div><div className="sl">고객당 평균</div></div>
+          <div className="stat"><div className="sn">{won(totalRevenue)}</div><div className="sl">누적 매출</div></div>
         </div>
 
-        <div className="card" style={{ padding: '14px 15px' }}>
-          <div className="ch" style={{ padding: 0, marginBottom: 8 }}>재방문율 (리텐션)</div>
-          <div className="reten">
-            <div className="reten-n">{retention}%</div>
-            <div className="reten-b">
-              <div className="reten-fill" style={{ width: `${retention}%` }} />
-            </div>
-          </div>
-          <div className="set-row" style={{ marginTop: 6, color: 'var(--muted)' }}>
-            재방문 고객 {repeatCust.toLocaleString()}명 · 신규(1회) {newCust.toLocaleString()}명
-          </div>
-        </div>
+        {/* 평생 재방문율(두 번 이상/전체)은 최근 변화가 안 보인다 → 최근 신규가 다시 오는지로 바꿨다 */}
+        <CohortCard cohorts={cohort.cohorts} medianDays={cohort.medianDays} repeat={repeatCust} total={totalCustomers} />
 
         {gDecided > 0 && (
           <div className="card" style={{ padding: '14px 15px' }}>
@@ -277,8 +266,8 @@ export default async function StatsPage() {
                   </tr>
                   <tr>
                     <td>객단가<span className="sub2">방문 1회당</span></td>
-                    <td>{won(perVisit('M'))}</td>
-                    <td>{won(perVisit('F'))}</td>
+                    <td>{price(perVisit('M'))}</td>
+                    <td>{price(perVisit('F'))}</td>
                   </tr>
                   <tr>
                     <td>재방문 주기<span className="sub2">중앙값</span></td>
@@ -336,41 +325,16 @@ export default async function StatsPage() {
           </p>
         </div>
 
-        <div className="card" style={{ padding: '14px 15px' }}>
-          <div className="ch" style={{ padding: 0, marginBottom: 10 }}>요일별 방문</div>
-          <div className="bars">
-            {days.map((d) => (
-              <div className="b" key={d.label}>
-                <div className="bv">{d.count}</div>
-                <div className="bar2 sage" style={{ height: `${Math.round((d.count / maxDow) * 80) + 3}px` }} />
-                <div className="bl">{d.label}</div>
-              </div>
-            ))}
-          </div>
-          {busiest.count > 0 && busiest.label !== quietest.label && (
-            <p className="note">
-              <b>{busiest.label}요일</b>이 가장 붐비고 <b>{quietest.label}요일</b>이 가장 한산해요.
-              한산한 날로 예약을 옮겨드릴 수 있는 분이 있는지 살펴보세요.
-            </p>
-          )}
-        </div>
+        {/* 요일만 보던 막대를 요일 × 시간대로 — 같은 요일도 오전과 저녁은 다르다 */}
+        <HeatCard heat={heat} />
 
-        <div className="card" style={{ padding: '14px 15px' }}>
-          <div className="ch" style={{ padding: 0, marginBottom: 10 }}>시술별 (건수 · 매출)</div>
-          {topSvc.length ? (
-            topSvc.map(([s, v]) => (
-              <div className="svc" key={s}>
-                <div className="svn">{s}</div>
-                <div className="svbar"><div className="svfill" style={{ width: `${Math.round((v.n / maxSvc) * 100)}%` }} /></div>
-                <div className="svc-c">{v.n}건<br />{won(v.rev)}</div>
-              </div>
-            ))
-          ) : (
-            <Empty title="시술 데이터가 없어요" hint="수집된 거래가 아직 없어요. 첫 수집이 끝나면 채워져요." />
-          )}
-        </div>
+        {/* 건수·매출만 보던 시술별을 객단가·다시 오는 비율까지 */}
+        <ServiceCard rows={svcRows} />
 
-        <p className="note">거래 {totalVisits.toLocaleString()}건 · 고객 {totalCustomers.toLocaleString()}명 기준.</p>
+        <p className="note">
+          거래 {tx.length.toLocaleString()}건 · 고객 {totalCustomers.toLocaleString()}명 기준.
+          {synced ? ` 변화는 ${synced.label} 수집까지로 셉니다.` : ''}
+        </p>
       </div>
     </main>
   );
