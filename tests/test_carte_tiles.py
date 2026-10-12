@@ -34,6 +34,10 @@ NEXT = [
     # 2회 이상인데 주기가 비어 있으면(재계산 전) 시술 기준으로 추정
     {"today": TODAY, "lastVisit": "2026-09-19", "visitCount": 3, "cycleDays": None,
      "lastServices": ["남자컷"], "bookedDate": None},
+    # 그 사이 디자이너 휴가(10.1~10.10, 10일) — 그만큼 늦춘다
+    {"today": TODAY, "lastVisit": "2026-09-19", "visitCount": 5, "cycleDays": 35,
+     "lastServices": ["뿌리염색"], "bookedDate": None,
+     "off": {"off_weekdays": [], "off_dates": [{"from": "2026-10-01", "to": "2026-10-10"}]}},
 ]
 RANKS = [[0, 1000], [49, 1000], [50, 1000], [6, 100], [999, 1000], [0, 0], [5, 5], [-1, 10]]
 
@@ -94,6 +98,11 @@ def test_next_visit_missing_cycle_is_estimated(ts):
     # 남자커트 표준 28일 → 9.19 + 28 = 10.17
     assert ts["next"][6] == {"kind": "expected", "date": "2026-10-17", "basis": "남자커트 기준 추정",
                              "estimated": True, "overdueDays": 0}
+
+
+def test_next_visit_waits_out_vacation(ts):
+    # 9.19 + 35일 = 10.24, 휴가 10일만큼 → 11.3
+    assert ts["next"][7]["date"] == "2026-11-03" and ts["next"][7]["overdueDays"] == 0
 
 
 def test_rank_percent(ts):

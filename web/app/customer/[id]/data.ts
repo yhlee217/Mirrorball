@@ -3,7 +3,9 @@ import { requireUser, openDek, nameReader } from '@/lib/tenant';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { isActiveBooking } from '@/lib/bookings';
-import { isRealCustomer } from '@/lib/customers';
+import { careState, isRealCustomer } from '@/lib/customers';
+import { lastSynced } from '@/lib/sync';
+import { awayDays } from '@/lib/offdays';
 import { txKind, ledger } from '@/lib/tx';
 import { daysBetween } from '@/lib/briefing';
 import { nextVisit, rankPercent } from '@/lib/carte-stats';
@@ -71,7 +73,7 @@ export async function loadCarte(id: string) {
   const realCount = () =>
     supabase.from('customers').select('id', { count: 'exact', head: true })
       .eq('tenant_id', cust.tenant_id).filter('ext_id', 'match', '^[0-9]+$');
-  const [{ data: tenant }, { data: tx }, { data: bk }, above, total] = await Promise.all([
+  const [{ data: tenant }, { data: tx }, { data: bk }, above, total, synced] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', cust.tenant_id).maybeSingle(),
     supabase
       .from('transactions')
@@ -89,6 +91,7 @@ export async function loadCarte(id: string) {
       .limit(5),
     ranked ? realCount().gt('total_won', cust.total_won) : null,
     ranked ? realCount() : null,
+    lastSynced(supabase), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다
   ]);
 
   const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
@@ -167,9 +170,15 @@ export async function loadCarte(id: string) {
   }
   const topSvc = [...svcCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  const overdue = cust.revisit_state === 'overdue';
-  const due = cust.revisit_state === 'due';
-  const reason = overdue && cust.last_visit ? `${monthsAgo(cust.last_visit)}개월 미방문` : due ? '재방문 시기예요' : '';
+  // 재방문 상태는 휴가를 반영한 것 — 챙길 고객·홈 신호와 같은 기준(lib/customers careState).
+  const asOf = synced?.date ?? today;
+  const state = careState(cust, settings, asOf);
+  const overdue = state === 'overdue';
+  const due = state === 'due';
+  const vac = cust.last_visit ? daysBetween(cust.last_visit, asOf) - awayDays(cust.last_visit, asOf, settings) : 0;
+  const reason =
+    (overdue && cust.last_visit ? `${monthsAgo(cust.last_visit)}개월 미방문` : due ? '재방문 시기예요' : '') +
+    ((overdue || due) && vac > 0 ? ` · 휴가 ${vac}일은 빼고 셈` : '');
 
   // 숫자 타일 — 머리말과 겹치지 않게 '마지막 방문 · 다음 방문 · 잔액(객단가) · 매출 순위'.
   // 순위 조회가 실패하면(count 없음) 타일만 '-'로 두고 화면은 그대로 뜬다.
@@ -181,6 +190,7 @@ export async function loadCarte(id: string) {
     cycleDays: cust.revisit_cycle_days,
     lastServices: history.filter((h) => h.date === cust.last_visit).map((h) => h.service),
     bookedDate: nextBk?.date ?? null,
+    off: settings,
   });
   const top = above?.count != null && total?.count ? rankPercent(above.count, total.count) : null;
 

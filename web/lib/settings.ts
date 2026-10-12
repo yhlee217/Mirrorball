@@ -1,3 +1,5 @@
+import { awayDays } from './offdays';
+
 // 테넌트 판정 기준(설정). 홈·고객필터·알림이 이 값으로 VIP·이탈 등을 판정한다.
 export type TenantSettings = {
   vip_won: number; // VIP: 누적 매출 이상(원)
@@ -86,8 +88,6 @@ export function mergeSettings(raw: unknown): TenantSettings {
   return out;
 }
 
-const DAY = 86400000;
-
 /** VIP 판정에 쓰는 고객 필드. visits_* 는 워커가 미리 집계해 둔 최근 방문 횟수. */
 export type VipInput = {
   total_won: number;
@@ -114,7 +114,11 @@ export function isVip(c: VipInput, s: TenantSettings): boolean {
   return s.vip_recent_visits > 0 && recentVisitsOf(c, s) >= s.vip_recent_visits;
 }
 
+/**
+ * 이탈 판정 — 설정의 기간 넘게 안 오셨나. 디자이너가 쉰 휴가 기간은 '안 오신 기간'에 넣지 않는다
+ * (lib/offdays awayDays — 그동안은 오고 싶어도 못 왔다).
+ */
 export function isLapsed(c: { last_visit: string | null; visit_count: number }, s: TenantSettings): boolean {
-  const days = c.last_visit ? Math.floor((Date.now() - new Date(c.last_visit).getTime()) / DAY) : Infinity;
+  const days = c.last_visit ? awayDays(c.last_visit.slice(0, 10), new Date(Date.now()).toISOString().slice(0, 10), s) : Infinity;
   return days > s.lapsed_months * 30 || (days > s.lapsed_soft_months * 30 && c.visit_count < s.lapsed_soft_visits);
 }

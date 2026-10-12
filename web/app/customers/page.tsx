@@ -4,10 +4,12 @@ export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { openDek, requireTenant } from '@/lib/tenant';
 import { decryptPII } from '@/lib/crypto';
-import { fetchAllRows, isRealCustomer } from '@/lib/customers';
+import { careState, fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookedCustomerIds } from '@/lib/bookings';
 import { phoneTail } from '@/lib/contact';
+import { lastSynced } from '@/lib/sync';
+import { kstNow } from '@/lib/kst';
 import CustomersList from './customers-list';
 
 type Cust = {
@@ -16,6 +18,7 @@ type Cust = {
   pii_enc: string | null;
   visit_count: number;
   revisit_state: string | null;
+  revisit_cycle_days: number | null;
   last_visit: string | null;
   first_visit: string | null;
   total_won: number;
@@ -48,22 +51,24 @@ export default async function CustomersPage({
   const initialFilter = searchParams?.filter && FILTERS.has(searchParams.filter) ? searchParams.filter : null;
   const { supabase, tenantId } = await requireTenant();
 
-  const [{ data: tenant }, customers, bookingSet, txs] = await Promise.all([
+  const [{ data: tenant }, customers, bookingSet, txs, synced] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
       supabase
         .from('customers')
-        .select('id,ext_id,pii_enc,visit_count,revisit_state,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d,gender,gender_manual')
+        .select('id,ext_id,pii_enc,visit_count,revisit_state,revisit_cycle_days,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d,gender,gender_manual')
         .order('id')
         .range(from, to)),
     // 앞으로 올 예약만 — 지난 예약·취소·노쇼는 빠진다. 홈·챙길 고객과 같은 판정이다.
     bookedCustomerIds(supabase, tenantId),
     fetchAllRows<{ customer_id: string | null; service: string | null }>((from, to) =>
       supabase.from('transactions').select('customer_id,service').order('id').range(from, to)),
+    lastSynced(supabase), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다(lib/customers careState)
   ]);
 
   const tRow = tenant as { dek_wrapped: string | null; settings: unknown } | null;
   const settings = mergeSettings(tRow?.settings);
+  const asOf = synced?.date ?? kstNow().date;
   const dek = await openDek(tRow?.dek_wrapped);
 
   const svcMap = new Map<string, Set<string>>();
@@ -102,7 +107,8 @@ export default async function CustomersPage({
     total_won: c.total_won || 0,
     last_visit: c.last_visit,
     first_visit: c.first_visit,
-    state: c.revisit_state,
+    state: careState(c, settings, asOf), // 휴가를 반영한 재방문 상태 — 홈·챙길 고객과 같은 기준
+    cycle: c.revisit_cycle_days,
     hasBooking: bookingSet.has(c.id),
     hasPhone: decoded[i].hasPhone,
     tail: decoded[i].tail,
@@ -123,7 +129,7 @@ export default async function CustomersPage({
         <div className="ttl" style={{ marginLeft: 10 }}>고객 {rows.length}명</div>
       </div>
       <div className="body">
-        <CustomersList rows={rows} settings={settings} initialFilter={initialFilter} />
+        <CustomersList rows={rows} settings={settings} asOf={asOf} initialFilter={initialFilter} />
       </div>
     </main>
   );

@@ -2,7 +2,7 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import { requireUser, getTenantId, openDek, nameReader } from '@/lib/tenant';
-import { fetchAllRows, isRealCustomer, isChurned, needsCare, onCareList } from '@/lib/customers';
+import { careState, fetchAllRows, isRealCustomer, isChurned, needsCare, onCareList } from '@/lib/customers';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
 import { bookedCustomerIds, isCancelled } from '@/lib/bookings';
@@ -19,6 +19,7 @@ type Cust = {
   id: string;
   ext_id: string | null;
   revisit_state: string | null;
+  revisit_cycle_days: number | null;
   tier: string | null;
   visit_count: number;
   total_won: number;
@@ -66,7 +67,7 @@ export default async function Page() {
       .order('time', { ascending: true, nullsFirst: false })
       .limit(200),
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select('id,ext_id,revisit_state,tier,visit_count,total_won,pii_enc,first_visit,last_visit,churned_at,visits_90d,visits_180d,visits_365d').order('id').range(from, to)),
+      supabase.from('customers').select('id,ext_id,revisit_state,revisit_cycle_days,tier,visit_count,total_won,pii_enc,first_visit,last_visit,churned_at,visits_90d,visits_180d,visits_365d').order('id').range(from, to)),
     lastSynced(supabase), // 주 1회라 '이 화면이 언제 기준인지'를 밝혀야 한다
     bookedCustomerIds(supabase, tenantId), // 이미 예약한 손님은 챙길 고객이 아니다
     recentlyContactedIds(supabase, tenantId), // 최근 연락한 분은 '할 일'에서 잠시 빠진다
@@ -83,18 +84,21 @@ export default async function Page() {
 
   // 이탈위험·재방문도래 신호는 needsCare 로 센다 — 설정의 이탈 판정, 이탈 표시, 이미 잡힌 예약을
   // 모두 뺀다. 고객 목록의 같은 필터와 숫자가 같아야 믿을 수 있다.
-  const isCareTarget = (c: Cust) => needsCare(c, { settings, churned: isChurned(c), booked: booked.has(c.id) });
+  // 재방문 상태는 휴가를 반영한 것(careState) — 기준일은 워커가 판정한 마지막 수집일.
+  const asOf = synced?.date ?? today;
+  const isCareTarget = (c: Cust) => needsCare(c, { settings, churned: isChurned(c), booked: booked.has(c.id), asOf });
   // '챙길 고객 N명'(할 일)은 최근 연락한 분도 뺀다 — 눌러서 열리는 챙길 고객 탭과 같은 숫자여야 한다.
   // 타일(이탈위험·재방문도래)은 손님 상태라 연락 여부와 무관하게 위 기준으로 센다.
   const isTodo = (c: Cust) =>
-    onCareList(c, { settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id) });
+    onCareList(c, { settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id), asOf });
 
   const signals = { overdue: 0, due: 0, new: 0, vip: 0 };
   for (const c of cust) {
     if (!isRealCustomer(c.ext_id)) continue; // '손님' 등 미식별 워크인 집계는 관리대상 제외
     if (isChurned(c)) continue; // 디자이너가 직접 이탈로 표시 — 모든 신호에서 제외
-    if (c.revisit_state === 'overdue' || c.revisit_state === 'due') {
-      if (isCareTarget(c)) (signals as Record<string, number>)[c.revisit_state]++;
+    const st = careState(c, settings, asOf);
+    if (st === 'overdue' || st === 'due') {
+      if (isCareTarget(c)) signals[st]++;
     } else if (c.revisit_state === 'new') {
       signals.new++;
     }
@@ -117,7 +121,7 @@ export default async function Page() {
   const known = (b: Booking) => !!b.customer_id && isRealCustomer(byId.get(b.customer_id)?.ext_id);
   const ids = [...new Set(soon.filter((b) => !isCancelled(b.status) && known(b)).map((b) => b.customer_id as string))];
   const lastDates = [...new Set(ids.map((id) => byId.get(id)?.last_visit).filter(Boolean) as string[])];
-  const wk = lastWeek(synced?.date, today);
+  const wk = lastWeek(asOf, today);
 
   const [weekTx, details, lastTx] = await Promise.all([
     fetchAllRows<WeekTx>((from, to) =>
@@ -165,7 +169,7 @@ export default async function Page() {
     return {
       ...base,
       tag: visitTag(c.visit_count),
-      gap: gapLine(c.last_visit, b.date, d?.revisit_cycle_days),
+      gap: gapLine(c.last_visit, b.date, d?.revisit_cycle_days, settings),
       last: lastSvc.get(c.id) ?? null,
       prefer: memoLines(d?.memo_ai, 2),
       recent: latestRecent(d?.memo_ai_recent),

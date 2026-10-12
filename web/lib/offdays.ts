@@ -1,5 +1,4 @@
-import { addDays, dowMon } from './week';
-import { daysBetween } from './briefing';
+import { addDays, daysBetween, dowMon } from './week';
 
 /**
  * 휴무 — 디자이너가 설정에서 정한 쉬는 날(정기 휴무 요일 + 휴가·임시 휴무 기간).
@@ -39,7 +38,7 @@ export function workedByWeekday(start: string, end: string, s: OffDays, visited:
 }
 
 /** [start, end] 안의 휴가 일수. off_dates 는 설정에서 겹치지 않게 합쳐 둔다(lib/settings cleanOffDates). */
-function vacationDaysIn(start: string, end: string, s: OffDays): number {
+export function vacationDaysIn(start: string, end: string, s: OffDays): number {
   let n = 0;
   for (const r of s.off_dates) {
     const a = r.from > start ? r.from : start;
@@ -47,6 +46,15 @@ function vacationDaysIn(start: string, end: string, s: OffDays): number {
     if (a <= b) n += daysBetween(a, b) + 1;
   }
   return n;
+}
+
+/**
+ * 마지막 방문 뒤 '안 오신 날수' — 그 사이 디자이너가 쉰 휴가는 뺀다(그동안은 오고 싶어도 못 왔다).
+ * 정기 휴무는 빼지 않는다 — 평소 방문 주기에 이미 들어 있다.
+ */
+export function awayDays(lastVisit: string, asOf: string, s: OffDays): number {
+  const d = daysBetween(lastVisit, asOf);
+  return s.off_dates.length ? d - vacationDaysIn(addDays(lastVisit, 1), asOf, s) : d;
 }
 
 /**

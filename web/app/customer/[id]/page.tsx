@@ -59,7 +59,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
             다음 예약이 잡힌 손님도 마찬가지 — 바로 아래 '다음 예약'과 서로 다른 말을 하게 된다. */}
         {!cust.churned_at && !nextBk && (overdue || due) && (
           <div className={'signal-card ' + (overdue ? 'x' : 'd')}>
-            <div className="sig-t">{SIGNAL[cust.revisit_state as string]}</div>
+            <div className="sig-t">{overdue ? SIGNAL.overdue : SIGNAL.due}</div>
             <div className="sig-w">
               {reason}
               {cust.revisit_cycle_days ? ` · 평소 ${cust.revisit_cycle_days}일 주기` : ''}

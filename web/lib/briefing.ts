@@ -1,21 +1,15 @@
 import { txKind } from './tx';
 import { friendlyService } from './service-name';
-import { addDays, dayLabel } from './week';
+import { addDays, dayLabel, daysBetween } from './week';
+import { awayDays, type OffDays } from './offdays';
+
+export { daysBetween };
 
 /**
  * 홈 '예약 브리핑' — 손님이 오기 전에 카르테를 하나씩 열지 않아도 되게, 예약마다
  * 몇 주 만인지 · 지난번에 뭘 했는지 · 무슨 얘기를 했는지 · 선불이 남았는지를 한 덩이로 묶는다.
  * 화면(app/home-view.tsx)은 여기서 만든 말을 놓기만 한다.
  */
-
-/** 'YYYY-MM-DD' 두 날짜 사이 일수(to − from). */
-export function daysBetween(from: string, to: string): number {
-  const t = (d: string) => {
-    const [y, m, dd] = d.split('-').map(Number);
-    return Date.UTC(y, m - 1, dd);
-  };
-  return Math.round((t(to) - t(from)) / 86400000);
-}
 
 /** 기간을 말로 — '10일' · '6주' · '3개월' · '2년'. 미용실에서 실제로 쓰는 단위를 따른다. */
 export function spanWords(days: number): string {
@@ -31,11 +25,13 @@ export const LATE_RATIO = 1.6;
 /**
  * '6주 만 · 평소 5주' — 지난 방문에서 이 예약일까지. 평소 주기는 방문 2회 이상이라 실제 간격이
  * 있을 때만 붙인다. late 면 화면이 눈에 띄게 칠한다(오랜만에 오시는 분은 안부부터).
+ * '몇 주 만'은 달력 그대로지만, 늦었는지는 그 사이 디자이너가 쉰 휴가를 빼고 본다(챙길 고객과 같은 기준).
  */
 export function gapLine(
   lastVisit: string | null | undefined,
   bookingDate: string,
   cycleDays: number | null | undefined,
+  off: OffDays = { off_weekdays: [], off_dates: [] },
 ): { text: string; late: boolean } | null {
   if (!lastVisit) return null;
   const gap = daysBetween(lastVisit, bookingDate);
@@ -43,7 +39,7 @@ export function gapLine(
   const cyc = cycleDays && cycleDays > 0 ? cycleDays : null;
   return {
     text: `${spanWords(gap)} 만${cyc ? ` · 평소 ${spanWords(cyc)}` : ''}`,
-    late: !!cyc && gap > cyc * LATE_RATIO,
+    late: !!cyc && awayDays(lastVisit, bookingDate, off) > cyc * LATE_RATIO,
   };
 }
 

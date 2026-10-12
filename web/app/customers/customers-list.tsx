@@ -15,7 +15,8 @@ type Row = {
   total_won: number;
   last_visit: string | null;
   first_visit: string | null;
-  state: string | null;
+  state: string | null; // 휴가를 반영한 재방문 상태(서버에서 careState)
+  cycle: number | null; // 평소 방문 주기(일)
   hasBooking: boolean;
   hasPhone: boolean;
   tail: string; // 전화번호 뒷자리 4자리(검색용) — 전체 번호는 받지 않는다
@@ -36,10 +37,12 @@ const FOLDED = ['booking', 'nophone', 'churned', 'nogender'];
 export default function CustomersList({
   rows,
   settings,
+  asOf,
   initialFilter = null,
 }: {
   rows: Row[];
   settings: TenantSettings;
+  asOf: string; // 재방문 판정의 기준일(마지막 수집일)
   initialFilter?: string | null;
 }) {
   const [q, setQ] = useState('');
@@ -114,8 +117,8 @@ export default function CustomersList({
     // '눌렀더니 인원이 다른' 불일치가 안 생긴다.
     // needsCare 는 이미 예약한 분도 뺀다 — 예약이 잡혔으면 더 챙길 대상이 아니다.
     const care = (r: Row) => needsCare(
-      { revisit_state: r.state, last_visit: r.last_visit, visit_count: r.visit_count },
-      { settings, churned: r.churned, booked: r.hasBooking },
+      { revisit_state: r.state, last_visit: r.last_visit, visit_count: r.visit_count, revisit_cycle_days: r.cycle },
+      { settings, churned: r.churned, booked: r.hasBooking, asOf },
     );
     if (chips.has('overdue')) f = f.filter((r) => r.state === 'overdue' && care(r));
     if (chips.has('due')) f = f.filter((r) => r.state === 'due' && care(r));
@@ -149,7 +152,7 @@ export default function CustomersList({
       return (b.last_visit || '').localeCompare(a.last_visit || ''); // recent
     });
     return arr;
-  }, [rows, q, chips, visitF, revF, recF, svcF, sort, settings]);
+  }, [rows, q, chips, visitF, revF, recF, svcF, sort, settings, asOf]);
 
   // 접힌 조건 중 켜진 수 — 손잡이에 보여야 '왜 목록이 줄었지'가 안 생긴다.
   const hiddenOn = FOLDED.filter((k) => chips.has(k)).length + [visitF, revF, recF, svcF].filter(Boolean).length;

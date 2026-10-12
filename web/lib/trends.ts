@@ -1,6 +1,6 @@
 import { txKind } from './tx';
 import { addDays, dowMon } from './week';
-import { daysBetween } from './briefing';
+import { daysBetween } from './week';
 import { windowEnd, workedByWeekday, type OffDays } from './offdays';
 
 export { dowMon };

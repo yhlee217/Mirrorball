@@ -11,6 +11,15 @@ import { txKind } from './tx';
 
 export type Span = { start: string; end: string };
 
+/** 'YYYY-MM-DD' 두 날짜 사이 일수(to − from). */
+export function daysBetween(from: string, to: string): number {
+  const t = (d: string) => {
+    const [y, m, dd] = d.split('-').map(Number);
+    return Date.UTC(y, m - 1, dd);
+  };
+  return Math.round((t(to) - t(from)) / 86400000);
+}
+
 /** 'YYYY-MM-DD' + n일. */
 export function addDays(date: string, n: number): string {
   const [y, m, d] = date.split('-').map(Number);

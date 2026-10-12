@@ -48,6 +48,8 @@ out({
   between: B.daysBetween('2026-09-01', '2026-10-13'),
   words: D.words.map(B.spanWords),
   gaps: D.gaps.map((g) => B.gapLine(g[0], g[1], g[2])),
+  // 7.1 → 10.13(104일)이지만 그 사이 휴가 53일(7.10~8.31) → 51일, 평소 35일의 1.6배(56) 안
+  gapVac: B.gapLine('2026-07-01', '2026-10-13', 35, { off_weekdays: [], off_dates: [{ from: '2026-07-10', to: '2026-08-31' }] }),
   tags: [B.visitTag(0), B.visitTag(null), B.visitTag(1), B.visitTag(5)],
   memo: [B.memoLines(D.pref, 2), B.memoLines(null, 2), B.memoLines('  \\n- \\n', 2)],
   recent: [B.latestRecent(D.recent), B.latestRecent('- 강아지 키움'), B.latestRecent(null)],
@@ -122,6 +124,11 @@ def test_gap_line(ts):
         None,
         None,
     ]
+
+
+def test_gap_line_late_skips_vacation(ts):
+    """'몇 주 만'은 달력 그대로, 늦었는지는 휴가를 빼고 — 챙길 고객과 같은 기준."""
+    assert ts["gapVac"] == {"text": "3개월 만 · 평소 5주", "late": False}
 
 
 def test_visit_tag(ts):

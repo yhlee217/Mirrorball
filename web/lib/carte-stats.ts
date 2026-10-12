@@ -1,6 +1,7 @@
 import { careFor } from './care-cycle';
-import { addDays } from './week';
-import { daysBetween, spanWords } from './briefing';
+import { daysBetween } from './week';
+import { spanWords } from './briefing';
+import { windowEnd, type OffDays } from './offdays';
 
 /**
  * 카르테 숫자 타일 — 머리말('N회 방문 · 누적 X')과 같은 숫자를 또 보이던 타일을, 손님 앞에서
@@ -41,6 +42,7 @@ function serviceCycle(services: (string | null)[]): { days: number; cat: string 
  *  2) 방문 2회 이상: 마지막 방문 + 평소 주기(방문 간격 중앙값 — 워커의 revisit_cycle_days).
  *  3) 1회뿐: 그날 받은 시술의 표준 주기(lib/care-cycle.ts). 실측이 아니라 추정이라 그렇게 밝힌다.
  *     (2026-10-12 실측: 방문 2회 이상은 34~52% — 나머지 절반가량이 이 경우다.)
+ * 그 사이 디자이너가 휴가를 갔으면 그만큼 늦춘다 — 그동안은 손님이 올 수 없었다(lib/offdays windowEnd).
  * overdueDays 는 예상일이 지났으면 지난 날수(아니면 0).
  */
 export function nextVisit(o: {
@@ -50,6 +52,7 @@ export function nextVisit(o: {
   cycleDays: number | null;
   lastServices: (string | null)[];
   bookedDate: string | null;
+  off?: OffDays;
 }): NextVisit {
   if (o.bookedDate) return { kind: 'booked', date: o.bookedDate };
   if (!o.lastVisit || o.visitCount < 1) return null;
@@ -66,7 +69,7 @@ export function nextVisit(o: {
     basis = s.cat ? `${s.cat} 기준 추정` : '추정';
     estimated = true;
   }
-  const date = addDays(o.lastVisit, days);
+  const date = windowEnd(o.lastVisit, days, o.off ?? { off_weekdays: [], off_dates: [] });
   return { kind: 'expected', date, basis, estimated, overdueDays: Math.max(0, daysBetween(date, o.today)) };
 }
 

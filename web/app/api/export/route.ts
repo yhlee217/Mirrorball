@@ -2,7 +2,10 @@ export const runtime = 'edge';
 
 import { supabaseServer } from '@/lib/supabase/server';
 import { unwrapDek, decryptPII } from '@/lib/crypto';
-import { fetchAllRows } from '@/lib/customers';
+import { careState, fetchAllRows } from '@/lib/customers';
+import { mergeSettings } from '@/lib/settings';
+import { lastSynced } from '@/lib/sync';
+import { kstNow } from '@/lib/kst';
 
 type Row = {
   id: string;
@@ -12,6 +15,7 @@ type Row = {
   last_visit: string | null;
   first_visit: string | null;
   revisit_state: string | null;
+  revisit_cycle_days: number | null;
 };
 
 const STATE: Record<string, string> = { overdue: '이탈위험', due: '재방문도래', new: '신규' };
@@ -29,7 +33,13 @@ export async function GET() {
   if (!mem) return new Response('no tenant', { status: 400 });
   const tid = (mem as { tenant_id: string }).tenant_id;
 
-  const { data: tenant } = await supabase.from('tenants').select('dek_wrapped').eq('id', tid).maybeSingle();
+  const [{ data: tenant }, synced] = await Promise.all([
+    supabase.from('tenants').select('dek_wrapped,settings').eq('id', tid).maybeSingle(),
+    lastSynced(supabase),
+  ]);
+  // 상태는 화면과 같은 기준 — 휴가를 반영한 재방문 상태(lib/customers careState)
+  const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
+  const asOf = synced?.date ?? kstNow().date;
   let dek: Uint8Array | null = null;
   const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
   if (dw) {
@@ -43,7 +53,7 @@ export async function GET() {
   const rows = await fetchAllRows<Row>((from, to) =>
     supabase
       .from('customers')
-      .select('id,pii_enc,visit_count,total_won,last_visit,first_visit,revisit_state')
+      .select('id,pii_enc,visit_count,total_won,last_visit,first_visit,revisit_state,revisit_cycle_days')
       .order('id')
       .range(from, to),
   );
@@ -62,7 +72,7 @@ export async function GET() {
       }
     }
     lines.push(
-      [q(name), q(phone), r.visit_count, r.total_won || 0, q(r.first_visit), q(r.last_visit), q(STATE[r.revisit_state ?? ''] ?? '')].join(','),
+      [q(name), q(phone), r.visit_count, r.total_won || 0, q(r.first_visit), q(r.last_visit), q(STATE[careState(r, settings, asOf) ?? ''] ?? '')].join(','),
     );
   }
 

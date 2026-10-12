@@ -52,37 +52,92 @@ def is_active_booking(b: dict, now: dt.datetime) -> bool:
     return not t or t >= now.strftime("%H:%M")
 
 
+def _day(v) -> dt.date | None:
+    try:
+        return dt.date.fromisoformat(v) if isinstance(v, str) and len(v) == 10 else None
+    except ValueError:
+        return None
+
+
+def off_dates(raw) -> list[tuple[dt.date, dt.date]]:
+    """web/lib/settings.ts cleanOffDates — 올바른 날짜만, 거꾸로면 뒤집고, 겹치거나 맞닿으면 합친다."""
+    rs = []
+    for r in raw if isinstance(raw, list) else []:
+        a, b = (_day(r.get("from")), _day(r.get("to"))) if isinstance(r, dict) else (None, None)
+        if a and b:
+            rs.append((min(a, b), max(a, b)))
+    out: list[list[dt.date]] = []
+    for a, b in sorted(rs):
+        if out and a <= out[-1][1] + dt.timedelta(days=1):
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return [(a, b) for a, b in out][-60:]
+
+
 def lapse_settings(raw) -> dict:
     s = dict(LAPSE_DEFAULTS)
     if isinstance(raw, dict):
-        for k in s:
+        for k in LAPSE_DEFAULTS:
             v = raw.get(k)
             if isinstance(v, (int, float)) and v > 0:
                 s[k] = v
+    s["off_dates"] = off_dates(raw.get("off_dates") if isinstance(raw, dict) else None)
     return s
 
 
+def away_days(last_visit: str, as_of: dt.date, s: dict) -> int:
+    """web/lib/offdays.ts awayDays — 마지막 방문 뒤 안 오신 날수, 그 사이 디자이너의 휴가는 뺀다."""
+    last = dt.date.fromisoformat(last_visit[:10])
+    days = (as_of - last).days
+    start = last + dt.timedelta(days=1)
+    for a, b in s.get("off_dates") or []:
+        lo, hi = max(a, start), min(b, as_of)
+        if lo <= hi:
+            days -= (hi - lo).days + 1
+    return days
+
+
+def care_state(c: dict, s: dict, as_of: dt.date):
+    """web/lib/customers.ts careState — 워커의 재방문 판정을 휴가 일수만큼 늦춘다(앞당기지는 않는다)."""
+    raw = c.get("revisit_state")
+    if raw not in ("due", "overdue") or not c.get("last_visit") or not s.get("off_dates"):
+        return raw
+    away = away_days(c["last_visit"], as_of, s)
+    cyc = c.get("revisit_cycle_days") or 42
+    adj = "overdue" if away > cyc * 1.6 else "due" if away >= cyc else None
+    if adj is None:
+        return None
+    rank = {"due": 1, "overdue": 2}
+    return adj if rank[adj] < rank[raw] else raw
+
+
 def is_lapsed(c: dict, s: dict, today: dt.date) -> bool:
-    """web/lib/settings.ts isLapsed — N개월 초과 미방문, 또는 M개월 초과이면서 방문 K회 미만."""
+    """web/lib/settings.ts isLapsed — N개월 초과 미방문, 또는 M개월 초과이면서 방문 K회 미만(휴가는 뺀다)."""
     if not c.get("last_visit"):
         return True
-    days = (today - dt.date.fromisoformat(c["last_visit"][:10])).days
+    days = away_days(c["last_visit"], today, s)
     return days > s["lapsed_months"] * 30 or (
         days > s["lapsed_soft_months"] * 30 and (c.get("visit_count") or 0) < s["lapsed_soft_visits"])
 
 
-def needs_care(c: dict, s: dict, today: dt.date, booked: bool) -> bool:
-    """web/lib/customers.ts needsCare — 이탈 표시·이미 예약·설정의 이탈 판정이면 챙길 고객이 아니다."""
+def needs_care(c: dict, s: dict, today: dt.date, booked: bool, as_of: dt.date | None = None) -> bool:
+    """web/lib/customers.ts needsCare — 이탈 표시·이미 예약·설정의 이탈 판정이면 챙길 고객이 아니다.
+
+    재방문 상태는 휴가를 반영한 것(care_state). as_of 는 워커가 판정한 날(앱은 마지막 수집일) —
+    이 스크립트는 수집 직후에 돌리므로 기본값은 오늘이다.
+    """
     if c.get("churned_at") or booked:
         return False
-    if c.get("revisit_state") not in ("overdue", "due"):
+    if care_state(c, s, as_of or today) not in ("overdue", "due"):
         return False
     return not is_lapsed(c, s, today)
 
 
-def on_care_list(c: dict, s: dict, today: dt.date, booked: bool, contacted: bool) -> bool:
+def on_care_list(c: dict, s: dict, today: dt.date, booked: bool, contacted: bool,
+                 as_of: dt.date | None = None) -> bool:
     """web/lib/customers.ts onCareList — 할 일(챙길 고객 탭)은 최근 연락한 분도 뺀다."""
-    return not contacted and needs_care(c, s, today, booked)
+    return not contacted and needs_care(c, s, today, booked, as_of)
 
 
 def last_n_months(today: dt.date, n: int) -> list[str]:
