@@ -33,10 +33,3 @@ export async function lastSynced(
 export function isSyncStale(s: { daysAgo: number } | null): boolean {
   return !!s && s.daysAgo >= 8;
 }
-
-/** '8월 30일 수집 기준 · 3일 전' — 화면 상단에 한 줄로 붙이는 표기. */
-export function syncLine(s: { label: string; daysAgo: number } | null): string | null {
-  if (!s) return null;
-  const when = s.daysAgo === 0 ? '오늘 갱신' : `${s.daysAgo}일 전`;
-  return `${s.label} 수집 기준 · ${when}${isSyncStale(s) ? ' · 수집이 밀렸어요' : ''}`;
-}

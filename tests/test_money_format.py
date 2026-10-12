@@ -19,7 +19,7 @@ RANGES = [[21_800_000, 23_900_000], [98_000_000, 110_000_000], [5000, 8000], [80
 def ts():
     got = run_ts(["lib/format.ts"], "const F = require('./format.js');\n"
                  "out({ won: D.won.map(F.won), price: D.price.map(F.price),"
-                 " range: D.range.map((r) => F.wonRange(r[0], r[1])) });\n",
+                 " range: D.range.map((r) => F.manRange(r[0], r[1])) });\n",
                  {"won": WON, "price": PRICE, "range": RANGES})
     if got is None:
         pytest.skip("node/npx 또는 web/node_modules 가 없다 — TS 실행 생략")
@@ -36,4 +36,5 @@ def test_price_keeps_one_decimal_under_100k(ts):
 
 
 def test_range_shares_the_unit(ts):
-    assert ts["range"] == ["2,180~2,390만원", "9,800만원~1.1억원", "5,000~8,000원", "8,000원~3만원"]
+    # 목록용 짧은 표기(man)와 같이 '원'은 만원 아래에서만
+    assert ts["range"] == ["2,180~2,390만", "9,800만~1.1억", "5,000~8,000원", "8,000원~3만"]

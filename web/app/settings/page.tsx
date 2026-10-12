@@ -6,9 +6,11 @@ import { openDek, requireTenant } from '@/lib/tenant';
 import { mergeSettings } from '@/lib/settings';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { decryptPII } from '@/lib/crypto';
+import { dayLabel } from '@/lib/week';
 import SettingsForm from './settings-form';
 import ChurnedList from './churned-list';
 import LogoutButton from '../logout-button';
+import { Help } from '@/components/help';
 
 export default async function SettingsPage() {
   const { supabase, user, tenantId } = await requireTenant();
@@ -99,30 +101,30 @@ export default async function SettingsPage() {
         />
 
         <div className="card">
-          <div className="ch">이탈 고객 {churnedRows.length > 0 ? `· ${churnedRows.length}명` : ''}</div>
+          <div className="ch">이탈 고객{churnedRows.length > 0 ? <span className="ch-n"> {churnedRows.length}명</span> : null}</div>
+          <Help inset>
+            카르테에서 직접 이탈로 표시한 고객이에요. 챙길 고객·홈 신호에서 빠져 있고, 이력과 매출은 그대로 남아 있어요.
+          </Help>
           <ChurnedList rows={churnedRows} />
-          <p className="note" style={{ padding: '0 15px 13px' }}>
-            직접 이탈로 표시한 고객이에요. 챙길 고객·홈 신호에서 빠져 있고, 이력과 매출은 그대로 남아 있어요.
-          </p>
         </div>
 
         <div className="card" style={{ padding: '14px 15px' }}>
           <div className="ch" style={{ padding: 0, marginBottom: 8 }}>데이터 수집</div>
-          <div className="set-row">고객 {count ?? 0}명 수집됨 · 최근 방문기록 {lastDate ?? '-'}</div>
-          <p className="note">
-            수집은 매장 PC(맥)에서 <b>매주 일요일 1회</b> 자동 실행됩니다. 그래서 화면은 마지막 수집 시점 기준이고,
-            그 뒤에 생긴 방문·예약은 다음 주에 반영돼요. 재연결이 필요하면 관리자에게 문의하세요.
-          </p>
+          <Help>
+            수집은 매장 PC(맥)에서 매주 일요일 1회 자동으로 돌아요. 그래서 화면은 마지막 수집 기준이고, 그 뒤에 생긴 방문·예약은
+            다음 주에 들어와요. 재연결이 필요하면 관리자에게 문의하세요.
+          </Help>
+          <div className="set-row">고객 {(count ?? 0).toLocaleString()}명 · 최근 방문 {lastDate ? dayLabel(lastDate) : '-'}</div>
         </div>
 
         <div className="card" style={{ padding: '14px 15px' }}>
           <div className="ch" style={{ padding: 0, marginBottom: 8 }}>계정 · 데이터</div>
+          <Help>데이터 삭제·탈퇴는 관리자에게 문의해 주세요(되돌릴 수 없어요).</Help>
           <div className="set-row" style={{ marginBottom: 10 }}>{user.email}</div>
           <a className="btn ghost" href="/api/export" style={{ display: 'block', textAlign: 'center', marginBottom: 10 }}>
             고객 CSV 내보내기
           </a>
           <LogoutButton />
-          <p className="note">데이터 삭제·탈퇴는 관리자에게 문의해 주세요(되돌릴 수 없습니다).</p>
         </div>
       </div>
     </main>

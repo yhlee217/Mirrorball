@@ -20,6 +20,27 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((t(to) - t(from)) / 86400000);
 }
 
+/** 기간을 말로 — '10일' · '6주' · '3개월' · '2년'. 미용실에서 실제로 쓰는 단위를 따른다. */
+export function spanWords(days: number): string {
+  if (days < 14) return `${days}일`;
+  if (days < 70) return `${Math.round(days / 7)}주`;
+  if (days < 730) return `${Math.round(days / 30)}개월`;
+  return `${Math.floor(days / 365)}년`;
+}
+
+/** '오늘' · '어제' · '10일 전' · '3주 전' · '4개월 전' — 목록의 날짜는 사람 말로(UX 계획 v3 원칙 3). */
+export function agoWords(days: number): string {
+  if (days <= 0) return '오늘';
+  if (days === 1) return '어제';
+  return `${spanWords(days)} 전`;
+}
+
+/** '10.20' — 요일 없이 짧게(추정 날짜·기준 표시). 요일까지는 dayLabel. */
+export function shortDate(date: string): string {
+  const [, m, d] = date.split('-').map(Number);
+  return `${m}.${d}`;
+}
+
 /** 'YYYY-MM-DD' + n일. */
 export function addDays(date: string, n: number): string {
   const [y, m, d] = date.split('-').map(Number);

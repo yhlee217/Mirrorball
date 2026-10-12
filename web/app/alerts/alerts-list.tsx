@@ -3,10 +3,14 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Empty } from '@/components/empty';
+import { Help } from '@/components/help';
 import { MSG } from '@/lib/copy';
 import { smsHref, telHref, type ContactVia } from '@/lib/contact';
 
-type Item = { id: string; name: string; phone: string | null; state: string; why: string; draft: string };
+// why = 한 줄 사유('2개월째 · 평소 5주 · 뿌리염색'), note = 펼친 곳의 한 줄(마지막 방문일·휴가)
+type Item = { id: string; name: string; phone: string | null; state: string; why: string; note: string; draft: string };
+
+const STATE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래' };
 
 export default function AlertsList({ items, quiet, quietDays }: { items: Item[]; quiet: number; quietDays: number }) {
   const router = useRouter();
@@ -15,6 +19,8 @@ export default function AlertsList({ items, quiet, quietDays }: { items: Item[];
   // 방금 연락한 카드 — 바로 지우면 '내가 뭘 눌렀는지'가 사라진다. 화면엔 남겨 표시만 바꾸고,
   // 다음에 열 때 목록에서 빠진다(onCareList). 문자 보낸 뒤 전화도 걸 수 있게 버튼은 그대로 둔다.
   const [done, setDone] = useState<Record<string, true>>({});
+  // 펼친 줄 — 문구·복사·카르테·이탈 처리는 펼쳤을 때만(첫 화면에 여러 분이 들어오게, UX 계획 v3)
+  const [open, setOpen] = useState<string | null>(null);
 
   const flash = (m: string) => {
     setToast(m);
@@ -104,72 +110,78 @@ export default function AlertsList({ items, quiet, quietDays }: { items: Item[];
   }
 
   // 다 연락해서 빈 것과, 정말 챙길 분이 없는 것은 다른 말이다
-  const quietNote = `최근 ${quietDays}일 안에 연락한 ${quiet}명은 빠져 있어요. 그 뒤에도 안 오시면 다시 올라와요.`;
+  const quietNote = `최근 ${quietDays}일 안에 연락한 분은 잠시 빠져요. 그 뒤에도 안 오시면 다시 올라와요.`;
   if (!items.length)
     return quiet ? (
-      <Empty title="지금 연락할 분은 다 연락했어요" hint={quietNote} action={<Link href="/visits">최근 다녀가신 분 보기 ›</Link>} />
+      <Empty title="다 연락했어요" hint={`연락한 ${quiet}명은 ${quietDays}일 동안 숨겨져요.`} action={<Link href="/visits">최근 방문 보기 ›</Link>} />
     ) : (
-      <Empty
-        title="지금 챙길 고객이 없어요"
-        hint="재방문 시기가 지난 분이 없다는 뜻이에요. 시기가 된 분이 생기면 여기에 먼저 올라와요."
-        action={<Link href="/visits">최근 다녀가신 분 보기 ›</Link>}
-      />
+      <Empty title="챙길 고객이 없어요" hint="재방문 시기가 된 분이 생기면 여기에 올라와요." action={<Link href="/visits">최근 방문 보기 ›</Link>} />
     );
 
   return (
     <>
-      {quiet > 0 && <p className="note" style={{ marginTop: -2, marginBottom: 10 }}>{quietNote}</p>}
-      {items.map((it) => (
-        <div className={'care' + (done[it.id] ? ' done' : '')} key={it.id}>
-          <div className="hd">
-            <span className={'tag ' + (it.state === 'overdue' ? 'rose' : 'gold')}>
-              {it.state === 'overdue' ? '이탈 위험' : '재방문 도래'}
-            </span>
-            <span className="cnm">{it.name} 님</span>
-          </div>
-          <div className="why">{it.why}</div>
-          <div className="draft">
-            <div className="lab">추천 문구</div>
-            {it.draft}
-          </div>
-          {done[it.id] ? (
-            <div className="contacted">
-              ✓ 연락함 · {quietDays}일 동안 목록에서 빠져요
-              <button type="button" className="undo" onClick={() => undoContacted(it.id)}>되돌리기</button>
-            </div>
-          ) : null}
-          {/* 연락이 이 화면의 일이다 — 문구를 복사해 다른 앱에서 손님을 찾던 단계를 없앤다.
-              번호가 없으면 복사만(카톡 등으로 직접). */}
-          <div className="row2">
-            {it.phone ? (
-              <>
-                <a className="btn" href={smsHref(it.phone, it.draft)} onClick={() => markContacted(it.id, 'sms')}>
-                  💬 문자
-                </a>
-                <a className="btn ghost" href={telHref(it.phone)} onClick={() => markContacted(it.id, 'call')}>
-                  📞 전화
-                </a>
-              </>
-            ) : null}
-            <button
-              type="button"
-              className={'btn' + (it.phone ? ' ghost' : '')}
-              onClick={() => {
-                copy(it.draft);
-                markContacted(it.id, 'copy');
-              }}
-            >
-              📋 복사
-            </button>
-          </div>
-          <div className="acts2">
-            <Link href={`/customer/${it.id}`}>고객 보기</Link>
-            <button type="button" onClick={() => markChurned(it.id, it.name)} disabled={busy === it.id}>
-              {busy === it.id ? '처리 중…' : '이탈 처리'}
-            </button>
-          </div>
+      {quiet > 0 && (
+        <div className="crow-q">
+          연락한 {quiet}명 숨김<Help inline>{quietNote}</Help>
         </div>
-      ))}
+      )}
+      <div className="card">
+        {items.map((it) => {
+          const isOpen = open === it.id;
+          const sent = !!done[it.id];
+          return (
+            <div className={'crow' + (sent ? ' done' : '') + (isOpen ? ' open' : '')} key={it.id}>
+              <div className="crow-r">
+                <button type="button" className="crow-m" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : it.id)}>
+                  <span className="crow-n">
+                    <b>{it.name}</b>
+                    <span className={'ctag ' + it.state}>{STATE[it.state] ?? ''}</span>
+                  </span>
+                  <span className="crow-w">{sent ? '✓ 연락함' : it.why}</span>
+                </button>
+                {/* 연락이 이 화면의 일이다 — 문자는 문구가 채워진 채로 열린다. 번호가 없으면 복사만. */}
+                <div className="crow-a">
+                  {it.phone ? (
+                    <>
+                      <a className="cbtn main" href={smsHref(it.phone, it.draft)} onClick={() => markContacted(it.id, 'sms')}>
+                        💬 문자
+                      </a>
+                      <a className="cbtn" href={telHref(it.phone)} aria-label="전화" onClick={() => markContacted(it.id, 'call')}>
+                        📞
+                      </a>
+                    </>
+                  ) : (
+                    <button type="button" className="cbtn main" onClick={() => { copy(it.draft); markContacted(it.id, 'copy'); }}>
+                      📋 복사
+                    </button>
+                  )}
+                </div>
+              </div>
+              {isOpen ? (
+                <div className="crow-x">
+                  <div className="draft">{it.draft}</div>
+                  {it.note ? <div className="crow-note">{it.note}</div> : null}
+                  <div className="crow-acts">
+                    {it.phone ? (
+                      <button type="button" onClick={() => { copy(it.draft); markContacted(it.id, 'copy'); }}>
+                        문구 복사
+                      </button>
+                    ) : null}
+                    <Link href={`/customer/${it.id}`}>카르테</Link>
+                    {sent ? (
+                      <button type="button" onClick={() => undoContacted(it.id)}>연락 되돌리기</button>
+                    ) : (
+                      <button type="button" onClick={() => markChurned(it.id, it.name)} disabled={busy === it.id}>
+                        {busy === it.id ? '처리 중…' : '이탈 처리'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
       {toast && <div className="toast">{toast}</div>}
     </>
   );

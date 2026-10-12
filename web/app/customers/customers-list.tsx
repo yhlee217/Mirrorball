@@ -1,11 +1,13 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { won } from '@/lib/format';
+import { man } from '@/lib/format';
+import { agoWords, daysBetween } from '@/lib/week';
 import Link from 'next/link';
 import { isVip as isVipS, type TenantSettings } from '@/lib/settings';
 import { needsCare } from '@/lib/customers';
 import { matchesQuery } from '@/lib/contact';
 import { Empty } from '@/components/empty';
+import { Help } from '@/components/help';
 import { MSG } from '@/lib/copy';
 
 type Row = {
@@ -28,9 +30,6 @@ type Row = {
   services: string[];
 };
 
-const DAY = 86400000;
-const daysSince = (d: string | null) => (d ? Math.floor((Date.now() - new Date(d).getTime()) / DAY) : Infinity);
-
 // '필터' 안에 접어 두는 칩. 늘 보이는 건 홈 타일과 같은 넷(이탈위험·재방문도래·신규·VIP)뿐이다.
 const FOLDED = ['booking', 'nophone', 'churned', 'nogender'];
 
@@ -38,13 +37,16 @@ export default function CustomersList({
   rows,
   settings,
   asOf,
+  today,
   initialFilter = null,
 }: {
   rows: Row[];
   settings: TenantSettings;
   asOf: string; // 재방문 판정의 기준일(마지막 수집일)
+  today: string; // KST — '3주 전'과 방문시기 필터의 기준
   initialFilter?: string | null;
 }) {
+  const daysSince = (d: string | null) => (d ? daysBetween(d, today) : Infinity);
   const [q, setQ] = useState('');
   // 홈 신호 타일(이탈위험/재방문도래/신규/VIP 등)에서 넘어온 초기 필터를 켠 상태로 시작.
   const [chips, setChips] = useState<Set<string>>(() => new Set(initialFilter ? [initialFilter] : []));
@@ -152,7 +154,7 @@ export default function CustomersList({
       return (b.last_visit || '').localeCompare(a.last_visit || ''); // recent
     });
     return arr;
-  }, [rows, q, chips, visitF, revF, recF, svcF, sort, settings, asOf]);
+  }, [rows, q, chips, visitF, revF, recF, svcF, sort, settings, asOf, today]);
 
   // 접힌 조건 중 켜진 수 — 손잡이에 보여야 '왜 목록이 줄었지'가 안 생긴다.
   const hiddenOn = FOLDED.filter((k) => chips.has(k)).length + [visitF, revF, recF, svcF].filter(Boolean).length;
@@ -165,20 +167,9 @@ export default function CustomersList({
 
   return (
     <>
-      <input className="search" placeholder="이름 또는 전화번호 뒷자리" value={q} onChange={(e) => setQ(e.target.value)} />
-
-      {/* 늘 보이는 건 자주 쓰는 넷. 나머지 조건 13개 중 9개는 '필터' 안에 접는다 — 폰 화면 절반이 필터였다. */}
-      <div className="fchips">
-        <Chip k="overdue" label="이탈위험" />
-        <Chip k="due" label="재방문도래" />
-        <Chip k="new" label="신규" />
-        <Chip k="vip" label="VIP" />
-      </div>
-
-      <div className="fbar">
-        <button type="button" className={'fchip' + (hiddenOn ? ' on' : '')} aria-expanded={more} onClick={() => setMore((m) => !m)}>
-          필터{hiddenOn ? ` ${hiddenOn}` : ''} {more ? '▴' : '▾'}
-        </button>
+      {/* 찾기·정렬 한 줄, 조건 한 줄 — 손잡이가 세 줄이던 것을 두 줄로(첫 화면에 손님 10명) */}
+      <div className="sbar">
+        <input className="search" placeholder="이름 · 전화 뒷자리" aria-label="이름 또는 전화번호 뒷자리로 찾기" value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="정렬">
           <option value="recent">최근 방문순</option>
           <option value="revenue">매출순</option>
@@ -187,6 +178,17 @@ export default function CustomersList({
           <option value="new">신규 유입순</option>
           <option value="name">이름순</option>
         </select>
+      </div>
+
+      {/* 늘 보이는 건 자주 쓰는 넷. 나머지 조건 13개 중 9개는 '필터' 안에 접는다 — 폰 화면 절반이 필터였다. */}
+      <div className="fchips">
+        <Chip k="overdue" label="이탈위험" />
+        <Chip k="due" label="재방문도래" />
+        <Chip k="new" label="신규" />
+        <Chip k="vip" label="VIP" />
+        <button type="button" className={'fchip' + (hiddenOn ? ' on' : '')} aria-expanded={more} onClick={() => setMore((m) => !m)}>
+          필터{hiddenOn ? ` ${hiddenOn}` : ''} {more ? '▴' : '▾'}
+        </button>
       </div>
 
       {more ? (
@@ -230,13 +232,18 @@ export default function CustomersList({
         </div>
       ) : null}
 
-      {sweeping ? (
-        <p className="sweep-hint">
-          시술명으로 성별을 알 수 없는 고객이에요. 아는 분만 눌러서 채워주세요 —
-          통계에 바로 반영됩니다. <b>방문순</b>으로 정렬하면 자주 오시는 분부터 나와요.
-        </p>
+      {/* 거른 수는 걸렀을 때만 — 안 걸렀으면 위 제목의 '고객 N명'과 같은 숫자다 */}
+      {narrowed ? (
+        <div className="sect-h list-n">
+          {filtered.length.toLocaleString()}명{sweeping ? ' 남음' : ''}
+          {sweeping ? (
+            <Help inline>
+              시술명으로 성별을 알 수 없는 분들이에요. 아는 분만 눌러 채우면 통계에 바로 반영돼요.
+              방문순으로 정렬하면 자주 오시는 분부터 나와요.
+            </Help>
+          ) : null}
+        </div>
       ) : null}
-      <div className="sec-h">{filtered.length}명{sweeping ? ' 남음' : ''}</div>
       <div className="card">
         {filtered.length ? (
           filtered.map((r) => {
@@ -245,18 +252,16 @@ export default function CustomersList({
                 <div className="av">{r.name.charAt(0)}</div>
                 <div className="bd">
                   <div className="nm">
-                    {r.name} 님{vip(r) ? <span className="tag-vip">VIP</span> : null}
+                    {r.name}
+                    {vip(r) ? <span className="tag-vip">VIP</span> : null}
                     {r.churned ? <span className="tag-off">이탈</span> : null}
                   </div>
                   <div className="sub">
-                    {r.visit_count}회 · {won(r.total_won)}{r.last_visit ? ' · 마지막 ' + r.last_visit : ''}
+                    {r.visit_count}회 · {man(r.total_won)}
+                    {r.last_visit ? ' · ' + agoWords(daysBetween(r.last_visit, today)) : ''}
                   </div>
                 </div>
-                <div className="rt">
-                  {/* 이탈로 확정한 고객에게 '이탈 위험'(=아직 붙잡을 수 있다) 추정을 띄우지 않는다 */}
-                  {/* 예약이 잡혔으면 '이탈 위험'보다 '예약 있음'이 지금의 사실이다 */}
-                  {r.churned ? '' : r.hasBooking ? '예약 있음' : r.state === 'overdue' ? '이탈 위험' : r.state === 'due' ? '재방문 도래' : ''}
-                </div>
+                <StateTag r={r} />
               </Link>
             );
             // 성별 채우는 중이 아니면 평소 목록 그대로 — 버튼을 늘 달아두면 지저분해진다.
@@ -284,23 +289,30 @@ export default function CustomersList({
         ) : sweeping ? (
           // 훑기를 끝낸 자리 — '없다'가 아니라 '다 채웠다'는 뜻이라 문구가 달라야 한다.
           <Empty
-            title="성별 미상 고객이 남지 않았어요"
-            hint="아는 분을 다 채우셨어요. 통계의 성별 비교가 그만큼 정확해졌어요."
-            action={<Link href="/stats">통계에서 확인하기 ›</Link>}
+            title="성별 미상 고객을 다 채웠어요"
+            action={<Link href="/stats">통계 보기 ›</Link>}
           />
         ) : narrowed ? (
           <Empty
-            title="조건에 맞는 고객이 없어요"
-            hint={`고객 ${rows.length}명 중 지금 조건에 걸리는 분이 없어요.`}
+            title="조건에 맞는 고객 없음"
             action={<button type="button" onClick={clearFilters}>필터 지우기</button>}
           />
         ) : (
-          <Empty
-            title="아직 고객이 없어요"
-            hint="주 1회 수집이라, 첫 수집이 끝나면 여기에 고객이 채워져요."
-          />
+          <Empty title="아직 고객이 없어요" hint="첫 수집이 끝나면 채워져요." />
         )}
       </div>
     </>
   );
+}
+
+/**
+ * 줄 오른쪽 상태 뱃지 — 지금의 사실 하나만. 이탈로 확정한 분에게 '이탈 위험'(아직 붙잡을 수 있다)을
+ * 띄우지 않고, 예약이 잡혔으면 '이탈 위험'보다 '예약 있음'이 지금의 사실이다.
+ */
+function StateTag({ r }: { r: Row }) {
+  if (r.churned) return null;
+  if (r.hasBooking) return <span className="ctag booked">예약 있음</span>;
+  if (r.state === 'overdue') return <span className="ctag overdue">이탈 위험</span>;
+  if (r.state === 'due') return <span className="ctag due">재방문 도래</span>;
+  return null;
 }

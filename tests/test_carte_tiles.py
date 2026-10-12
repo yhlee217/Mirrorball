@@ -41,9 +41,21 @@ NEXT = [
 ]
 RANKS = [[0, 1000], [49, 1000], [50, 1000], [6, 100], [999, 1000], [0, 0], [5, 5], [-1, 10]]
 
+# 선불 원장 — 충전 전 시술(s0), 잔액에서 뺀 시술(s1 전부 · s2 일부), 바닥난 뒤(s3), 사비로 고친 줄(s4)
+LEDGER = [
+    {"id": "s0", "date": "2026-01-05", "amount": 50000, "kind": "service"},
+    {"id": "c1", "date": "2026-02-01", "amount": 100000, "kind": "charge"},
+    {"id": "s4", "date": "2026-02-10", "amount": 30000, "kind": "service", "pocket": True},
+    {"id": "s1", "date": "2026-03-01", "amount": 60000, "kind": "service"},
+    {"id": "s2", "date": "2026-04-01", "amount": 60000, "kind": "service"},
+    {"id": "s3", "date": "2026-05-01", "amount": 60000, "kind": "service"},
+]
+
 SCRIPT = """
 const S = require('./carte-stats.js');
+const T = require('./tx.js');
 out({
+  book: T.ledger(D.ledger),
   ago: [0, 1, 5, 23, 100].map(S.agoWords),
   short: S.shortDate('2026-10-20'),
   next: D.next.map(S.nextVisit),
@@ -54,7 +66,7 @@ out({
 
 @pytest.fixture(scope="module")
 def ts():
-    got = run_ts(["lib/carte-stats.ts"], SCRIPT, {"next": NEXT, "ranks": RANKS})
+    got = run_ts(["lib/carte-stats.ts", "lib/tx.ts"], SCRIPT, {"next": NEXT, "ranks": RANKS, "ledger": LEDGER})
     if got is None:
         pytest.skip("node/npx 또는 web/node_modules 가 없다 — TS 실행 생략")
     return got
@@ -108,3 +120,10 @@ def test_next_visit_waits_out_vacation(ts):
 def test_rank_percent(ts):
     """1등도 1%, 경계는 올림, 6/100 같은 값이 부동소수 오차로 한 칸 밀리지 않는다."""
     assert ts["ranks"] == [1, 5, 6, 7, 100, None, None, None]
+
+
+def test_ledger_marks_rows_drawn_from_balance(ts):
+    """'사비 결제' 손잡이는 잔액에서 뺀 줄에만 단다 — 충전 전·바닥난 뒤·이미 사비인 줄은 빠진다."""
+    b = ts["book"]
+    assert b["drew"] == ["s1", "s2"]
+    assert (b["balance"], b["covered"]) == (0, 100000)

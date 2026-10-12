@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { requireUser, getTenantId, openDek, nameReader } from '@/lib/tenant';
 import { careState, fetchAllRows, isRealCustomer, isChurned, needsCare, onCareList } from '@/lib/customers';
-import { mergeSettings, isVip } from '@/lib/settings';
+import { mergeSettings } from '@/lib/settings';
 import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
 import { bookedCustomerIds, isCancelled } from '@/lib/bookings';
 import { recentlyContactedIds } from '@/lib/contact';
@@ -93,17 +93,13 @@ export default async function Page() {
   const isTodo = (c: Cust) =>
     onCareList(c, { settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id), asOf });
 
-  const signals = { overdue: 0, due: 0, new: 0, vip: 0 };
+  // 홈에는 이탈위험·재방문도래만 — 신규·VIP 는 고객 목록 칩에 있다(UX 계획 v3: 숫자 띠 하나로).
+  const signals = { overdue: 0, due: 0 };
   for (const c of cust) {
     if (!isRealCustomer(c.ext_id)) continue; // '손님' 등 미식별 워크인 집계는 관리대상 제외
     if (isChurned(c)) continue; // 디자이너가 직접 이탈로 표시 — 모든 신호에서 제외
     const st = careState(c, settings, asOf);
-    if (st === 'overdue' || st === 'due') {
-      if (isCareTarget(c)) signals[st]++;
-    } else if (c.revisit_state === 'new') {
-      signals.new++;
-    }
-    if (isVip(c, settings)) signals.vip++;
+    if ((st === 'overdue' || st === 'due') && isCareTarget(c)) signals[st]++;
   }
   const real = cust.filter((c) => isRealCustomer(c.ext_id));
   const careCount = real.filter(isTodo).length;

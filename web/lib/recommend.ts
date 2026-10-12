@@ -182,7 +182,7 @@ const dueRec = (d: Due, ref: string): Rec => ({
   kind: 'due',
   label: d.cat,
   reason: `마지막 ${spanWords(daysBetween(d.last, ref))} 전 · ${
-    d.personal ? `이 손님은 보통 ${spanWords(d.cycle)}마다` : `${d.cat} 표준 ${spanWords(d.cycle)}`
+    d.personal ? `보통 ${spanWords(d.cycle)}마다` : `표준 ${spanWords(d.cycle)}`
   }`,
   short: `마지막 ${spanWords(daysBetween(d.last, ref))} 전`,
 });
@@ -190,7 +190,7 @@ const dueRec = (d: Due, ref: string): Rec => ({
 const crossRec = (c: Cross): Rec => ({
   kind: 'cross',
   label: c.label,
-  reason: `이 매장 ${c.from} 손님의 ${Math.round(c.share * 100)}%가 ${c.fam}도 받아요${c.label !== c.fam ? ` · 주로 ${c.label}` : ''}`,
+  reason: `${c.from} 손님 ${Math.round(c.share * 100)}%가 ${c.fam}도 받아요${c.label !== c.fam ? ` · 주로 ${c.label}` : ''}`,
   short: `${c.from} 손님 ${Math.round(c.share * 100)}%가 함께`,
 });
 

@@ -47,10 +47,6 @@ type Cust = {
 type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null; kind: string | null; paid_out_of_pocket: boolean | null };
 type Bk = { date: string; time: string | null; service: string | null; note: string | null; status: string | null };
 
-function monthsAgo(d: string | null): number | null {
-  if (!d) return null;
-  return Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000));
-}
 
 export type Carte = Awaited<ReturnType<typeof loadCarte>>;
 
@@ -162,6 +158,9 @@ export async function loadCarte(id: string) {
   );
   const chargedTotal = book.charged;
   const balance = book.balance;
+  // '사비 결제' 손잡이는 잔액에서 뺀 줄과 이미 사비로 표시한 줄에만 — 충전 전·잔액이 바닥난 뒤의
+  // 시술은 어차피 사비로 셈해 손잡이가 할 일이 없는데, 줄마다 달리면 이력이 버튼으로 덮인다.
+  const pocketIds = [...book.drew, ...history.filter((h) => h.paid_out_of_pocket).map((h) => h.id)];
 
   // 매장 메모를 따로 모아 보여주던 카드는 없앴다 — 아래 '시술 이력'이 같은 메모를 방문마다
   // 이미 달고 있어 화면에 두 번 나왔다. 메모는 어느 시술 때 적힌 것인지가 중요하므로
@@ -182,10 +181,8 @@ export async function loadCarte(id: string) {
   const state = careState(cust, settings, asOf);
   const overdue = state === 'overdue';
   const due = state === 'due';
+  // 마지막 방문 뒤 디자이너 휴가 일수 — 재방문 판정에서 뺀 날(띠의 ? 에 밝힌다)
   const vac = cust.last_visit ? daysBetween(cust.last_visit, asOf) - awayDays(cust.last_visit, asOf, settings) : 0;
-  const reason =
-    (overdue && cust.last_visit ? `${monthsAgo(cust.last_visit)}개월 미방문` : due ? '재방문 시기예요' : '') +
-    ((overdue || due) && vac > 0 ? ` · 휴가 ${vac}일은 빼고 셈` : '');
 
   // 숫자 타일 — 머리말과 겹치지 않게 '마지막 방문 · 다음 방문 · 잔액(객단가) · 매출 순위'.
   // 순위 조회가 실패하면(count 없음) 타일만 '-'로 두고 화면은 그대로 뜬다.
@@ -209,9 +206,9 @@ export async function loadCarte(id: string) {
   return {
     cust, name, settings, vip, avg,
     history, charges, others,
-    chargedTotal, balance,
+    chargedTotal, balance, pocketIds,
     familyList, nextBk, topSvc,
-    overdue, due, reason,
+    overdue, due, vac, today,
     sinceLast, next, top, recs,
   };
 }

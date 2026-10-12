@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MSG } from '@/lib/copy';
+import { Help } from '@/components/help';
 import { isVip, isLapsed, cleanOffDates, type TenantSettings } from '@/lib/settings';
 import { dayLabel } from '@/lib/week';
 
@@ -151,7 +152,10 @@ export default function SettingsForm({
 
       <div className="card" style={{ padding: '14px 15px' }}>
         <div className="ch" style={{ padding: 0, marginBottom: 3 }}>휴무</div>
-        <div className="crit-sub">쉬는 날을 알려주시면 통계가 영업한 날끼리 견줘요</div>
+        <Help>
+          쉬는 날을 알려주시면 통계가 영업한 날끼리 견주고, 챙길 고객도 휴가만큼 늦춰서 셈해요. 정기 휴무 요일이라도
+          그날 일한 기록이 있으면 영업한 날로 셉니다. 휴가가 하루뿐이면 마지막 날은 비워 두세요.
+        </Help>
 
         <div className="crit">
           <div className="crit-nm" style={{ marginBottom: 8 }}>정기 휴무</div>
@@ -168,7 +172,6 @@ export default function SettingsForm({
               </button>
             ))}
           </div>
-          <div className="crit-hint">매주 쉬는 요일 · 그날 일한 기록이 있으면 영업한 날로 셉니다</div>
         </div>
 
         <div className="crit">
@@ -183,7 +186,7 @@ export default function SettingsForm({
               </div>
             ))
           ) : (
-            <div className="crit-hint" style={{ marginTop: 0 }}>등록된 휴가가 없어요</div>
+            <div className="crit-hint" style={{ marginTop: 0 }}>등록된 휴가 없음</div>
           )}
           <div className="off-add">
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="쉬는 첫날" />
@@ -193,21 +196,22 @@ export default function SettingsForm({
           <button type="button" className="btn ghost" style={{ marginTop: 8, width: '100%' }} onClick={addRange} disabled={!from}>
             기간 추가
           </button>
-          <div className="crit-hint">하루만 쉬면 마지막 날은 비워 두세요</div>
         </div>
         {offDirty ? <div className="off-dirty">아래 &lsquo;저장&rsquo;을 눌러야 반영돼요</div> : null}
       </div>
 
       <div className="card" style={{ padding: '14px 15px' }}>
         <div className="ch" style={{ padding: 0, marginBottom: 3 }}>VIP 기준</div>
-        <div className="crit-sub">아래 하나만 넘어도 VIP예요</div>
+        <Help>
+          아래 하나만 넘어도 VIP예요 — 누적매출은 많이 쓰신 분, 누적방문은 오래 다니신 분, &lsquo;최근&rsquo;은 요즘 자주
+          오시는 분이에요. 횟수를 0으로 두면 그 기준은 쓰지 않아요.
+        </Help>
 
         <div className="crit">
           <div className="crit-top">
             <div className="crit-nm">누적매출</div>
             <Num v={vipWon} set={setVipWon} unit="만원" />
           </div>
-          <div className="crit-hint">많이 쓰신 분</div>
         </div>
 
         <div className="crit">
@@ -215,7 +219,6 @@ export default function SettingsForm({
             <div className="crit-nm">누적방문</div>
             <Num v={vipVisits} set={setVipVisits} unit="회" />
           </div>
-          <div className="crit-hint">오래 다니신 분</div>
         </div>
 
         <div className="crit">
@@ -230,7 +233,6 @@ export default function SettingsForm({
             </div>
             <Num v={vipRecV} set={setVipRecV} unit="회" />
           </div>
-          <div className="crit-hint">요즘 자주 오시는 분 · 0으로 두면 이 기준은 안 써요</div>
         </div>
 
         <div className="crit-sum">
@@ -241,14 +243,16 @@ export default function SettingsForm({
 
       <div className="card" style={{ padding: '14px 15px' }}>
         <div className="ch" style={{ padding: 0, marginBottom: 3 }}>이탈 기준</div>
-        <div className="crit-sub">여기 걸리면 챙길 고객·홈 신호에서 빠져요</div>
+        <Help>
+          여기 걸리면 챙길 고객·홈 신호에서 빠져요. 첫 줄은 방문 횟수와 상관없이, 둘째 줄은 몇 번 오다 마신 분을 더 일찍
+          빼는 기준이에요.
+        </Help>
 
         <div className="crit">
           <div className="crit-top">
             <div className="crit-nm">이 기간 넘게 안 오시면</div>
             <Num v={lapsedM} set={setLapsedM} unit="개월" />
           </div>
-          <div className="crit-hint">방문 횟수와 상관없이 제외</div>
         </div>
 
         <div className="crit">
@@ -260,7 +264,6 @@ export default function SettingsForm({
             <div className="crit-nm">안 오시고 방문이</div>
             <Num v={softV} set={setSoftV} unit="회 미만" w={54} />
           </div>
-          <div className="crit-hint">몇 번 오다 마신 분은 더 일찍 제외</div>
         </div>
 
         <div className="crit-sum">
@@ -271,7 +274,10 @@ export default function SettingsForm({
 
       <div className="card" style={{ padding: '14px 15px' }}>
         <div className="ch" style={{ padding: 0, marginBottom: 3 }}>표시 설정</div>
-        <div className="crit-sub">판정과 무관하게 화면에만 영향을 줘요</div>
+        <Help>
+          판정과 상관없이 화면에만 영향을 줘요. 매출 구간은 고객 목록 매출 필터의 경계, 다가오는 예약은 홈에 며칠 앞
+          예약까지 보여줄지예요.
+        </Help>
 
         <div className="crit">
           <div className="crit-top">
@@ -282,7 +288,6 @@ export default function SettingsForm({
             <div className="crit-nm">매출 구간 · 상</div>
             <Num v={revHigh} set={setRevHigh} unit="만원" />
           </div>
-          <div className="crit-hint">고객 목록 매출 필터의 경계</div>
         </div>
 
         <div className="crit">
@@ -290,7 +295,6 @@ export default function SettingsForm({
             <div className="crit-nm">다가오는 예약</div>
             <Num v={bDays} set={setBDays} unit="일 앞까지" w={54} />
           </div>
-          <div className="crit-hint">홈에 며칠 앞 예약까지 보여줄지</div>
         </div>
       </div>
 

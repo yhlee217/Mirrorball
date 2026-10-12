@@ -2,7 +2,7 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { won } from '@/lib/format';
+import { man } from '@/lib/format';
 import GenderPicker from './gender-picker';
 import CustomerNote from './customer-note';
 import ChurnToggle from './churn-toggle';
@@ -10,16 +10,13 @@ import { loadCarte } from './data';
 import {
   MemoAiCard,
   RecommendCard,
-  StatTiles,
+  FactStrip,
   FamilyCard,
   NextBookingCard,
-  TopServicesCard,
   PrepaidCard,
   HistoryCard,
   OtherItemsCard,
 } from './cards';
-
-const SIGNAL: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', new: '신규' };
 
 /**
  * 고객 카르테 — 화면 배치만 담당한다.
@@ -30,11 +27,13 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   const {
     cust, name, vip, avg,
     history, charges, others,
-    chargedTotal, balance,
+    chargedTotal, balance, pocketIds,
     familyList, nextBk, topSvc,
-    overdue, due, reason,
+    overdue, due, vac, today,
     sinceLast, next, top, recs,
   } = await loadCarte(params.id);
+  // 상태 뱃지 — 이탈로 표시한 분, 다음 예약이 잡힌 분에겐 띄우지 않는다(이미 정해졌거나 오시기로 했다)
+  const badge = !cust.churned_at && !nextBk && (overdue || due) ? (overdue ? 'overdue' : 'due') : null;
 
   return (
     <main className="wrap">
@@ -47,29 +46,16 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           <div>
             <h2>
               {name} 님{vip ? <span className="tag-vip">VIP</span> : null}
+              {badge ? <span className={'ctag ' + badge}>{badge === 'overdue' ? '이탈 위험' : '재방문 도래'}</span> : null}
             </h2>
             <div className="s">
-              {cust.visit_count}회 방문{cust.total_won ? ' · 누적 ' + won(cust.total_won) : ''}
+              {cust.visit_count}회{cust.total_won ? ' · 누적 ' + man(cust.total_won) : ''}
             </div>
           </div>
         </div>
 
-        <MemoAiCard cust={cust} />
-
-        {/* 이탈로 표시한 고객은 '이탈 위험' 추정을 띄우지 않는다 — 이미 확정된 걸 재촉하는 꼴이라.
-            다음 예약이 잡힌 손님도 마찬가지 — 바로 아래 '다음 예약'과 서로 다른 말을 하게 된다. */}
-        {!cust.churned_at && !nextBk && (overdue || due) && (
-          <div className={'signal-card ' + (overdue ? 'x' : 'd')}>
-            <div className="sig-t">{overdue ? SIGNAL.overdue : SIGNAL.due}</div>
-            <div className="sig-w">
-              {reason}
-              {cust.revisit_cycle_days ? ` · 평소 ${cust.revisit_cycle_days}일 주기` : ''}
-            </div>
-          </div>
-        )}
-
-        {/* 방문 수·누적 매출은 바로 위 머리말에 있다 — 타일은 그 다음 질문에 답한다 */}
-        <StatTiles
+        {/* 첫 화면에: 누구 · 지금 상태(뱃지) · 한 줄 띠 · 메모 · 권할 것 · 다음 예약(UX 계획 v3) */}
+        <FactStrip
           lastVisit={cust.last_visit}
           sinceLast={sinceLast}
           next={next}
@@ -77,18 +63,16 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           balance={balance}
           avg={avg}
           top={top}
+          vacation={badge ? vac : 0}
         />
-
-        {/* 손님 앞에서 먼저 필요한 것: 다음에 언제 오시는지 → 지난번에 뭘 했는지 */}
-        <NextBookingCard bk={nextBk} />
-        {/* 이번에 뭘 권할지 — 지난 이력보다 먼저 본다(응대 중에 바로 쓸 것) */}
+        <MemoAiCard cust={cust} today={today} />
         <RecommendCard items={recs} />
-        <HistoryCard history={history} hasCharges={charges.length > 0} />
+        <NextBookingCard bk={nextBk} />
+        <HistoryCard history={history} pocketIds={pocketIds} top={topSvc} />
 
         <CustomerNote id={cust.id} initMemo={cust.memo ?? ''} initTags={cust.prefer_tags ?? []} />
 
-        <TopServicesCard top={topSvc} />
-        <FamilyCard list={familyList} />
+        <FamilyCard list={familyList} today={today} />
         <PrepaidCard charges={charges} chargedTotal={chargedTotal} balance={balance} />
         <OtherItemsCard items={others} />
 

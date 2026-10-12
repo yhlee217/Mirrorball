@@ -6,7 +6,8 @@ import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
 import { kstNow } from '@/lib/kst';
-import { lastSynced, syncLine } from '@/lib/sync';
+import { lastSynced } from '@/lib/sync';
+import { SyncChip } from '@/components/sync-chip';
 import { txKind } from '@/lib/tx';
 import VisitsList from './visits-list';
 
@@ -74,7 +75,7 @@ export default async function VisitsPage() {
         const c = cmap.get(v.customer_id)!;
         const name = await nameFrom(c.pii_enc);
         const rawMain = v.services[0] ?? null;
-        const svc = [...new Set(v.services.map((s) => friendlyService(s)).filter(Boolean))].join(' + ');
+        const svc = [...new Set(v.services.map((s) => friendlyService(s)).filter(Boolean))].join('+'); // 홈 브리핑과 같은 표기
         return {
           id: v.customer_id,
           name,
@@ -94,13 +95,11 @@ export default async function VisitsPage() {
   return (
     <main className="wrap">
       <div className="body">
-        <div className="hello">
-          <div className="e">
-            <span>Visits</span>
-          </div>
-          <h2>방문 관리</h2>
-          <div className="s">지난 2주 다녀가신 분 — 메모 남기고 다음 방문 챙기기 좋아요</div>
-          {syncLine(synced) ? <div className="s">{syncLine(synced)} · 그 뒤 방문은 다음 수집에 들어와요</div> : null}
+        {/* 머리말은 한 줄 — 수집 기준은 작은 표식 하나로(UX 계획 v3). 그 뒤 방문은 다음 수집에 들어온다. */}
+        <div className="top">
+          <b>방문</b>
+          <span className="sect-n">2주</span>
+          <SyncChip synced={synced} />
         </div>
         <VisitsList items={items} today={today} yesterday={yesterday} />
       </div>

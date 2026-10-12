@@ -20,15 +20,23 @@ export function won(n: number): string {
   return man.toLocaleString() + '만원';
 }
 
-/** won() 표기의 단위 — '만원'·'억원'도 '원'으로 끝나니 긴 것부터 본다. */
-const unitOf = (s: string) => (s.endsWith('억원') ? '억원' : s.endsWith('만원') ? '만원' : '원');
+/**
+ * 목록용 짧은 금액 — '45만' · '1.2억'(원 생략). 만원 아래는 단위가 없으면 헷갈려 '5,000원' 그대로.
+ * 한 줄에 금액이 여럿 늘어설 때 '원'이 되풀이되지 않게(UX 계획 v3 원칙 3).
+ */
+export function man(n: number): string {
+  const w = won(n);
+  return Math.abs(n) < 10000 ? w : w.replace(/원$/, '');
+}
 
-/** 범위 — 단위가 같으면 한 번만: '2,180~2,390만원'. 다르면 '9,800만원~1.1억원'. */
-export function wonRange(a: number, b: number): string {
-  const x = won(a);
-  const y = won(b);
-  const u = unitOf(x);
-  return u === unitOf(y) ? `${x.slice(0, -u.length)}~${y}` : `${x}~${y}`;
+/**
+ * 범위 — man() 표기로, 단위가 같으면 한 번만: '2,180~2,390만'. 다르면 '9,800만~1.1억'.
+ * man() 은 늘 한 글자 단위('만'·'억'·'원')로 끝나 끝 글자만 견주면 된다.
+ */
+export function manRange(a: number, b: number): string {
+  const x = man(a);
+  const y = man(b);
+  return x.slice(-1) === y.slice(-1) ? `${x.slice(0, -1)}~${y}` : `${x}~${y}`;
 }
 
 /**

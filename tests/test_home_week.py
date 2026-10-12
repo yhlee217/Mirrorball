@@ -53,6 +53,7 @@ out({
   tags: [B.visitTag(0), B.visitTag(null), B.visitTag(1), B.visitTag(5)],
   memo: [B.memoLines(D.pref, 2), B.memoLines(null, 2), B.memoLines('  \\n- \\n', 2)],
   recent: [B.latestRecent(D.recent), B.latestRecent('- 강아지 키움'), B.latestRecent(null)],
+  recentWords: ['(2026-08) 딸 결혼식 준비 중', '(2025-12) 이사', '강아지 키움'].map((x) => B.recentWords(x, D.today)),
   last: Object.fromEntries(B.lastServices(D.lastTx, (id) => D.lastVisit[id])),
   heads: ['2026-10-12', '2026-10-13', '2026-10-15'].map((d) => B.dayHead(d, D.today)),
 });
@@ -118,7 +119,7 @@ def test_span_words(ts):
 
 def test_gap_line(ts):
     assert ts["gaps"] == [
-        {"text": "6주 만 · 평소 5주", "late": False},
+        {"text": "6주 만", "late": False},             # 평소대로면 덧붙이지 않는다
         {"text": "3개월 만 · 평소 5주", "late": True},
         {"text": "6주 만", "late": False},
         None,
@@ -128,7 +129,7 @@ def test_gap_line(ts):
 
 def test_gap_line_late_skips_vacation(ts):
     """'몇 주 만'은 달력 그대로, 늦었는지는 휴가를 빼고 — 챙길 고객과 같은 기준."""
-    assert ts["gapVac"] == {"text": "3개월 만 · 평소 5주", "late": False}
+    assert ts["gapVac"] == {"text": "3개월 만", "late": False}   # 늦지 않으면 평소 주기를 덧붙이지 않는다
 
 
 def test_visit_tag(ts):
@@ -146,8 +147,13 @@ def test_latest_recent_picks_newest_month(ts):
 
 def test_last_services_only_last_visit_day_services(ts):
     """마지막 방문일의 시술만 — 충전·예전 방문·다른 날 거래는 빠진다. 직급 표기는 뗀다."""
-    assert ts["last"] == {"A": "커트 + 뿌리염색"}
+    assert ts["last"] == {"A": "커트+뿌리염색"}
 
 
 def test_day_heads(ts):
     assert ts["heads"] == ["오늘 · 10.12(월)", "내일 · 10.13(화)", "10.15(목)"]
+
+
+def test_recent_words_story_first(ts):
+    """근황은 이야기가 먼저, 언제인지는 뒤에 — 올해가 아니면 연도까지."""
+    assert ts["recentWords"] == ["딸 결혼식 준비 중 · 8월", "이사 · 25년 12월", "강아지 키움"]

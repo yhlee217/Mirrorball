@@ -8,9 +8,10 @@ import { bookedCustomerIds } from '@/lib/bookings';
 import { CONTACT_QUIET_DAYS, phoneDigits, recentlyContactedIds } from '@/lib/contact';
 import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
-import { lastSynced, syncLine } from '@/lib/sync';
+import { lastSynced } from '@/lib/sync';
+import { SyncChip } from '@/components/sync-chip';
 import { kstNow } from '@/lib/kst';
-import { daysBetween } from '@/lib/week';
+import { dayLabel, daysBetween, spanWords } from '@/lib/week';
 import { awayDays } from '@/lib/offdays';
 import AlertsList from './alerts-list';
 
@@ -50,8 +51,8 @@ export default async function AlertsPage() {
   const real = ((customers as Cust[]) ?? []).filter((c) => isRealCustomer(c.ext_id));
   // 연락해서 잠시 빠진 분 — 목록이 왜 줄었는지 밝힌다
   const quiet = real.filter((c) => needsCare(c, flags(c)) && contacted.has(c.id)).length;
-  const base = real
-    .filter((c) => onCareList(c, flags(c)))
+  const todo = real.filter((c) => onCareList(c, flags(c)));
+  const base = [...todo]
     .sort((a, b) => (stateOf(a) === 'overdue' ? 0 : 1) - (stateOf(b) === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count)
     .slice(0, 50);
   const contacts = await Promise.all(base.map((c) => readContact(c.pii_enc)));
@@ -80,15 +81,18 @@ export default async function AlertsPage() {
     const svc = friendlyService(rawSvc); // 고객 문구용(직급·성별 표기 제거)
     const care = careFor(rawSvc); // 시술별 표준 관리주기·표현(분류는 원본 메뉴명으로)
     const loyal = c.visit_count >= settings.vip_visits;
-    const std = care ? ` · ${care.cat} 표준 ${care.days}일` : '';
     const state = stateOf(c) as string;
-    // 휴가를 빼고 셌으면 밝힌다 — 달력으로 세면 더 오래돼 보이는데 판정이 늦은 까닭
-    const vac = c.last_visit ? daysBetween(c.last_visit.slice(0, 10), asOf) - awayDays(c.last_visit.slice(0, 10), asOf, settings) : 0;
-    const vacNote = vac > 0 ? ` · 휴가 ${vac}일은 빼고 셈` : '';
-    const why =
-      state === 'overdue'
-        ? `마지막 방문 ${c.last_visit ?? '-'}${m ? ` · ${m}개월 미방문` : ''} · 평소 ${c.revisit_cycle_days ?? '-'}일 주기${std}${vacNote}`
-        : `재방문 시기 · 마지막 방문 ${c.last_visit ?? '-'}${c.revisit_cycle_days ? ` · 주기 ${c.revisit_cycle_days}일` : ''}${std}${vacNote}`;
+    // 사유는 한 줄 조각 — '2개월째 · 평소 5주 · 뿌리염색'(UX 계획 v3). 날짜·표준 주기는 펼친 곳에.
+    const last = c.last_visit ? c.last_visit.slice(0, 10) : null;
+    const why = [
+      last ? `${spanWords(daysBetween(last, asOf))}째` : null,
+      c.revisit_cycle_days ? `평소 ${spanWords(c.revisit_cycle_days)}` : null,
+      care?.cat ?? (svc || null),
+    ].filter(Boolean).join(' · ');
+    // 펼친 곳의 한 줄 — 마지막 방문일, 휴가를 빼고 셌으면 그 일수(달력보다 판정이 늦은 까닭)
+    const vac = last ? daysBetween(last, asOf) - awayDays(last, asOf, settings) : 0;
+    const note = [last ? `마지막 방문 ${dayLabel(last)}` : null, vac > 0 ? `휴가 ${vac}일은 빼고 셈` : null]
+      .filter(Boolean).join(' · ');
     let draft: string;
     if (state === 'overdue') {
       const open = loyal
@@ -107,19 +111,16 @@ export default async function AlertsPage() {
           ? `${name}님, 지난 ${svc} ${care.phrase} 연락드려요. 편하신 시간에 예약 도와드릴게요!`
           : `${name}님, ${svc ? '지난 ' + svc : '지난 시술'} 이제 관리해주실 시기예요${c.revisit_cycle_days ? ` (평소 ${c.revisit_cycle_days}일 주기)` : ''}. 편하신 시간에 예약 도와드릴게요!`;
     }
-    return { id: c.id, name, phone: phoneDigits(contacts[i].phone), state, why, draft };
+    return { id: c.id, name, phone: phoneDigits(contacts[i].phone), state, why, note, draft };
   });
-
-  // 이탈·재방문 판정은 월 단위라 주 1회 수집으로도 충분하지만, 어느 시점 기준인지는 밝힌다.
-  const basis = syncLine(synced);
 
   return (
     <main className="wrap">
       <div className="bar">
-        <div className="ttl">챙길 고객</div>
+        <div className="ttl">챙길 고객 <span className="sect-n">{todo.length.toLocaleString()}명</span></div>
+        <SyncChip synced={synced} />
       </div>
       <div className="body">
-        <div className="sec-h">자동 발송 X · 문자·전화는 버튼으로 바로{basis ? ` · ${basis}` : ''}</div>
         <AlertsList items={items} quiet={quiet} quietDays={CONTACT_QUIET_DAYS} />
       </div>
     </main>

@@ -1,25 +1,13 @@
 import { careFor } from './care-cycle';
-import { daysBetween } from './week';
-import { spanWords } from './briefing';
+import { agoWords, daysBetween, shortDate, spanWords } from './week';
 import { windowEnd, type OffDays } from './offdays';
+
+export { agoWords, shortDate };
 
 /**
  * 카르테 숫자 타일 — 머리말('N회 방문 · 누적 X')과 같은 숫자를 또 보이던 타일을, 손님 앞에서
  * 바로 묻게 되는 것으로 바꿨다: 마지막 방문 · 다음 방문 · 잔액(또는 객단가) · 매출 순위.
  */
-
-/** '오늘' · '어제' · '10일 전' · '3주 전' · '4개월 전'. */
-export function agoWords(days: number): string {
-  if (days <= 0) return '오늘';
-  if (days === 1) return '어제';
-  return `${spanWords(days)} 전`;
-}
-
-/** '10.20' — 추정 날짜는 요일까지 붙이면 정확한 약속처럼 읽힌다. */
-export function shortDate(date: string): string {
-  const [, m, d] = date.split('-').map(Number);
-  return `${m}.${d}`;
-}
 
 export type NextVisit =
   | { kind: 'booked'; date: string }

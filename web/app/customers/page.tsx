@@ -126,10 +126,10 @@ export default async function CustomersPage({
     <main className="wrap">
       <div className="bar">
         <Link href="/" className="back">‹ 홈</Link>
-        <div className="ttl" style={{ marginLeft: 10 }}>고객 {rows.length}명</div>
+        <div className="ttl" style={{ marginLeft: 10 }}>고객 <span className="sect-n">{rows.length.toLocaleString()}명</span></div>
       </div>
       <div className="body">
-        <CustomersList rows={rows} settings={settings} asOf={asOf} initialFilter={initialFilter} />
+        <CustomersList rows={rows} settings={settings} asOf={asOf} today={kstNow().date} initialFilter={initialFilter} />
       </div>
     </main>
   );

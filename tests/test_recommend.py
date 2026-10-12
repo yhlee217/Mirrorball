@@ -113,8 +113,8 @@ def test_cross_sell_rules(ts):
 def test_recommend_composition_and_exclusion(ts):
     r = ts["recX"]
     assert [x["kind"] for x in r] == ["due", "cross"]
-    assert r[0]["label"] == "남자커트" and r[0]["reason"] == "마지막 4주 전 · 이 손님은 보통 3주마다"
-    assert r[1]["label"] == "다운펌" and r[1]["reason"] == "이 매장 남자커트 손님의 39%가 펌도 받아요 · 주로 다운펌"
+    assert r[0]["label"] == "남자커트" and r[0]["reason"] == "마지막 4주 전 · 보통 3주마다"
+    assert r[1]["label"] == "다운펌" and r[1]["reason"] == "남자커트 손님 39%가 펌도 받아요 · 주로 다운펌"
     # 이번에 커트를 예약했으면 커트는 빼고, 펌을 예약했으면 펌 갈래는 빼고 권한다
     assert [x["label"] for x in ts["recXcut"]] == ["다운펌"]
     assert [x["label"] for x in ts["recXperm"]] == ["남자커트"]

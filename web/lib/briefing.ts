@@ -1,9 +1,9 @@
 import { txKind } from './tx';
 import { friendlyService } from './service-name';
-import { addDays, dayLabel, daysBetween } from './week';
+import { addDays, dayLabel, daysBetween, spanWords } from './week';
 import { awayDays, type OffDays } from './offdays';
 
-export { daysBetween };
+export { daysBetween, spanWords };
 
 /**
  * 홈 '예약 브리핑' — 손님이 오기 전에 카르테를 하나씩 열지 않아도 되게, 예약마다
@@ -11,21 +11,14 @@ export { daysBetween };
  * 화면(app/home-view.tsx)은 여기서 만든 말을 놓기만 한다.
  */
 
-/** 기간을 말로 — '10일' · '6주' · '3개월' · '2년'. 미용실에서 실제로 쓰는 단위를 따른다. */
-export function spanWords(days: number): string {
-  if (days < 14) return `${days}일`;
-  if (days < 70) return `${Math.round(days / 7)}주`;
-  if (days < 730) return `${Math.round(days / 30)}개월`;
-  return `${Math.floor(days / 365)}년`;
-}
-
 /** 평소보다 많이 늦게 오시나 — 워커의 '이탈 위험'과 같은 배수(worker/scrape.py _derive). */
 export const LATE_RATIO = 1.6;
 
 /**
- * '6주 만 · 평소 5주' — 지난 방문에서 이 예약일까지. 평소 주기는 방문 2회 이상이라 실제 간격이
- * 있을 때만 붙인다. late 면 화면이 눈에 띄게 칠한다(오랜만에 오시는 분은 안부부터).
- * '몇 주 만'은 달력 그대로지만, 늦었는지는 그 사이 디자이너가 쉰 휴가를 빼고 본다(챙길 고객과 같은 기준).
+ * '6주 만' — 지난 방문에서 이 예약일까지. 늦게 오시는 분만 '· 평소 5주'를 붙인다(평소대로면 덧붙일
+ * 말이 없다 — UX 계획 v3). late 면 화면이 눈에 띄게 칠한다(오랜만에 오시는 분은 안부부터).
+ * 평소 주기는 방문 2회 이상이라 실제 간격이 있을 때만. '몇 주 만'은 달력 그대로지만, 늦었는지는
+ * 그 사이 디자이너가 쉰 휴가를 빼고 본다(챙길 고객과 같은 기준).
  */
 export function gapLine(
   lastVisit: string | null | undefined,
@@ -37,10 +30,8 @@ export function gapLine(
   const gap = daysBetween(lastVisit, bookingDate);
   if (gap <= 0) return null;
   const cyc = cycleDays && cycleDays > 0 ? cycleDays : null;
-  return {
-    text: `${spanWords(gap)} 만${cyc ? ` · 평소 ${spanWords(cyc)}` : ''}`,
-    late: !!cyc && awayDays(lastVisit, bookingDate, off) > cyc * LATE_RATIO,
-  };
+  const late = !!cyc && awayDays(lastVisit, bookingDate, off) > cyc * LATE_RATIO;
+  return { text: `${spanWords(gap)} 만${late && cyc ? ` · 평소 ${spanWords(cyc)}` : ''}`, late };
 }
 
 /**
@@ -70,7 +61,18 @@ export function latestRecent(text: string | null | undefined): string | null {
 }
 
 /**
- * 지난 방문에 받은 시술 — 같은 날 여러 건이면 ' + '로 잇는다. 마지막 방문일(last_visit)의 시술
+ * 근황 한 줄을 읽히게 — '(2026-08) 딸 결혼식 준비 중' → '딸 결혼식 준비 중 · 8월'.
+ * 이야기가 먼저, 언제인지는 뒤에 작게. 올해가 아니면 '25년 8월'.
+ */
+export function recentWords(line: string, today: string): string {
+  const m = /^\((\d{4})-(\d{2})\)\s*(.*)$/.exec(line);
+  if (!m) return line;
+  const when = m[1] === today.slice(0, 4) ? `${Number(m[2])}월` : `${m[1].slice(2)}년 ${Number(m[2])}월`;
+  return m[3] ? `${m[3]} · ${when}` : when;
+}
+
+/**
+ * 지난 방문에 받은 시술 — 같은 날 여러 건이면 '+'로 붙인다(한 줄에 들어가게). 마지막 방문일(last_visit)의 시술
  * 거래만 본다. 충전·제품은 시술이 아니라 뺀다. 이름은 직급·가격 표기를 뗀 것(friendlyService).
  */
 export function lastServices(
@@ -87,7 +89,7 @@ export function lastServices(
     if (!a.includes(s)) a.push(s);
     acc.set(t.customer_id, a);
   }
-  return new Map([...acc].map(([id, a]) => [id, a.join(' + ')]));
+  return new Map([...acc].map(([id, a]) => [id, a.join('+')]));
 }
 
 /** 날짜 머리말 — '오늘 · 10.12(월)' · '내일 · 10.13(화)' · '10.15(수)'. */

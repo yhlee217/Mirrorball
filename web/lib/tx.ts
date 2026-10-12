@@ -42,6 +42,7 @@ export function ledger(items: LedgerItem[]): {
   revenue: number;
   charged: number;
   covered: number;
+  drew: string[]; // 잔액에서 (일부라도) 차감한 시술의 id — 화면이 '사비 결제' 손잡이를 달 줄
 } {
   const key = (t: LedgerItem) => `${t.date ?? ''} ${t.time ?? ''} ${t.id ?? ''}`;
   const rows = [...items].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
@@ -50,6 +51,7 @@ export function ledger(items: LedgerItem[]): {
   let revenue = 0;
   let charged = 0;
   let covered = 0;
+  const drew: string[] = [];
 
   for (const it of rows) {
     const amt = it.amount || 0;
@@ -75,6 +77,7 @@ export function ledger(items: LedgerItem[]): {
     balance -= use;
     covered += use;
     revenue += amt - use;
+    if (use > 0 && it.id) drew.push(it.id);
   }
-  return { balance, revenue, charged, covered };
+  return { balance, revenue, charged, covered, drew };
 }

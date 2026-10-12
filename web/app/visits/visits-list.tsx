@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { won } from '@/lib/format';
+import { man } from '@/lib/format';
+import { dayLabel } from '@/lib/week';
 import { Empty } from '@/components/empty';
 
 // 방문 관리 — 리뷰 요청 '복사 버튼'은 강요처럼 보여서 뺐다. 홈케어 팁도 손님께 전할 말투라
@@ -26,13 +27,13 @@ function Row({ it }: { it: Item }) {
         <div className="av">{it.name.charAt(0)}</div>
         <div className="bd">
           <div className="nm">
-            {it.name} 님
-            <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--muted)' }}> · {it.visit_count}회째</span>
+            {it.name}
+            {it.visit_count <= 1 ? <span className="tag-new">첫 방문</span> : <span className="nm-n">{it.visit_count}회째</span>}
           </div>
           <div className="sub">
             {it.time ? it.time + ' · ' : ''}
             {it.service || '시술'}
-            {it.amount ? ' · ' + won(it.amount) : ''}
+            {it.amount ? ' · ' + man(it.amount) : ''}
           </div>
           {/* 매장이 그날 남긴 메모는 디자이너 본인의 기록이라 그대로 보여준다 */}
           {it.memo ? <div className="memo-note">{it.memo}</div> : null}
@@ -59,13 +60,10 @@ export default function VisitsList({
 }) {
   if (!items.length)
     return (
-      <Empty
-        title="최근 2주 방문 기록이 없어요"
-        hint="수집은 주 1회예요. 방금 다녀가신 분은 다음 수집 뒤에 여기 나타나요."
-      />
+      <Empty title="최근 2주 방문 없음" hint="방금 다녀가신 분은 다음 수집 뒤에 나와요." />
     );
 
-  const label = (d: string) => (d === today ? '오늘' : d === yesterday ? '어제' : d);
+  const label = (d: string) => (d === today ? '오늘' : d === yesterday ? '어제' : dayLabel(d));
   const groups: { key: string; rows: Item[] }[] = [];
   for (const it of items) {
     const k = label(it.date);
@@ -74,20 +72,17 @@ export default function VisitsList({
     else groups.push({ key: k, rows: [it] });
   }
 
+  // 날짜마다 카드를 따로 두지 않고 한 카드 안에 날짜 머리줄로 — 홈 '이번 주' 예약과 같은 모양
   return (
-    <>
+    <div className="card">
       {groups.map((g) => (
         <div key={g.key}>
-          <div className="sec-h" style={{ marginTop: 14 }}>
-            {g.key} · {g.rows.length}명
-          </div>
-          <div className="card">
-            {g.rows.map((it) => (
-              <Row key={it.id + it.date} it={it} />
-            ))}
-          </div>
+          <div className="bf-day">{g.key} · {g.rows.length}명</div>
+          {g.rows.map((it) => (
+            <Row key={it.id + it.date} it={it} />
+          ))}
         </div>
       ))}
-    </>
+    </div>
   );
 }
