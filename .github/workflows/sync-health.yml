@@ -36,4 +36,9 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           ALERT_WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
           STALE_DAYS: '8'
+          # 백업·화면 오류(0023 ops_health, 개선 계획 v5). 맥에 새 코드가 깔리고 첫 일요일 백업이 지난 뒤부터
+          # 백업 기록이 없으면 실패한다 — 그 전엔 경고만.
+          BACKUP_DAYS: '8'
+          ERROR_LIMIT: '5'
+          BACKUP_REQUIRED_SINCE: '2026-10-20'
         run: python3 scripts/sync_health_check.py
