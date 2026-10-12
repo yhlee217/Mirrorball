@@ -75,6 +75,22 @@ export function onCareList(
   return !o.contacted && needsCare(c, o);
 }
 
+/** 선불 잔액을 남긴 채 이 날수를 넘겨 안 오신 분 — 통계 알약 · 고객 목록 필터가 같은 기준(개선 계획 v5 P3). */
+export const PREPAID_AWAY_DAYS = 90;
+
+/**
+ * 선불 잔액을 남긴 채 발길이 끊긴 분인가. 이미 받은 돈이라 다시 오시게 하기 가장 쉬운 손님이고, 오래
+ * 두면 환불 요청·불만으로 돌아온다. 잔액은 워커의 추정(결제수단이 기록되지 않는다)이라 화면에만 쓴다 —
+ * 손님 문자엔 넣지 않는다. 디자이너가 이탈로 표시한 분은 뺀다. today 는 KST 날짜.
+ */
+export function prepaidAway(
+  c: { prepaid_balance: number | null; last_visit: string | null; churned_at?: string | null },
+  today: string,
+): boolean {
+  if ((c.prepaid_balance ?? 0) <= 0 || !c.last_visit || c.churned_at) return false;
+  return daysBetween(c.last_visit.slice(0, 10), today) > PREPAID_AWAY_DAYS;
+}
+
 /** 첫 방문 안부를 띄우는 기간 — 첫 방문 뒤 이 날수 안. 수집이 주 1회라 두 번의 수집에 걸친다. */
 export const HELLO_DAYS = 14;
 

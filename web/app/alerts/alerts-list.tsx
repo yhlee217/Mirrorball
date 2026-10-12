@@ -7,9 +7,11 @@ import { Help } from '@/components/help';
 import { MSG } from '@/lib/copy';
 import { smsHref, telHref, type ContactVia } from '@/lib/contact';
 import type { Effect } from '@/lib/effect';
+import { man } from '@/lib/format';
 
 // why = 한 줄 사유('2개월째 · 평소 5주 · 뿌리염색' · '안부 · 6일 전 · 뿌리염색'), note = 펼친 곳의 한 줄(방문일·휴가)
-type Item = { id: string; name: string; phone: string | null; state: string; why: string; note: string; draft: string };
+// prepaid = 선불 잔액(추정) — 디자이너만 보는 꼬리표. 문구엔 넣지 않는다
+type Item = { id: string; name: string; phone: string | null; state: string; why: string; note: string; draft: string; prepaid?: number };
 
 // 첫 방문 손님은 안부·다시 오실 때 모두 '첫 방문' — 무엇을 할지는 사유 줄 첫마디가 말한다(lib/customers firstCare)
 const STATE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', hello: '첫 방문', back: '첫 방문' };
@@ -176,6 +178,7 @@ export default function AlertsList({
                   <span className="crow-n">
                     <b>{it.name}</b>
                     <span className={'ctag ' + it.state}>{STATE[it.state] ?? ''}</span>
+                    {it.prepaid ? <span className="ppd">선불 {man(it.prepaid)}</span> : null}
                   </span>
                   <span className="crow-w">{sent ? '✓ 연락함' : it.why}</span>
                 </button>

@@ -91,7 +91,7 @@ const items = names.slice(0, 8).map((n, i) => {
   return {
     id: 'a' + i, name: n, phone: '01012345678', state: over ? 'overdue' : 'due',
     why: over ? `${2 + (i % 3)}개월째 · 평소 5주 · 뿌리염색` : '5주째 · 평소 4주 · 남자커트',
-    note: over ? '마지막 방문 7.1(수)' : '마지막 방문 9.2(수)',
+    note: over ? '마지막 방문 7.1(수)' : '마지막 방문 9.2(수)', prepaid: i === 0 ? 520000 : i === 3 ? 180000 : 0,
     draft: over
       ? `${n}님, 오랜만이에요! 벌써 ${2 + (i % 3)}개월 됐네요. 늘 찾아주셔서 감사해요 🙏 지난 뿌리염색 뿌리 올라올 때쯤이라 한번 뵙고 싶어서 연락드려요. 편하신 때 편하게 연락 주세요!`
       : `${n}님, 지난 커트 머리 자라 정리하실 때쯤이라 연락드려요. 편하신 시간에 예약 도와드릴게요!`,
@@ -121,7 +121,7 @@ out.visits = screen('', `<div class="top"><b>방문</b><span class="sect-n">2주
 const rows = Array.from({ length: 20 }, (_, i) => ({
   id: 'c' + i, name: names[i % 10], visit_count: 1 + i, total_won: 50000 * (i + 1), last_visit: `2026-0${1 + (i % 9)}-1${i % 9}`,
   first_visit: '2024-01-01', state: ['overdue', 'due', null, 'new'][i % 4], cycle: 35, hasBooking: i % 7 === 0, hasPhone: true,
-  tail: '1234', churned: false, gender: 'F', visits_90d: 1, visits_180d: 2, visits_365d: 4,
+  tail: '1234', churned: false, gender: 'F', visits_90d: 1, visits_180d: 2, visits_365d: 4, prepaid_balance: i % 6 === 2 ? 300000 : 0,
 }));
 out.customers = screen(bar('고객 <span class="sect-n">1,136명</span>'),
   r(load('app/customers/customers-list.js').default, { rows, settings: DEFAULT_SETTINGS, asOf: SYNC.date, today: TODAY, initialFilter: null }));
@@ -162,7 +162,7 @@ out.stats = screen(bar('통계', { sync: true }),
     span: '1–11일', work: { now: 9, prev: 10 }, rev: 9820000, revDelta: 12, visits: 380, prevVisits: 391,
     fc: { show: true, worked: 9, remaining: 17, soFar: 9820000, center: 22500000, low: 21800000, high: 23900000, months: 6, lastMonth: 20500000 },
     bkLeft: 18, active: [['5월', 410], ['6월', 425], ['7월', 418], ['8월', 402], ['9월', 398], ['10.11', 395]].map(([label, count]) => ({ label, count })),
-    prepaid: { sum: 76040000, n: 129 }, careCount: 84, unknownGender: 212,
+    prepaid: { sum: 76040000, n: 129 }, careCount: 84, unknownGender: 212, prepaidGone: 18,
   })
   + r(S.CohortCard, {
     cohorts: [['2026-04', 25, 6, false], ['2026-05', 29, 7, false], ['2026-06', 23, 5, false], ['2026-07', 24, 6, true], ['2026-08', 23, 4, true], ['2026-09', 14, 2, true]]

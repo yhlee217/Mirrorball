@@ -6,7 +6,7 @@ import { requireTenant } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { SyncChip } from '@/components/sync-chip';
-import { fetchAllRows, isRealCustomer, isChurned, onCareList, onFirstList, servicesOn } from '@/lib/customers';
+import { fetchAllRows, isRealCustomer, isChurned, onCareList, onFirstList, prepaidAway, servicesOn } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookedCustomerIds, isActiveBooking } from '@/lib/bookings';
 import { recentlyContactedIds } from '@/lib/contact';
@@ -85,6 +85,8 @@ export default async function StatsPage() {
   // 선불 잔액(D6) — 손님별 추정 잔액의 합. 앞으로 시술로 갚을 돈이라 매출과 따로 본다.
   const prepaidSum = cs.reduce((s, c) => s + Math.max(0, c.prepaid_balance || 0), 0);
   const prepaidN = cs.filter((c) => (c.prepaid_balance || 0) > 0).length;
+  // 선불을 남긴 채 3개월 넘게 안 오신 분 — 고객 목록 '선불 3개월+'와 같은 기준(KST 오늘)
+  const prepaidGone = cs.filter((c) => prepaidAway(c, kToday)).length;
 
   // 실매출 = 결제 금액 − 선불 잔액으로 결제된 금액.
   // 충전과 그 충전금으로 한 시술을 둘 다 더하면 이중 계상이라, 한 규칙으로 걷어낸다.
@@ -267,6 +269,7 @@ export default async function StatsPage() {
           prepaid={{ sum: prepaidSum, n: prepaidN }}
           careCount={careCount}
           unknownGender={gNoClue + gProxy}
+          prepaidGone={prepaidGone}
         />
 
         {/* 평생 재방문율(두 번 이상/전체)은 최근 변화가 안 보인다 → 최근 신규가 다시 오는지로 */}

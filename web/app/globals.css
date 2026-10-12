@@ -101,6 +101,9 @@ body{background:var(--bg);color:var(--ink);
 .ctag.due{background:#F2EAD8;color:var(--gold-ink)}
 .ctag.booked{background:#E4EDE2;color:var(--sage-ink)}
 .ctag.hello,.ctag.back{background:#E7EFE5;color:var(--sage-ink)}   /* 첫 방문 — 홈 예약의 '첫 방문' 꼬리표와 같은 색 */
+/* 선불 잔액 꼬리표 — 상태가 아니라 곁정보라 테두리만(챙길 고객 · 고객 목록 이름 옆) */
+.li .nm .ppd{margin-left:6px;vertical-align:middle}
+.ppd{font-size:12px;font-weight:700;color:var(--accent-d);border:1px solid var(--line);border-radius:20px;padding:0 7px;white-space:nowrap}
 .li .ctag{flex:none;margin-left:8px}
 
 /* 3-3. 빈 상태 — '무엇이 비었나(t) · 왜/언제 채워지나(h) · 뭘 하면 되나(a)' 세 줄.

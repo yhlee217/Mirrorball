@@ -4,7 +4,7 @@ import { man } from '@/lib/format';
 import { agoWords, daysBetween } from '@/lib/week';
 import Link from 'next/link';
 import { isVip as isVipS, type TenantSettings } from '@/lib/settings';
-import { needsCare } from '@/lib/customers';
+import { needsCare, prepaidAway, PREPAID_AWAY_DAYS } from '@/lib/customers';
 import { matchesQuery } from '@/lib/contact';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
@@ -27,10 +27,11 @@ type Row = {
   visits_90d: number | null; // VIP 판정(최근 자주 오심)용 — 워커가 미리 집계
   visits_180d: number | null;
   visits_365d: number | null;
+  prepaid_balance: number; // 선불 잔액(추정)
 };
 
 // '필터' 안에 접어 두는 칩. 늘 보이는 건 홈 타일과 같은 넷(이탈위험·재방문도래·신규·VIP)뿐이다.
-const FOLDED = ['booking', 'nophone', 'churned', 'nogender'];
+const FOLDED = ['booking', 'nophone', 'churned', 'nogender', 'prepaid'];
 
 export default function CustomersList({
   rows,
@@ -146,6 +147,8 @@ export default function CustomersList({
     if (chips.has('nogender')) f = f.filter((r) => !r.gender && !picked[r.id]);
     if (chips.has('booking')) f = f.filter((r) => r.hasBooking);
     if (chips.has('nophone')) f = f.filter((r) => !r.hasPhone);
+    // 선불 잔액을 남긴 채 3개월 넘게 안 오신 분 — 통계 알약과 같은 기준(lib/customers prepaidAway)
+    if (chips.has('prepaid')) f = f.filter((r) => prepaidAway({ ...r, churned_at: r.churned ? 'y' : null }, today));
     if (visitF === 'reg') f = f.filter((r) => r.visit_count >= 10);
     else if (visitF === 'rep') f = f.filter((r) => r.visit_count >= 3 && r.visit_count <= 9);
     else if (visitF === 'new') f = f.filter((r) => r.visit_count <= 2);
@@ -212,6 +215,7 @@ export default function CustomersList({
             <Chip k="nophone" label="전화없음" />
             <Chip k="churned" label="이탈" />
             <Chip k="nogender" label="성별 미상" />
+            <Chip k="prepaid" label={`선불 ${PREPAID_AWAY_DAYS / 30}개월+`} />
           </div>
           <div className="fsel">
             <select value={visitF} onChange={(e) => setVisitF(e.target.value)}>
@@ -269,6 +273,7 @@ export default function CustomersList({
                     {r.name}
                     {vip(r) ? <span className="tag-vip">VIP</span> : null}
                     {r.churned ? <span className="tag-off">이탈</span> : null}
+                    {r.prepaid_balance > 0 ? <span className="ppd">선불 {man(r.prepaid_balance)}</span> : null}
                   </div>
                   <div className="sub">
                     {r.visit_count}회 · {man(r.total_won)}

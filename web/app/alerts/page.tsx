@@ -38,10 +38,11 @@ type Cust = {
   last_visit: string | null;
   visit_count: number;
   churned_at: string | null;
+  prepaid_balance: number | null;
 };
 type Tx = { customer_id: string | null; date: string | null; service: string | null; kind: string | null };
 
-const COLS = 'id,ext_id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count,churned_at';
+const COLS = 'id,ext_id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count,churned_at,prepaid_balance';
 const EFFECT_DAYS = 28; // 연락 효과를 보는 기간 — 지난 4주
 // 줄 순서 — 안부는 첫 방문 2주 안에만 뜨는 짧은 할 일이라 맨 위, 다시 오실 때는 맨 아래.
 const ORDER: Record<string, number> = { hello: 0, overdue: 1, due: 2, back: 3 };
@@ -119,6 +120,8 @@ export default async function AlertsPage() {
     ...firstTodo.map((c) => ({ c, state: firstKind.get(c.id) as string })),
   ].sort((a, b) =>
     ORDER[a.state] - ORDER[b.state] ||
+    // 같은 상태 안에서는 선불 잔액이 남은 분 먼저 — 이미 받은 돈이라 다시 오시게 하기 가장 쉽다(v5 P3)
+    Number((b.c.prepaid_balance ?? 0) > 0) - Number((a.c.prepaid_balance ?? 0) > 0) ||
     (a.state === 'hello' || a.state === 'back'
       ? (a.c.last_visit ?? '').localeCompare(b.c.last_visit ?? '') // 첫 방문은 오래된 분부터 — 곧 목록에서 내려간다
       : b.c.visit_count - a.c.visit_count));
@@ -194,7 +197,8 @@ export default async function AlertsPage() {
         loyal: c.visit_count >= settings.vip_visits, cycleDays: c.revisit_cycle_days,
       });
     }
-    return { id: c.id, name, phone: phoneDigits(contacts[i].phone), state, why, note, draft };
+    // 선불 잔액은 디자이너만 본다 — 추정이라 손님 문자(draft)엔 넣지 않는다
+    return { id: c.id, name, phone: phoneDigits(contacts[i].phone), state, why, note, draft, prepaid: Math.max(0, c.prepaid_balance ?? 0) };
   });
 
   return (

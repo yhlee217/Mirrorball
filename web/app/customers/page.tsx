@@ -28,10 +28,11 @@ type Cust = {
   visits_90d: number | null;
   visits_180d: number | null;
   visits_365d: number | null;
+  prepaid_balance: number | null;
 };
 
 // 홈의 신호 타일(이탈위험/재방문도래/신규/VIP)에서 넘어올 때 초기 필터를 받는다.
-const FILTERS = new Set(['overdue', 'due', 'new', 'vip', 'booking', 'nophone', 'churned', 'nogender']);
+const FILTERS = new Set(['overdue', 'due', 'new', 'vip', 'booking', 'nophone', 'churned', 'nogender', 'prepaid']);
 
 export default async function CustomersPage({
   searchParams,
@@ -46,7 +47,7 @@ export default async function CustomersPage({
     fetchAllRows<Cust>((from, to) =>
       supabase
         .from('customers')
-        .select('id,ext_id,pii_enc,visit_count,revisit_state,revisit_cycle_days,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d,gender,gender_manual')
+        .select('id,ext_id,pii_enc,visit_count,revisit_state,revisit_cycle_days,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d,gender,gender_manual,prepaid_balance')
         .order('id')
         .range(from, to)),
     // 앞으로 올 예약만 — 지난 예약·취소·노쇼는 빠진다. 홈·챙길 고객과 같은 판정이다.
@@ -99,6 +100,7 @@ export default async function CustomersPage({
     visits_90d: c.visits_90d,
     visits_180d: c.visits_180d,
     visits_365d: c.visits_365d,
+    prepaid_balance: Math.max(0, c.prepaid_balance ?? 0), // 추정 — 줄에 '선불 52만', '선불 3개월+' 조건
   }));
 
   return (

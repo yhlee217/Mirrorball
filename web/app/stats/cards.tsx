@@ -55,6 +55,7 @@ export function SummaryCard({
   prepaid,
   careCount,
   unknownGender,
+  prepaidGone,
 }: {
   span: string; // '1–11일' — 이달 1일부터 마지막 수집일까지
   work: { now: number; prev: number } | null; // 영업한 날 — 휴무를 정했거나 지난달과 다를 때만
@@ -68,6 +69,7 @@ export function SummaryCard({
   prepaid: { sum: number; n: number };
   careCount: number;
   unknownGender: number;
+  prepaidGone: number; // 선불 남긴 채 3개월 넘게 안 오신 분(lib/customers prepaidAway)
 }) {
   const first = active[0];
   const last = active[active.length - 1];
@@ -115,9 +117,12 @@ export function SummaryCard({
         {prepaid.n > 0 ? <Num label="선불 잔액" v={`약 ${man(prepaid.sum)}`} sub={`${prepaid.n.toLocaleString()}명`} /> : null}
       </div>
       {/* 할 일 — 통계를 보고 '그래서 뭘 하지'로 바로 건너가게. 숫자는 홈·챙길 고객과 같은 기준 */}
-      {careCount > 0 || unknownGender > 0 ? (
+      {careCount > 0 || unknownGender > 0 || prepaidGone > 0 ? (
         <div className="strip-l">
           {careCount > 0 ? <Link href="/alerts" className="pill main">챙길 고객 <b>{careCount.toLocaleString()}</b></Link> : null}
+          {prepaidGone > 0 ? (
+            <Link href="/customers?filter=prepaid" className="pill">선불 3개월+ <b>{prepaidGone.toLocaleString()}</b></Link>
+          ) : null}
           {unknownGender > 0 ? (
             <Link href="/customers?filter=nogender" className="pill">성별 미상 <b>{unknownGender.toLocaleString()}</b></Link>
           ) : null}
