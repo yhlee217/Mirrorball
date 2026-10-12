@@ -6,7 +6,7 @@
    0  토큰            색
    1  리셋·바탕        브라우저 기본값 · body
    2  화면 뼈대        .wrap .bar .body .back .hello  (모든 화면이 쓴다)
-   3  공통 부품        카드·행 / 뱃지 / 빈 상태 / 버튼 / 입력 / 통계 타일 / 잔글씨
+   3  공통 부품        카드·행 / 뱃지 / 빈 상태 / 버튼 / 입력 / 통계 타일 / 잔글씨 / 접기
    4  홈              /
    5  챙길 고객        /alerts
    6  방문 관리        /visits
@@ -38,10 +38,10 @@
 a,button{-webkit-touch-callout:none;touch-action:manipulation}
 /* 순수 조작 요소는 길게 눌러도 글자가 잡히지 않게. 고객 이름·메모 같은 '내용'은 선택 가능하게
    남겨둔다(전부 막으면 복사해 쓸 수가 없다). */
-.tab,.chip,.hs,.btn,.fchip,.gear,.back,.sug,.tagx,.churn-set,.churn-undo,button{
+.tab,.hs,.btn,.fchip,.gear,.back,.sug,.tagx,.churn-set,.churn-undo,button{
   -webkit-user-select:none;user-select:none}
 input,textarea,select{-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
-/* 접기(details)는 방문 관리·카르테 두 곳뿐이고 둘 다 기본 삼각형을 감추고 제 표식을 쓴다.
+/* 접기(details)는 방문 관리·카르테·홈 세 곳이고 모두 기본 삼각형을 감추고 제 표식을 쓴다.
    블록마다 두 줄씩 적던 걸 여기 한 번만 둔다. */
 summary{list-style:none}
 summary::-webkit-details-marker{display:none}
@@ -134,13 +134,33 @@ body{background:var(--bg);color:var(--ink);
 .sk{background:linear-gradient(90deg,var(--soft) 25%,#E6DFD4 37%,var(--soft) 63%);background-size:400% 100%;animation:shimmer 1.4s ease infinite;border-radius:13px}
 @keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
 
+/* 3-8. 카드 아래 접기 — 카르테 시술 이력 · 홈 '그 뒤 예약'. 단골은 이력이 100건을 넘고,
+   한 달 치 예약을 다 펼치면 이번 주 브리핑이 묻힌다. */
+.moreh>summary{cursor:pointer;text-align:center;font-size:12.5px;
+  color:var(--muted);padding:11px 15px;border-top:1px solid var(--line);
+  -webkit-tap-highlight-color:transparent}
+.moreh>summary::after{content:' ▾'}
+.moreh[open]>summary::after{content:' ▴'}
+.moreh>summary:active{background:var(--soft)}
+
 /* ── 4. 홈 (/) ────────────────────────────────────────────────────────────── */
-.chips{display:flex;flex-wrap:wrap;gap:9px;margin:16px 0}
-.chip{flex:1 1 calc(50% - 5px);background:var(--soft);border-radius:14px;padding:13px 8px;text-align:center}
-.chip .nnum{font-size:25px;font-weight:600;color:var(--accent-d);line-height:1}
-.chip .l{font-size:11px;color:var(--muted);margin-top:5px}
-.chip-flat{display:flex;align-items:center;justify-content:center}
-.chip-flat .l{margin-top:0;font-size:12.5px}
+/* 이번 주 요약 — 지난 한 주 숫자 셋. 전주 값을 곁에 둬야 늘었는지 줄었는지가 읽힌다 */
+.wk-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:2px 15px 13px}
+.wk-nums>div{display:flex;flex-direction:column;gap:1px;min-width:0}
+.wk-nums .wl{font-size:10.5px;color:var(--muted)}
+.wk-nums b{font-size:19px;font-weight:800;color:var(--accent-d);line-height:1.3;white-space:nowrap}
+.wk-nums .wp{font-size:11px;color:var(--muted)}
+/* 예약 브리핑 — 예약마다 '몇 주 만 · 지난번 시술 · 메모 · 선불'을 한 덩이로. 줄이 여럿이라
+   아바타·시각을 위로 붙인다. 하루 단위로 머리말을 둔다. */
+.bf .li{align-items:flex-start}
+.bf-day{font-size:11px;font-weight:800;color:var(--accent);letter-spacing:.3px;padding:10px 15px 2px;border-top:1px solid var(--line)}
+.bf-day + .li{border-top:none}
+.bf-f{font-size:12px;color:var(--ink);margin-top:3px;line-height:1.45}
+.bf-f .late{color:var(--rose);font-weight:700}   /* 평소 주기보다 한참 늦게 오시는 분 — 안부부터 */
+.bf-f .dim{color:var(--muted)}
+.bf-m{margin-top:6px;font-size:12.5px;line-height:1.5;color:var(--accent-d);background:var(--soft);border-radius:9px;padding:6px 9px}
+.bf-m .r{color:var(--ink)}
+.bf-m .k{font-size:10.5px;font-weight:700;color:var(--muted);margin-right:5px}
 /* 신호 타일 4칸(이탈위험·재방문도래·신규·VIP) — 누르면 고객 목록의 같은 필터로 간다 */
 .hsig{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:16px 0 14px}
 .hs{border:1px solid var(--line);border-radius:13px;padding:11px 4px 9px;text-align:center}
@@ -263,14 +283,6 @@ a.hs:active{background:var(--soft)}
 .pocket.on{color:#fff;background:var(--accent);border-color:var(--accent)}
 .pocket:disabled{opacity:.5}
 .pocket.busy{min-width:52px}      /* '…' 로 바뀔 때 줄이 밀리지 않게 */
-
-/* 시술 이력 접기 — 단골은 100건이 넘어 화면이 통째로 이력이 된다 */
-.moreh>summary{cursor:pointer;text-align:center;font-size:12.5px;
-  color:var(--muted);padding:11px 15px;border-top:1px solid var(--line);
-  -webkit-tap-highlight-color:transparent}
-.moreh>summary::after{content:' ▾'}
-.moreh[open]>summary::after{content:' ▴'}
-.moreh>summary:active{background:var(--soft)}
 
 /* 성별 지정 — 추정을 사람이 덮어쓰는 자리. 지정하면 진하게, 추정 상태면 옅게 표시한다 */
 .gpick{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:13px;

@@ -7,8 +7,8 @@ export default function Loading() {
       <div className="body">
         <div className="sk" style={{ height: 54, marginBottom: 16 }} />
         <div className="sk" style={{ height: 66, marginBottom: 14 }} />
-        <div className="sk" style={{ height: 120, marginBottom: 13 }} />
-        <div className="sk" style={{ height: 120 }} />
+        <div className="sk" style={{ height: 200, marginBottom: 13 }} />
+        <div className="sk" style={{ height: 160 }} />
       </div>
     </main>
   );
