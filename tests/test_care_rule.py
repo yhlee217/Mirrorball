@@ -89,10 +89,35 @@ VAC_CASES = [
 ]
 
 
+# 첫 방문 손님(개선 계획 v4 P1) — 안부(첫 방문 14일 안) · 다시 오실 때(그날 시술의 표준 주기 ~ 두 배)
+# 이름, 고객, 그날 시술, 휴가 여부, 기대
+FIRST_CASES = [
+    ("첫 방문 5일 — 안부",                {"visit_count": 1, "last_visit": ago(5)}, ["뿌리염색"], False, "hello"),
+    ("첫 방문 13일 — 아직 안부",           {"visit_count": 1, "last_visit": ago(13)}, ["남자컷(원장)"], False, "hello"),
+    ("14일 · 남자커트 4주 전 — 아무것도",   {"visit_count": 1, "last_visit": ago(20)}, ["남자컷(원장)"], False, None),
+    ("뿌리염색 5주 지남 — 다시 오실 때",     {"visit_count": 1, "last_visit": ago(40)}, ["뿌리염색"], False, "back"),
+    ("뿌리염색 두 배(10주) 넘음 — 내림",     {"visit_count": 1, "last_visit": ago(75)}, ["뿌리염색"], False, None),
+    ("두 시술이면 짧은 주기(앞머리 3주)",     {"visit_count": 1, "last_visit": ago(30)}, ["여자컷", "앞머리컷"], False, "back"),
+    ("모르는 시술은 42일",                  {"visit_count": 1, "last_visit": ago(50)}, ["드라이"], False, "back"),
+    ("펌 13주~26주 안 — 다시 오실 때",       {"visit_count": 1, "last_visit": ago(170)}, ["디지털펌"], False, "back"),
+    ("두 번 오신 분은 첫 방문 손님 아님",     {"visit_count": 2, "last_visit": ago(40)}, ["뿌리염색"], False, None),
+    ("휴가 30일 빼면 아직 주기 전",          {"visit_count": 1, "last_visit": ago(60)}, ["뿌리염색"], True, None),
+    ("휴가가 없으면 다시 오실 때",           {"visit_count": 1, "last_visit": ago(60)}, ["뿌리염색"], False, "back"),
+]
+# 할 일 — 이탈 표시 · 잡힌 예약 · 최근 연락이면 빠진다
+FIRST_TODO = [
+    ("안부 · 그대로", {"visit_count": 1, "last_visit": ago(5)}, False, False, "hello"),
+    ("안부 · 예약 있음", {"visit_count": 1, "last_visit": ago(5)}, True, False, None),
+    ("안부 · 연락함", {"visit_count": 1, "last_visit": ago(5)}, False, True, None),
+    ("안부 · 이탈 표시", {"visit_count": 1, "last_visit": ago(5), "churned_at": "2026-09-01T00:00:00Z"}, False, False, None),
+]
+
+
 def _node_results() -> dict | None:
     """web/lib 의 판정을 tsc → node 로 돌린 결과(tests/tsnode.py — 컴파일이 깨지면 건너뛰지 않고 실패)."""
-    return run_ts(["lib/customers.ts", "lib/settings.ts", "lib/contact.ts"], """
-const { needsCare, onCareList, careState } = require('./customers.js');
+    return run_ts(["lib/customers.ts", "lib/settings.ts", "lib/contact.ts", "lib/care-cycle.ts"], """
+const { needsCare, onCareList, careState, firstCare, onFirstList } = require('./customers.js');
+const { careFor } = require('./care-cycle.js');
 const { DEFAULT_SETTINGS: S } = require('./settings.js');
 const { phoneDigits, smsHref, telHref } = require('./contact.js');
 const SV = { ...S, off_dates: D.vac };
@@ -104,6 +129,10 @@ out({
   sms: smsHref('01012345678', D.body), tel: telHref('01012345678'),
   vacState: D.vacCases.map((c) => careState(c, SV, D.today)),
   vacNeeds: D.vacCases.map((c) => needsCare(c, { settings: SV, churned: false, booked: false, asOf: D.today })),
+  first: D.first.map((k) => firstCare(k.c, k.svcs, k.vac ? SV : S, D.today)),
+  firstTodo: D.firstTodo.map((k) => onFirstList(k.c, ['뿌리염색'],
+    { settings: S, churned: !!k.c.churned_at, booked: k.booked, contacted: k.contacted, asOf: D.today })),
+  cats: D.menus.map((m) => (careFor(m) || {}).cat || null),
 });
 """, {
         "needs": [{"c": c_, "booked": b} for _, c_, b, _ in CASES],
@@ -113,6 +142,9 @@ out({
         "today": TODAY.isoformat(),
         "vac": VAC,
         "vacCases": [c for _, c, _, _ in VAC_CASES],
+        "first": [{"c": c_, "svcs": sv, "vac": v} for _, c_, sv, v, _ in FIRST_CASES],
+        "firstTodo": [{"c": c_, "booked": b, "contacted": k} for _, c_, b, k, _ in FIRST_TODO],
+        "menus": MENUS,
     })
 
 
@@ -163,3 +195,32 @@ def test_no_vacation_keeps_worker_state():
     """휴가를 정하지 않았으면 워커 판정 그대로 — 예전과 같은 숫자."""
     for _, c, _, _ in VAC_CASES:
         assert up.care_state(c, S, TODAY) == c["revisit_state"]
+
+
+# 시술 분류 — 웹(care-cycle.ts)과 측정(care_cycle.py)이 같은 표(care-cycle.json)를 같은 순서로 읽는가
+MENUS = ["뿌리펌", "뿌리 볼륨펌", "뿌리염색", "새치커버", "남자 다운펌", "디지털펌", "염색클리닉", "두피 클리닉",
+         "앞머리컷", "주니어컷", "남자컷(원장)", "여자컷(부원장)", "커트", "드라이", ""]
+
+
+@pytest.mark.parametrize("name, c, svcs, vac, want", FIRST_CASES, ids=[c[0] for c in FIRST_CASES])
+def test_python_first_visit_rule(name, c, svcs, vac, want):
+    assert up.first_care(c, svcs, SV if vac else S, TODAY) == want
+
+
+def test_web_first_visit_rule_matches_python(web):
+    """첫 방문 손님 — 앱과 측정이 같은 손님을 같은 때(안부·다시 오실 때)로 본다."""
+    for (name, c, svcs, vac, want), got in zip(FIRST_CASES, web["first"]):
+        assert got == want, f"[TS] {name}"
+        assert got == up.first_care(c, svcs, SV if vac else S, TODAY), f"[TS↔PY 불일치] {name}"
+
+
+def test_web_first_todo_matches_python(web):
+    for (name, c, booked, contacted, want), got in zip(FIRST_TODO, web["firstTodo"]):
+        assert got == want, f"[TS] {name}"
+        assert got == up.on_first_list(c, ["뿌리염색"], S, TODAY, booked, contacted), f"[TS↔PY 불일치] {name}"
+
+
+def test_care_table_is_shared(web):
+    import care_cycle
+    assert web["cats"] == [(care_cycle.care_for(m) or {}).get("cat") for m in MENUS]
+    assert web["cats"][:4] == ["뿌리펌", "뿌리펌", "뿌리염색", "뿌리염색"]     # 뿌리펌이 뿌리염색보다 먼저

@@ -97,6 +97,14 @@ const items = names.slice(0, 8).map((n, i) => {
       : `${n}님, 지난 커트 머리 자라 정리하실 때쯤이라 연락드려요. 편하신 시간에 예약 도와드릴게요!`,
   };
 });
+// 첫 방문 손님(개선 계획 v4) — 맨 위 안부, 맨 아래 다시 오실 때. 견본은 그대로 8명(전후 비교가 되게)
+items.splice(6);
+items.unshift({ id: 'f1', name: names[8], phone: '01012345678', state: 'hello', why: '안부 · 6일 전 · 뿌리염색',
+  note: '첫 방문 10.6(월) · 첫 방문 14일 안에만 떠요',
+  draft: `${names[8]}님, 지난주 뿌리염색 해드린 하예원이에요 😊 지내보시니 괜찮으세요? 너무 뜨거운 물로 자주 감지 않으시면 색이 더 오래가요. 불편한 점 있으면 편하게 말씀 주세요!` });
+items.push({ id: 'f2', name: names[9], phone: '01012345678', state: 'back', why: '다시 오실 때 · 5주째 · 뿌리염색',
+  note: '첫 방문 9.4(금) · 뿌리염색 보통 5주 · 10주 지나면 목록에서 내려가요',
+  draft: `${names[9]}님, 하예원이에요! 5주 전 처음 오셨을 때 뿌리염색 해드렸는데, 뿌리 올라올 때쯤이라 연락드려요. 편하신 시간에 예약 도와드릴게요!` });
 out.alerts = screen(bar('챙길 고객 <span class="sect-n">84명</span>', { back: false, sync: true }),
   r(load('app/alerts/alerts-list.js').default, { items, quiet: 3, quietDays: 14 }));
 

@@ -95,11 +95,12 @@ body{background:var(--bg);color:var(--ink);
 .tag-new{color:var(--sage-ink);background:#E7EFE5}
 .tag-vip{color:var(--gold-ink);background:#F2EAD8}
 .tag-off{color:var(--muted);background:var(--soft)}
-/* 상태 뱃지 — 지금 이 손님에게 할 일(이탈 위험 · 재방문 도래 · 예약 있음). 챙길 고객 · 고객 목록 · 카르테 머리말 */
+/* 상태 뱃지 — 지금 이 손님에게 할 일(이탈 위험 · 재방문 도래 · 첫 방문 · 예약 있음). 챙길 고객 · 고객 목록 · 카르테 머리말 */
 .ctag{font-size:12px;font-weight:800;border-radius:20px;padding:1px 7px;white-space:nowrap}
 .ctag.overdue{background:#F3E6E2;color:var(--rose-ink)}
 .ctag.due{background:#F2EAD8;color:var(--gold-ink)}
 .ctag.booked{background:#E4EDE2;color:var(--sage-ink)}
+.ctag.hello,.ctag.back{background:#E7EFE5;color:var(--sage-ink)}   /* 첫 방문 — 홈 예약의 '첫 방문' 꼬리표와 같은 색 */
 .li .ctag{flex:none;margin-left:8px}
 
 /* 3-3. 빈 상태 — '무엇이 비었나(t) · 왜/언제 채워지나(h) · 뭘 하면 되나(a)' 세 줄.
@@ -167,7 +168,7 @@ body{background:var(--bg);color:var(--ink);
   -webkit-tap-highlight-color:transparent}
 .help>summary::before{content:'';position:absolute;inset:-11px}   /* 원은 22px, 누르는 영역은 44px */
 .help.inl{display:inline}
-.help.inl>summary{position:relative;display:inline-flex;vertical-align:middle;margin-left:5px}
+.help.inl>summary{position:relative;top:auto;right:auto;display:inline-flex;vertical-align:middle;margin-left:5px}
 .help[open]>summary{background:var(--soft);color:var(--accent-d)}
 .help-b{font-size:12.5px;line-height:1.6;color:var(--ink);background:var(--soft);border-radius:10px;padding:9px 11px;margin:6px 0 10px}
 .help-b.inset{margin:6px 15px 10px}

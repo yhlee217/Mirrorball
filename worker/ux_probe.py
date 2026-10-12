@@ -20,11 +20,14 @@ from env import load_env
 load_env()
 
 
+import care_cycle  # noqa: E402
 import mirrorball_crypto as mc  # noqa: E402
 import supa  # noqa: E402
+import txkind  # noqa: E402
 
 KST = dt.timezone(dt.timedelta(hours=9))
 CONTACT_QUIET_DAYS = 14   # web/lib/contact.ts 와 같은 값 — 연락 뒤 이 기간은 '할 일'에서 빠진다
+HELLO_DAYS = 14           # web/lib/customers.ts 와 같은 값 — 첫 방문 뒤 이 기간 안이면 '안부'
 # web/lib/settings.ts DEFAULT_SETTINGS 와 같은 값 — 테넌트 설정에 없으면 이걸 쓴다
 LAPSE_DEFAULTS = {"lapsed_months": 12, "lapsed_soft_months": 6, "lapsed_soft_visits": 3}
 
@@ -140,6 +143,54 @@ def on_care_list(c: dict, s: dict, today: dt.date, booked: bool, contacted: bool
     return not contacted and needs_care(c, s, today, booked, as_of)
 
 
+def first_care(c: dict, services, s: dict, as_of: dt.date, today: dt.date | None = None):
+    """web/lib/customers.ts firstCare — 첫 방문 손님(방문 1회)을 챙길 때(개선 계획 v4 P1).
+
+    hello = 첫 방문 뒤 HELLO_DAYS 안(안부), back = 그날 시술의 표준 주기 ~ 두 배(휴가는 뺀다, 다시 오실 때).
+    이탈 판정(is_lapsed)이 먼저 걸리면 back 이 아니다. 주기는 그날 받은 시술 중 가장 짧은 것(care_cycle).
+    """
+    if (c.get("visit_count") or 0) != 1 or not c.get("last_visit"):
+        return None
+    day = c["last_visit"][:10]
+    ago = (as_of - dt.date.fromisoformat(day)).days
+    if ago < 0:
+        return None
+    if ago < HELLO_DAYS:
+        return "hello"
+    best = care_cycle.soonest_care(services)
+    cyc = best["days"] if best else 42
+    away = away_days(day, as_of, s)
+    if away < cyc or away > cyc * 2:
+        return None
+    return None if is_lapsed(c, s, today or as_of) else "back"
+
+
+def on_first_list(c: dict, services, s: dict, today: dt.date, booked: bool, contacted: bool,
+                  as_of: dt.date | None = None):
+    """web/lib/customers.ts onFirstList — 이탈 표시·잡힌 예약·최근 연락이 없는 첫 방문 손님."""
+    if c.get("churned_at") or booked or contacted:
+        return None
+    return first_care(c, services, s, as_of or today, today)
+
+
+def services_on(txs: list[dict], day_of) -> dict[str, list[str]]:
+    """web/lib/customers.ts servicesOn — 손님별로 그날 받은 시술의 원본 메뉴명(충전·제품은 뺀다)."""
+    out: dict[str, list[str]] = {}
+    for t in txs:
+        cid, svc, date = t.get("customer_id"), t.get("service"), t.get("date")
+        if not cid or not svc or not date:
+            continue
+        day = day_of(cid)
+        if not day or date[:10] != day[:10]:
+            continue
+        if (t.get("kind") or txkind.classify(svc)) != "service":
+            continue
+        out.setdefault(cid, [])
+        if svc not in out[cid]:
+            out[cid].append(svc)
+    return out
+
+
 def last_n_months(today: dt.date, n: int) -> list[str]:
     """이번 달 포함 최근 n개월 'YYYY-MM'. 달 단위로 센다(31일씩 빼면 달을 건너뛴다)."""
     y, m, out = today.year, today.month, []
@@ -164,6 +215,20 @@ def measure(customers: list[dict], txs: list[dict], bookings: list[dict],
     state = [c for c in real if needs_care(c, settings, today, booked=c["id"] in active)]   # 홈 타일
     care = [c for c in real
             if on_care_list(c, settings, today, c["id"] in active, c["id"] in contacted)]  # 챙길 고객 탭
+    # 첫 방문 손님(안부·다시 오실 때)도 챙길 고객 탭에 오른다(개선 계획 v4 P1) — 화면과 같은 숫자로 센다
+    ones = {c["id"]: c for c in real if (c.get("visit_count") or 0) == 1}
+    one_svcs = services_on(txs, lambda cid: ones[cid].get("last_visit") if cid in ones else None)
+    first = Counter()
+    first_quiet = 0
+    for c in ones.values():
+        svcs = one_svcs.get(c["id"], [])
+        k = on_first_list(c, svcs, settings, today, c["id"] in active, c["id"] in contacted)
+        if k:
+            first[k] += 1
+            care.append(c)
+        elif (c["id"] in contacted and not c.get("churned_at") and c["id"] not in active
+              and first_care(c, svcs, settings, today)):
+            first_quiet += 1
 
     since = (today - dt.timedelta(days=365)).isoformat()
     recent = [t for t in txs if (t.get("date") or "") >= since]
@@ -187,7 +252,8 @@ def measure(customers: list[dict], txs: list[dict], bookings: list[dict],
         "care": len(care),
         "care_phone": (sum(1 for c in care if has_phone.get(c["id"])), len(care)),
         "care_booked": len(cand) - len(state),
-        "care_quiet": len(state) - len(care),
+        "care_quiet": len(state) - (len(care) - sum(first.values())) + first_quiet,
+        "care_first": (first["hello"], first["back"]),
         "tx_time": (sum(1 for t in recent if (t.get("time") or "").strip()), len(recent)),
         "repeat": (sum(1 for c in real if (c.get("visit_count") or 0) >= 2), len(real)),
         "cycle": (sum(1 for c in real if c.get("revisit_cycle_days")), len(real)),
@@ -219,6 +285,7 @@ def report(slug: str, salon: str, m: dict) -> list[str]:
         f"  C1  전화번호        {pct(*m['phone'])} · 챙길 고객 중 {pct(*m['care_phone'])}",
         f"  1-1 챙길 고객 {m['care']}명 — 이미 예약해서 빠진 {m['care_booked']}명"
         f" · 최근 연락해서 빠진 {m['care_quiet']}명",
+        f"      그중 첫 방문    안부 {m['care_first'][0]}명 · 다시 오실 때 {m['care_first'][1]}명",
         f"  D4  시술 시각       채움 {pct(*m['tx_time'])} — 최근 12개월 거래",
         f"  B2  방문 2회 이상   {pct(*m['repeat'])} · 주기 계산됨 {pct(*m['cycle'])}",
         f"  A3  선불 잔액       남은 손님 {n}명 · 합계 {won(total)} (추정)",
@@ -297,7 +364,7 @@ def main() -> int:
             "customers", tid,
             "id,ext_id,pii_enc,visit_count,first_visit,last_visit,revisit_state,"
             "revisit_cycle_days,churned_at,prepaid_balance,memo_ai")
-        txs = supa.select_all("transactions", tid, "date,time")
+        txs = supa.select_all("transactions", tid, "customer_id,date,time,service,kind")
         bookings = supa.select_all("bookings", tid, "customer_id,date,time,status")
         since = (now - dt.timedelta(days=CONTACT_QUIET_DAYS)).astimezone(dt.timezone.utc).isoformat()
         contacted = {r["customer_id"] for r in supa._get("/care_items", {

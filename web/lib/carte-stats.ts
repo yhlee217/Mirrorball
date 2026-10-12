@@ -1,4 +1,4 @@
-import { careFor } from './care-cycle';
+import { soonestCare } from './care-cycle';
 import { agoWords, daysBetween, shortDate, spanWords } from './week';
 import { windowEnd, type OffDays } from './offdays';
 
@@ -14,14 +14,10 @@ export type NextVisit =
   | { kind: 'expected'; date: string; basis: string; estimated: boolean; overdueDays: number }
   | null;
 
-/** 시술별 표준 주기 중 가장 짧은 것 — 먼저 돌아올 이유가 다음 방문을 정한다. */
+/** 시술별 표준 주기 중 가장 짧은 것(lib/care-cycle soonestCare). 모르면 42일 — effectiveCycle 와 같은 기본값. */
 function serviceCycle(services: (string | null)[]): { days: number; cat: string | null } {
-  let best: { days: number; cat: string | null } | null = null;
-  for (const s of services) {
-    const c = careFor(s);
-    if (c && (!best || c.days < best.days)) best = { days: c.days, cat: c.cat };
-  }
-  return best ?? { days: 42, cat: null }; // lib/care-cycle effectiveCycle 와 같은 기본값
+  const best = soonestCare(services);
+  return best ? { days: best.care.days, cat: best.care.cat } : { days: 42, cat: null };
 }
 
 /**

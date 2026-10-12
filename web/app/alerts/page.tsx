@@ -2,16 +2,29 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import { contactReader, openDek, requireTenant } from '@/lib/tenant';
-import { careState, fetchAllRows, isRealCustomer, isChurned, needsCare, onCareList } from '@/lib/customers';
+import {
+  careState,
+  fetchAllRows,
+  isRealCustomer,
+  isChurned,
+  needsCare,
+  onCareList,
+  firstCare,
+  onFirstList,
+  servicesOn,
+  HELLO_DAYS,
+} from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookedCustomerIds } from '@/lib/bookings';
 import { CONTACT_QUIET_DAYS, phoneDigits, recentlyContactedIds } from '@/lib/contact';
 import { friendlyService } from '@/lib/service-name';
-import { careFor } from '@/lib/care-cycle';
+import { careFor, soonestCare } from '@/lib/care-cycle';
+import { draftFor, whenWord } from '@/lib/drafts';
 import { lastSynced } from '@/lib/sync';
 import { SyncChip } from '@/components/sync-chip';
 import { kstNow } from '@/lib/kst';
-import { dayLabel, daysBetween, spanWords } from '@/lib/week';
+import { txKind } from '@/lib/tx';
+import { addDays, agoWords, dayLabel, daysBetween, spanWords } from '@/lib/week';
 import { awayDays } from '@/lib/offdays';
 import AlertsList from './alerts-list';
 
@@ -25,99 +38,138 @@ type Cust = {
   visit_count: number;
   churned_at: string | null;
 };
+type Tx = { customer_id: string | null; date: string | null; service: string | null; kind: string | null };
+
+const COLS = 'id,ext_id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count,churned_at';
+// 줄 순서 — 안부는 첫 방문 2주 안에만 뜨는 짧은 할 일이라 맨 위, 다시 오실 때는 맨 아래.
+const ORDER: Record<string, number> = { hello: 0, overdue: 1, due: 2, back: 3 };
 
 export default async function AlertsPage() {
   const { supabase, tenantId } = await requireTenant();
+  const today = kstNow().date;
 
-  const [{ data: tenant }, customers, booked, contacted, synced] = await Promise.all([
-    supabase.from('tenants').select('dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
+  const [{ data: tenant }, customers, firsts, booked, contacted, synced] = await Promise.all([
+    supabase.from('tenants').select('designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select('id,ext_id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count,churned_at').in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
+      supabase.from('customers').select(COLS).in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
+    // 첫 방문 손님(방문 1회) — 워커는 '신규'로만 두므로 따로 받는다. 1년 안이면 넉넉하다(lib/customers firstCare)
+    fetchAllRows<Cust>((from, to) =>
+      supabase.from('customers').select(COLS).eq('visit_count', 1).gte('last_visit', addDays(today, -365))
+        .order('id').range(from, to)),
     bookedCustomerIds(supabase, tenantId), // 이미 예약한 분께 '예약 도와드릴게요'를 보내지 않게
     recentlyContactedIds(supabase, tenantId), // 최근 연락한 분은 할 일에서 잠시 뺀다
     lastSynced(supabase), // 재방문 판정의 기준일(워커가 판정한 날) — 휴가를 빼고 셀 때 쓴다
   ]);
 
-  const tRow = tenant as { dek_wrapped: string | null; settings: unknown } | null;
+  const tRow = tenant as { designer_name: string | null; dek_wrapped: string | null; settings: unknown } | null;
   const settings = mergeSettings(tRow?.settings);
+  const designer = tRow?.designer_name?.trim() || null;
   const dek = await openDek(tRow?.dek_wrapped);
   const readContact = contactReader(dek);
 
   // 재방문 상태는 휴가를 반영한 것(careState) — 휴가 동안은 손님이 오고 싶어도 못 왔다.
   // DB 에서 due·overdue 만 받아도 되는 건, 휴가 반영은 판정을 늦추기만 하고 앞당기지 않아서다.
-  const asOf = synced?.date ?? kstNow().date;
+  const asOf = synced?.date ?? today;
   const stateOf = (c: Cust) => careState(c, settings, asOf);
   const flags = (c: Cust) => ({ settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id), asOf });
   const real = ((customers as Cust[]) ?? []).filter((c) => isRealCustomer(c.ext_id));
-  // 연락해서 잠시 빠진 분 — 목록이 왜 줄었는지 밝힌다
-  const quiet = real.filter((c) => needsCare(c, flags(c)) && contacted.has(c.id)).length;
-  const todo = real.filter((c) => onCareList(c, flags(c)));
-  // 전원을 그린다 — 화면은 50명씩 펼친다(alerts-list). 머리말 숫자와 목록이 같은 사람을 가리키게.
-  const base = [...todo]
-    .sort((a, b) => (stateOf(a) === 'overdue' ? 0 : 1) - (stateOf(b) === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count);
-  const contacts = await Promise.all(base.map((c) => readContact(c.pii_enc)));
-  const names = contacts.map((x) => x.name);
+  const realFirst = ((firsts as Cust[]) ?? []).filter((c) => isRealCustomer(c.ext_id));
 
-  // 개인화용: 각 고객의 마지막 시술. 50명씩 나눠 받는다 — 한 번에 묶으면 주소가 길어지고,
-  // 단골 몇 분의 긴 이력이 상한(3000행)을 채워 다른 분 마지막 시술이 빠질 수 있다.
+  // 손님별 거래 — 마지막 시술(문구)과 첫 방문 날 받은 시술(주기·문구)에 쓴다. 50명씩 나눠 받는다:
+  // 한 번에 묶으면 주소가 길어지고, 단골 몇 분의 긴 이력이 상한(3000행)을 채워 다른 분 시술이 빠질 수 있다.
+  const txsOf = async (cs: Cust[]): Promise<Tx[]> => {
+    const chunks: Cust[][] = [];
+    for (let i = 0; i < cs.length; i += 50) chunks.push(cs.slice(i, i + 50));
+    const parts = await Promise.all(
+      chunks.map((part) => {
+        const since = part.map((c) => (c.last_visit ?? '').slice(0, 10)).filter(Boolean).sort()[0] ?? '1970-01-01';
+        return supabase
+          .from('transactions')
+          .select('customer_id,date,service,kind')
+          .in('customer_id', part.map((c) => c.id))
+          .gte('date', since)
+          .order('date', { ascending: false })
+          .limit(3000);
+      }),
+    );
+    return parts.flatMap(({ data }) => (data as Tx[] | null) ?? []);
+  };
+
+  const todo = real.filter((c) => onCareList(c, flags(c)));
+  const firstById = new Map(realFirst.map((c) => [c.id, c]));
+  const firstSvcs = servicesOn(await txsOf(realFirst), (id) => firstById.get(id)?.last_visit);
+  const svcsOf = (c: Cust) => firstSvcs.get(c.id) ?? [];
+  const firstKind = new Map(realFirst.map((c) => [c.id, onFirstList(c, svcsOf(c), flags(c))]));
+  const firstTodo = realFirst.filter((c) => firstKind.get(c.id));
+  // 연락해서 잠시 빠진 분 — 목록이 왜 줄었는지 밝힌다
+  const quiet =
+    real.filter((c) => needsCare(c, flags(c)) && contacted.has(c.id)).length +
+    realFirst.filter((c) => contacted.has(c.id) && !isChurned(c) && !booked.has(c.id) && firstCare(c, svcsOf(c), settings, asOf))
+      .length;
+
+  // 전원을 그린다 — 화면은 50명씩 펼친다(alerts-list). 머리말 숫자와 목록이 같은 사람을 가리키게.
+  const rows: { c: Cust; state: string }[] = [
+    ...todo.map((c) => ({ c, state: stateOf(c) as string })),
+    ...firstTodo.map((c) => ({ c, state: firstKind.get(c.id) as string })),
+  ].sort((a, b) =>
+    ORDER[a.state] - ORDER[b.state] ||
+    (a.state === 'hello' || a.state === 'back'
+      ? (a.c.last_visit ?? '').localeCompare(b.c.last_visit ?? '') // 첫 방문은 오래된 분부터 — 곧 목록에서 내려간다
+      : b.c.visit_count - a.c.visit_count));
+
+  const [contacts, lastTx] = await Promise.all([Promise.all(rows.map((r) => readContact(r.c.pii_enc))), txsOf(todo)]);
+  // 2회 이상 손님의 마지막 시술 — 최신 거래부터 오므로 손님마다 처음 만난 시술. 충전·제품은 건너뛴다.
   const lastSvc = new Map<string, string>();
-  const chunks: Cust[][] = [];
-  for (let i = 0; i < base.length; i += 50) chunks.push(base.slice(i, i + 50));
-  const parts = await Promise.all(
-    chunks.map((cs) => {
-      const since = cs.map((c) => (c.last_visit ?? '').slice(0, 10)).filter(Boolean).sort()[0] ?? '1970-01-01';
-      return supabase
-        .from('transactions')
-        .select('customer_id,date,service')
-        .in('customer_id', cs.map((c) => c.id))
-        .gte('date', since)
-        .order('date', { ascending: false })
-        .limit(3000);
-    }),
-  );
-  for (const { data: txs } of parts) {
-    for (const t of (txs as { customer_id: string | null; service: string | null }[]) ?? []) {
-      if (t.customer_id && t.service && !lastSvc.has(t.customer_id)) lastSvc.set(t.customer_id, t.service);
+  for (const t of lastTx) {
+    if (t.customer_id && t.service && !lastSvc.has(t.customer_id) && txKind(t.kind, t.service) === 'service') {
+      lastSvc.set(t.customer_id, t.service);
     }
   }
-  const monthsOf = (d: string | null) => (d ? Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 2592000000)) : null);
 
-  const items = base.map((c, i) => {
-    const name = names[i];
-    const m = monthsOf(c.last_visit);
-    const rawSvc = lastSvc.get(c.id);
-    const svc = friendlyService(rawSvc); // 고객 문구용(직급·성별 표기 제거)
-    const care = careFor(rawSvc); // 시술별 표준 관리주기·표현(분류는 원본 메뉴명으로)
-    const loyal = c.visit_count >= settings.vip_visits;
-    const state = stateOf(c) as string;
-    // 사유는 한 줄 조각 — '2개월째 · 평소 5주 · 뿌리염색'(UX 계획 v3). 날짜·표준 주기는 펼친 곳에.
+  const items = rows.map(({ c, state }, i) => {
+    const name = contacts[i].name;
     const last = c.last_visit ? c.last_visit.slice(0, 10) : null;
-    const why = [
-      last ? `${spanWords(daysBetween(last, asOf))}째` : null,
-      c.revisit_cycle_days ? `평소 ${spanWords(c.revisit_cycle_days)}` : null,
-      care?.cat ?? (svc || null),
-    ].filter(Boolean).join(' · ');
-    // 펼친 곳의 한 줄 — 마지막 방문일, 휴가를 빼고 셌으면 그 일수(달력보다 판정이 늦은 까닭)
+    const days = last ? daysBetween(last, today) : null;
     const vac = last ? daysBetween(last, asOf) - awayDays(last, asOf, settings) : 0;
-    const note = [last ? `마지막 방문 ${dayLabel(last)}` : null, vac > 0 ? `휴가 ${vac}일은 빼고 셈` : null]
-      .filter(Boolean).join(' · ');
+    let why: string;
+    let note: string;
     let draft: string;
-    if (state === 'overdue') {
-      const open = loyal
-        ? `${name}님, 오랜만이에요! 벌써 ${m}개월 됐네요. 늘 찾아주셔서 감사해요 🙏`
-        : `${name}님, ${m ? m + '개월 만이에요' : '오랜만이에요'}! 잘 지내셨어요? 😊`;
-      const mid =
-        care && svc
-          ? ` 지난 ${svc} ${care.phrase} 한번 뵙고 싶어서 연락드려요.`
-          : svc
-            ? ` 지난 ${svc} 이제 슬슬 관리할 시기라 생각나서 연락드려요.`
-            : ` 슬슬 컨디션 체크 겸 한번 뵙고 싶어서요.`;
-      draft = `${open}${mid} 편하신 때 편하게 연락 주세요!`;
+    if (state === 'hello' || state === 'back') {
+      // 첫 방문 손님 — 그날 받은 시술 중 주기가 가장 짧은 것이 문구·주기를 정한다(카르테 다음 방문과 같다)
+      const pick = soonestCare(svcsOf(c));
+      const raw = pick?.service ?? svcsOf(c)[0] ?? null;
+      const svc = friendlyService(raw) || null;
+      const care = pick?.care ?? null;
+      if (state === 'hello') {
+        why = ['안부', days !== null ? agoWords(days) : null, care?.cat ?? svc].filter(Boolean).join(' · ');
+        note = [last ? `첫 방문 ${dayLabel(last)}` : null, `첫 방문 ${HELLO_DAYS}일 안에만 떠요`].filter(Boolean).join(' · ');
+        draft = draftFor({ kind: 'hello', name, designer, svc, care, days, when: last ? whenWord(last, today) : undefined });
+      } else {
+        why = ['다시 오실 때', days !== null ? `${spanWords(days)}째` : null, care?.cat ?? svc].filter(Boolean).join(' · ');
+        note = [
+          last ? `첫 방문 ${dayLabel(last)}` : null,
+          care ? `${care.cat} 보통 ${spanWords(care.days)}` : null,
+          `${spanWords((care?.days ?? 42) * 2)} 지나면 목록에서 내려가요`,
+          vac > 0 ? `휴가 ${vac}일은 빼고 셈` : null,
+        ].filter(Boolean).join(' · ');
+        draft = draftFor({ kind: 'back', name, designer, svc, care, days });
+      }
     } else {
-      draft =
-        care && svc
-          ? `${name}님, 지난 ${svc} ${care.phrase} 연락드려요. 편하신 시간에 예약 도와드릴게요!`
-          : `${name}님, ${svc ? '지난 ' + svc : '지난 시술'} 이제 관리해주실 시기예요${c.revisit_cycle_days ? ` (평소 ${c.revisit_cycle_days}일 주기)` : ''}. 편하신 시간에 예약 도와드릴게요!`;
+      const rawSvc = lastSvc.get(c.id);
+      const svc = friendlyService(rawSvc); // 고객 문구용(직급·성별 표기 제거)
+      const care = careFor(rawSvc); // 시술별 표준 관리주기·표현(분류는 원본 메뉴명으로)
+      // 사유는 한 줄 조각 — '2개월째 · 평소 5주 · 뿌리염색'(UX 계획 v3). 날짜·표준 주기는 펼친 곳에.
+      why = [
+        last ? `${spanWords(daysBetween(last, asOf))}째` : null,
+        c.revisit_cycle_days ? `평소 ${spanWords(c.revisit_cycle_days)}` : null,
+        care?.cat ?? (svc || null),
+      ].filter(Boolean).join(' · ');
+      // 펼친 곳의 한 줄 — 마지막 방문일, 휴가를 빼고 셌으면 그 일수(달력보다 판정이 늦은 까닭)
+      note = [last ? `마지막 방문 ${dayLabel(last)}` : null, vac > 0 ? `휴가 ${vac}일은 빼고 셈` : null].filter(Boolean).join(' · ');
+      draft = draftFor({
+        kind: state === 'overdue' ? 'overdue' : 'due', name, designer, svc: svc || null, care, days,
+        loyal: c.visit_count >= settings.vip_visits, cycleDays: c.revisit_cycle_days,
+      });
     }
     return { id: c.id, name, phone: phoneDigits(contacts[i].phone), state, why, note, draft };
   });
@@ -125,7 +177,7 @@ export default async function AlertsPage() {
   return (
     <main className="wrap">
       <div className="bar">
-        <div className="ttl">챙길 고객 <span className="sect-n">{todo.length.toLocaleString()}명</span></div>
+        <div className="ttl">챙길 고객 <span className="sect-n">{items.length.toLocaleString()}명</span></div>
         <SyncChip synced={synced} />
       </div>
       <div className="body">

@@ -18,6 +18,8 @@ import {
   OtherItemsCard,
 } from './cards';
 
+const BADGE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', hello: '첫 방문', back: '첫 방문' };
+
 /**
  * 고객 카르테 — 화면 배치만 담당한다.
  * 무엇을 어떻게 계산하는지는 ./data, 각 카드의 표시는 ./cards 에 있다.
@@ -29,11 +31,11 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     history, charges, others,
     chargedTotal, balance, pocketIds,
     familyList, nextBk, topSvc,
-    overdue, due, vac, today,
+    overdue, due, first, vac, today,
     sinceLast, next, top, recs,
   } = await loadCarte(params.id);
   // 상태 뱃지 — 이탈로 표시한 분, 다음 예약이 잡힌 분에겐 띄우지 않는다(이미 정해졌거나 오시기로 했다)
-  const badge = !cust.churned_at && !nextBk && (overdue || due) ? (overdue ? 'overdue' : 'due') : null;
+  const badge = cust.churned_at || nextBk ? null : overdue ? 'overdue' : due ? 'due' : first;
 
   return (
     <main className="wrap">
@@ -46,7 +48,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           <div>
             <h2>
               {name} 님{vip ? <span className="tag-vip">VIP</span> : null}
-              {badge ? <span className={'ctag ' + badge}>{badge === 'overdue' ? '이탈 위험' : '재방문 도래'}</span> : null}
+              {badge ? <span className={'ctag ' + badge}>{BADGE[badge]}</span> : null}
             </h2>
             <div className="s">
               {cust.visit_count}회{cust.total_won ? ' · 누적 ' + man(cust.total_won) : ''}

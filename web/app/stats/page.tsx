@@ -6,7 +6,7 @@ import { requireTenant } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { SyncChip } from '@/components/sync-chip';
-import { fetchAllRows, isRealCustomer, isChurned, onCareList } from '@/lib/customers';
+import { fetchAllRows, isRealCustomer, isChurned, onCareList, onFirstList, servicesOn } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookedCustomerIds, isActiveBooking } from '@/lib/bookings';
 import { recentlyContactedIds } from '@/lib/contact';
@@ -223,8 +223,14 @@ export default async function StatsPage() {
 
   // ── 지금 할 일 ── 홈 신호와 같은 기준으로 센다(숫자가 다르면 어느 쪽을 믿을지 모른다)
   // 누르면 챙길 고객 탭이 열린다 — 그 목록과 같은 '할 일' 기준(최근 연락한 분 제외)
-  const careCount = cs.filter((c) =>
-    onCareList(c, { settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id), asOf })).length;
+  // 첫 방문 손님(안부·다시 오실 때)도 함께 — 챙길 고객 탭·홈과 같은 숫자(lib/customers onFirstList)
+  const flagsOf = (c: (typeof cs)[number]) =>
+    ({ settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id), asOf });
+  const byIdCs = new Map(cs.map((c) => [c.id, c]));
+  const oneSvcs = servicesOn(tx, (id) => (byIdCs.get(id)?.visit_count === 1 ? byIdCs.get(id)?.last_visit : null));
+  const careCount =
+    cs.filter((c) => onCareList(c, flagsOf(c))).length +
+    cs.filter((c) => c.visit_count === 1 && onFirstList(c, oneSvcs.get(c.id) ?? [], flagsOf(c))).length;
 
   const span = dayOfMonth > 1 ? `1–${dayOfMonth}일` : '1일';
 

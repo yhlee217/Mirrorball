@@ -118,3 +118,27 @@ def test_recently_contacted_leave_the_todo_list_only():
     """연락한 분은 할 일(탭)에서만 빠지고, 상태(타일)로는 그대로 센다."""
     m = up.measure(CUSTOMERS, TXS, BOOKINGS, PHONES, S, NOW, contacted={"c2"})
     assert m["care"] == 0 and m["care_quiet"] == 1 and m["care_booked"] == 1
+
+
+def test_first_visit_customers_join_the_care_list():
+    """첫 방문 손님(방문 1회)도 챙길 고객 탭에 오른다 — 안부(14일 안) · 다시 오실 때(표준 주기~두 배)."""
+    cs = [
+        {"id": "f1", "ext_id": "201", "revisit_state": "new", "last_visit": d(-6), "visit_count": 1},   # 안부
+        {"id": "f2", "ext_id": "202", "revisit_state": "new", "last_visit": d(-40), "visit_count": 1},  # 뿌리염색 5주 지남
+        {"id": "f3", "ext_id": "203", "revisit_state": "new", "last_visit": d(-40), "visit_count": 1},  # 펌 13주 전
+        {"id": "f4", "ext_id": "204", "revisit_state": "new", "last_visit": d(-40), "visit_count": 1},  # 예약 있음
+        {"id": "f5", "ext_id": "205", "revisit_state": "new", "last_visit": d(-6), "visit_count": 1},   # 연락함
+    ]
+    txs = [
+        {"customer_id": "f1", "date": d(-6), "service": "여자컷", "kind": "service"},
+        {"customer_id": "f2", "date": d(-40), "service": "뿌리염색", "kind": "service"},
+        {"customer_id": "f2", "date": d(-40), "service": "선불충전", "kind": "charge"},   # 충전은 시술 아님
+        {"customer_id": "f3", "date": d(-40), "service": "디지털펌", "kind": "service"},
+        {"customer_id": "f4", "date": d(-40), "service": "뿌리염색", "kind": "service"},
+    ]
+    bks = [{"customer_id": "f4", "date": d(3), "time": "11:00", "status": "예약"}]
+    m = up.measure(cs, txs, bks, {}, S, NOW, contacted={"f5"})
+    assert m["care"] == 2 and m["care_first"] == (1, 1)     # f1 안부 · f2 다시 오실 때
+    assert m["care_quiet"] == 1                              # f5 — 연락해서 잠시 빠짐
+    lines = "\n".join(up.report("demo", "살롱", m))
+    assert "그중 첫 방문    안부 1명 · 다시 오실 때 1명" in lines

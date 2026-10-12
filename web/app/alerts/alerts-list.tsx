@@ -7,10 +7,11 @@ import { Help } from '@/components/help';
 import { MSG } from '@/lib/copy';
 import { smsHref, telHref, type ContactVia } from '@/lib/contact';
 
-// why = 한 줄 사유('2개월째 · 평소 5주 · 뿌리염색'), note = 펼친 곳의 한 줄(마지막 방문일·휴가)
+// why = 한 줄 사유('2개월째 · 평소 5주 · 뿌리염색' · '안부 · 6일 전 · 뿌리염색'), note = 펼친 곳의 한 줄(방문일·휴가)
 type Item = { id: string; name: string; phone: string | null; state: string; why: string; note: string; draft: string };
 
-const STATE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래' };
+// 첫 방문 손님은 안부·다시 오실 때 모두 '첫 방문' — 무엇을 할지는 사유 줄 첫마디가 말한다(lib/customers firstCare)
+const STATE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', hello: '첫 방문', back: '첫 방문' };
 const STEP = 50; // 한 번에 펼치는 수 — 급한 분(이탈 위험)부터 정렬돼 온다
 
 export default function AlertsList({ items, quiet, quietDays }: { items: Item[]; quiet: number; quietDays: number }) {

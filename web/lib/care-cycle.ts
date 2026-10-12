@@ -7,36 +7,20 @@
 // 뭉뚱그리지만(남자컷(부원장) → 커트), 주기 판단에는 성별·부위 정보가 필요하기 때문이다.
 // 위에서부터 먼저 매칭되는 규칙을 쓰므로, 복합 시술(남자컷+다운펌)은 펌·염색이 우선한다.
 
-// tip: 그날 받은 시술의 홈케어 안내(방문 관리 화면에 그대로 보여줌 — 손님께 전할 말 겸 기억용)
-export type Care = { cat: string; days: number; phrase: string; tip: string };
+// 표는 web/lib/care-cycle.json — 점검 스크립트(worker/care_cycle.py)도 같은 파일을 읽는다.
+//   tip: 그날 받은 시술의 홈케어 안내(방문 관리 화면에 그대로 — 손님께 전할 말 겸 기억용)
+//   keep: 1~2주 뒤 첫 방문 안부에 넣을 팁 — 시술 직후용 팁('당일'·'이틀')은 그때 보내면 어색하다
+import table from './care-cycle.json';
 
-const TABLE: { test: RegExp; care: Care }[] = [
-  // '뿌리펌'은 펌인데 '뿌리'에 먼저 걸리면 염색 주기가 잡힌다 → 뿌리염색보다 위에 둔다.
-  { test: /뿌리\s*(?:볼륨)?\s*펌/, care: { cat: '뿌리펌', days: 70, phrase: '볼륨 슬슬 가라앉을 때쯤이라',
-      tip: '말릴 때 뿌리를 세워 드라이하면 볼륨이 훨씬 오래갑니다.' } },
-  { test: /뿌리|새치/, care: { cat: '뿌리염색', days: 35, phrase: '뿌리 올라올 때쯤이라',
-      tip: '염색 당일은 두피 자극을 피하고, 이틀 정도는 강한 스타일링을 쉬는 게 좋아요.' } },
-  { test: /다운펌/, care: { cat: '다운펌', days: 56, phrase: '슬슬 풀릴 때쯤이라',
-      tip: '드라이할 때 뿌리를 손으로 눌러 말리면 눌린 결이 오래 유지돼요.' } },
-  { test: /매직|셋팅|디지털|볼륨|웨이브|펌/, care: { cat: '펌', days: 90, phrase: '슬슬 풀릴 때쯤이라',
-      tip: '이틀은 감지 말고, 말릴 때 손으로 감아쥐듯 말리면 컬이 오래 살아요.' } },
-  // 염색을 클리닉보다 위에 — '염색클리닉'은 색이 주된 시술이라 염색 주기가 맞다.
-  { test: /염색|컬러|이노아|탈색|블리치|하이라이트|톤다운|톤업/, care: { cat: '염색', days: 56, phrase: '컬러 빠질 때쯤이라',
-      tip: '2~3일은 뜨거운 물을 피하고 컬러 전용 샴푸를 쓰면 색이 덜 빠져요.' } },
-  { test: /클리닉|트리트|케어|앰플|두피|스켈프/, care: { cat: '클리닉', days: 28, phrase: '모발 컨디션 챙기실 때라',
-      tip: '집에서 주 1회 트리트먼트를 병행하면 효과가 훨씬 오래갑니다.' } },
-  // 커트 — 성별·부위로 주기가 가장 크게 갈린다(앞머리 3주 < 남자·주니어 4주 < 여자 8주).
-  { test: /앞머리\s*(?:컷|커트)/, care: { cat: '앞머리컷', days: 21, phrase: '앞머리 자랐을 때쯤이라',
-      tip: '앞머리는 3주쯤이면 눈을 찌르기 시작해요. 그때 다듬으러 오시면 됩니다.' } },
-  { test: /(?:주니어|학생|아동|어린이)\s*(?:컷|커트)/, care: { cat: '주니어커트', days: 28, phrase: '머리 자랐을 때쯤이라',
-      tip: '아이들은 자라는 속도가 빨라 4주쯤 다듬어주면 단정하게 유지돼요.' } },
-  { test: /(?:남자|남성)\s*(?:컷|커트)/, care: { cat: '남자커트', days: 28, phrase: '머리 자라 정리하실 때쯤이라',
-      tip: '4주쯤 지나면 옆·뒤가 먼저 지저분해져요. 그때 정리하면 모양이 유지됩니다.' } },
-  { test: /(?:여자|여성)\s*(?:컷|커트)/, care: { cat: '여자커트', days: 56, phrase: '머리 모양 정리하실 때쯤이라',
-      tip: '끝이 상하기 전에 살짝 다듬으면 기장을 기르면서도 결이 예쁘게 유지돼요.' } },
-  { test: /컷|커트/, care: { cat: '커트', days: 35, phrase: '머리 정리하실 때쯤이라',
-      tip: '한 달쯤 지나 모양이 흐트러질 때 다듬으면 스타일이 오래 유지돼요.' } },
-];
+export type Care = { cat: string; days: number; phrase: string; tip: string; keep: string };
+
+// '뿌리펌'은 펌인데 '뿌리'에 먼저 걸리면 염색 주기가 잡힌다 → 표에서 뿌리염색보다 위에 둔다.
+// 염색은 클리닉보다 위('염색클리닉'은 색이 주된 시술), 커트는 성별·부위로 가장 크게 갈린다
+// (앞머리 3주 < 남자·주니어 4주 < 여자 8주). 순서가 뜻을 갖는다.
+const TABLE: { test: RegExp; care: Care }[] = table.rules.map((r) => ({
+  test: new RegExp(r.pattern),
+  care: { cat: r.cat, days: r.days, phrase: r.phrase, tip: r.tip, keep: r.keep },
+}));
 
 /** 시술 종류(cat) → 표준 주기(일). 다음 시술 추천(lib/recommend)이 종류별로 때가 됐는지 볼 때 쓴다. */
 export const CYCLE_BY_CAT: Record<string, number> = Object.fromEntries(TABLE.map((r) => [r.care.cat, r.care.days]));
@@ -52,4 +36,17 @@ export function careFor(service?: string | null): Care | null {
 export function effectiveCycle(service?: string | null, personalDays?: number | null): number {
   if (personalDays && personalDays > 0) return personalDays;
   return careFor(service)?.days ?? 42;
+}
+
+/**
+ * 그날 받은 시술 중 주기가 가장 짧은 것 — 먼저 돌아올 이유가 다음 방문을 정한다(남자컷+뿌리염색 →
+ * 남자커트 4주). 카르테 '다음 방문' 추정과 첫 방문 손님 '다시 오실 때'가 같은 규칙을 쓴다.
+ */
+export function soonestCare(services: (string | null | undefined)[]): { service: string; care: Care } | null {
+  let best: { service: string; care: Care } | null = null;
+  for (const s of services) {
+    const c = careFor(s);
+    if (c && s && (!best || c.days < best.care.days)) best = { service: s, care: c };
+  }
+  return best;
 }

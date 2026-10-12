@@ -2,7 +2,7 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import { requireUser, getTenantId, openDek, nameReader } from '@/lib/tenant';
-import { careState, fetchAllRows, isRealCustomer, isChurned, needsCare, onCareList } from '@/lib/customers';
+import { careState, fetchAllRows, firstCare, isRealCustomer, isChurned, needsCare, onCareList, onFirstList, servicesOn } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
 import { bookedCustomerIds, isCancelled } from '@/lib/bookings';
@@ -102,8 +102,6 @@ export default async function Page() {
     if ((st === 'overdue' || st === 'due') && isCareTarget(c)) signals[st]++;
   }
   const real = cust.filter((c) => isRealCustomer(c.ext_id));
-  const careCount = real.filter(isTodo).length;
-  const careQuiet = real.filter((c) => isCareTarget(c) && contacted.has(c.id)).length;
 
   // 예약 — 앞으로 7일은 브리핑, 그 뒤(설정의 표시 기간까지)는 접어 둔다.
   // 예약 시각은 KST(HandSOS 기준). isUpcoming 이 '오늘 이미 지난 시간'도 걸러낸다.
@@ -135,6 +133,16 @@ export default async function Page() {
           .then((r) => (r.data as LastTx[] | null) ?? [])
       : Promise.resolve([] as LastTx[]),
   ]);
+
+  // '챙길 고객 N'(할 일) — 2회 이상 손님(onCareList) + 첫 방문 손님(onFirstList, 안부·다시 오실 때).
+  // 첫 방문 손님의 주기는 그날 받은 시술로 정해서 1년 거래가 온 뒤에 센다. 챙길 고객 탭과 같은 숫자다.
+  const ones = real.filter((c) => c.visit_count === 1);
+  const oneSvcs = servicesOn(yearTx, (id) => (byId.get(id)?.visit_count === 1 ? byId.get(id)?.last_visit : null));
+  const firstFlags = (c: Cust) => ({ settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id), asOf });
+  const careCount = real.filter(isTodo).length + ones.filter((c) => onFirstList(c, oneSvcs.get(c.id) ?? [], firstFlags(c))).length;
+  const careQuiet =
+    real.filter((c) => isCareTarget(c) && contacted.has(c.id)).length +
+    ones.filter((c) => contacted.has(c.id) && !isChurned(c) && !booked.has(c.id) && firstCare(c, oneSvcs.get(c.id) ?? [], settings, asOf)).length;
 
   // 지난 한 주 — 첫 방문은 실고객만 센다(워크인 집계는 '첫 방문'이 의미가 없다).
   const firsts = real.map((c) => c.first_visit);

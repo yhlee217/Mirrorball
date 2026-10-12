@@ -1,6 +1,9 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 import { isLapsed, type TenantSettings } from './settings';
 import { awayDays } from './offdays';
+import { daysBetween } from './week';
+import { soonestCare } from './care-cycle';
+import { txKind } from './tx';
 
 // 실제 고객만 관리 대상 — 고객번호(숫자) ext_id 를 가진 고객. '손님' 등 미식별 워크인
 // 집계는 이름 기반(비숫자) ext_id 라 관리 화면(홈·알림·목록)에서 제외한다.
@@ -70,6 +73,69 @@ export function onCareList(
   o: { settings: TenantSettings; churned: boolean; booked: boolean; contacted: boolean; asOf: string },
 ): boolean {
   return !o.contacted && needsCare(c, o);
+}
+
+/** 첫 방문 안부를 띄우는 기간 — 첫 방문 뒤 이 날수 안. 수집이 주 1회라 두 번의 수집에 걸친다. */
+export const HELLO_DAYS = 14;
+
+export type FirstCare = 'hello' | 'back';
+
+/**
+ * 첫 방문 손님(방문 1회)을 챙길 때인가(개선 계획 v4 P1). 워커는 이분들을 '신규(new)'로만 두어
+ * 재방문 판정(due·overdue)에 걸리지 않았다 — 신규 넷 중 셋이 다시 안 오는데(2026-10-12 실측 22%)
+ * 할 일 목록 밖에 있었다.
+ *   hello — 첫 방문 뒤 HELLO_DAYS 안: 예약 권유 없는 안부(+ 오래 두고 쓸 관리 팁)
+ *   back  — 그날 받은 시술의 표준 주기 ~ 그 두 배(휴가는 뺀다): 다시 오실 때. 두 배를 넘기면 내린다 —
+ *           처음 한 번 오신 분을 몇 달씩 목록에 두면 지금 챙길 분이 묻힌다. 설정의 이탈 판정(6개월에
+ *           3회 미만 등)이 먼저 걸리면 거기서 끝.
+ * services = 그날 받은 원본 메뉴명들(주기는 가장 짧은 것 — lib/care-cycle soonestCare). asOf = 마지막 수집일.
+ */
+export function firstCare(
+  c: { visit_count: number; last_visit: string | null },
+  services: (string | null | undefined)[],
+  s: TenantSettings,
+  asOf: string,
+): FirstCare | null {
+  if (c.visit_count !== 1 || !c.last_visit) return null;
+  const day = c.last_visit.slice(0, 10);
+  const ago = daysBetween(day, asOf);
+  if (ago < 0) return null;
+  if (ago < HELLO_DAYS) return 'hello';
+  const cyc = soonestCare(services)?.care.days ?? DEFAULT_CYCLE;
+  const away = awayDays(day, asOf, s);
+  if (away < cyc || away > cyc * 2) return null;
+  return isLapsed(c, s) ? null : 'back';
+}
+
+/** 첫 방문 손님의 할 일 — firstCare 이면서 이탈 표시·잡힌 예약·최근 연락이 없는 분(onCareList 와 같은 규칙). */
+export function onFirstList(
+  c: { visit_count: number; last_visit: string | null },
+  services: (string | null | undefined)[],
+  o: { settings: TenantSettings; churned: boolean; booked: boolean; contacted: boolean; asOf: string },
+): FirstCare | null {
+  if (o.churned || o.booked || o.contacted) return null;
+  return firstCare(c, services, o.settings, o.asOf);
+}
+
+/**
+ * 손님별로 그날(dayOf) 받은 시술의 원본 메뉴명 — 충전·제품은 뺀다. 첫 방문 손님의 주기·문구에 쓴다
+ * (주기 판단엔 '남자컷'처럼 원본 이름이 필요하다 — lib/care-cycle).
+ */
+export function servicesOn(
+  txs: { customer_id: string | null; date: string | null; service: string | null; kind: string | null }[],
+  dayOf: (id: string) => string | null | undefined,
+): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const t of txs) {
+    if (!t.customer_id || !t.service || !t.date) continue;
+    const day = dayOf(t.customer_id);
+    if (!day || t.date.slice(0, 10) !== day.slice(0, 10)) continue;
+    if (txKind(t.kind, t.service) !== 'service') continue;
+    const list = out.get(t.customer_id) ?? [];
+    if (!list.includes(t.service)) list.push(t.service);
+    out.set(t.customer_id, list);
+  }
+  return out;
 }
 
 /**

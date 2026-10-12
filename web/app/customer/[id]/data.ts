@@ -3,7 +3,7 @@ import { requireUser, openDek, nameReader } from '@/lib/tenant';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { isActiveBooking } from '@/lib/bookings';
-import { careState, fetchAllRows, isRealCustomer } from '@/lib/customers';
+import { careState, fetchAllRows, firstCare, isRealCustomer } from '@/lib/customers';
 import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
 import { addDays } from '@/lib/week';
 import { lastSynced } from '@/lib/sync';
@@ -181,6 +181,8 @@ export async function loadCarte(id: string) {
   const state = careState(cust, settings, asOf);
   const overdue = state === 'overdue';
   const due = state === 'due';
+  // 첫 방문 손님 — 안부(첫 방문 2주 안) · 다시 오실 때(그날 시술의 표준 주기~두 배). 챙길 고객과 같은 기준.
+  const first = firstCare(cust, history.filter((h) => h.date === cust.last_visit).map((h) => h.service), settings, asOf);
   // 마지막 방문 뒤 디자이너 휴가 일수 — 재방문 판정에서 뺀 날(띠의 ? 에 밝힌다)
   const vac = cust.last_visit ? daysBetween(cust.last_visit, asOf) - awayDays(cust.last_visit, asOf, settings) : 0;
 
@@ -208,7 +210,7 @@ export async function loadCarte(id: string) {
     history, charges, others,
     chargedTotal, balance, pocketIds,
     familyList, nextBk, topSvc,
-    overdue, due, vac, today,
+    overdue, due, first, vac, today,
     sinceLast, next, top, recs,
   };
 }
