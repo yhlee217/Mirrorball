@@ -15,6 +15,7 @@ import { activeTrend, datesByCustomer, newcomerCohorts, serviceTable, toVisits, 
 import { hasOffDays, workedDays } from '@/lib/offdays';
 import { monthForecast } from '@/lib/forecast';
 import { backtest, pairStats, visitsByCustomer } from '@/lib/recommend';
+import { contactEffectByGroup, helloEffect, kstDay, type ContactRow } from '@/lib/effect';
 import {
   SummaryCard,
   CohortCard,
@@ -23,6 +24,7 @@ import {
   ServiceCard,
   GenderCard,
   RecommendHitCard,
+  ContactEffectCard,
   TotalsCard,
   type GenderStat,
 } from './cards';
@@ -33,7 +35,7 @@ export default async function StatsPage() {
   const kToday = kstNow().date;
   const [y0, m0] = kToday.split('-').map(Number);
   const monthLast = new Date(Date.UTC(y0, m0, 0)).toISOString().slice(0, 10);
-  const [{ data: tenant }, customers, txs, booked, contacted, synced, { data: bkLeftRows }] = await Promise.all([
+  const [{ data: tenant }, customers, txs, booked, contacted, synced, { data: bkLeftRows }, contactRows] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<{ id: string; ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
                    age_band: string | null; gender_src: string | null; gender_manual: string | null; revisit_cycle_days: number | null;
@@ -52,6 +54,10 @@ export default async function StatsPage() {
     // 이번 달 남은 기간에 잡힌 예약 — 마감 예상 옆에 참고로만(예상 금액에는 섞지 않는다)
     supabase.from('bookings').select('date,time,status').eq('tenant_id', tenantId)
       .gte('date', kToday).lte('date', monthLast).limit(1000),
+    // 연락 효과(더 보기) — 연락 기록 전부(문자·전화·복사, 시각만 남는다)
+    fetchAllRows<ContactRow>((from, to) =>
+      supabase.from('care_items').select('customer_id,sent_at').eq('tenant_id', tenantId).eq('kind', 'contact')
+        .order('id').range(from, to)),
   ]);
   // '손님' 등 미식별 워크인은 관리 대상이 아니다 — 홈·챙길 고객·고객목록과 같은 기준으로 뺀다.
   // 통계만 포함하고 있어서 고객수·재방문율·객단가가 부풀고, 성별은 전부 '미상'으로 쌓였다.
@@ -234,6 +240,11 @@ export default async function StatsPage() {
 
   const span = dayOfMonth > 1 ? `1–${dayOfMonth}일` : '1일';
 
+  // 연락 효과 — 실고객만(워크인 집계는 연락 대상이 아니다). byCust = 손님별 방문일(오름차순)
+  const realContacts = contactRows.filter((r) => r.customer_id && realIds.has(r.customer_id));
+  const contactSince = realContacts.map((r) => (r.sent_at ? kstDay(r.sent_at) : '')).filter(Boolean).sort()[0] ?? null;
+  const realVisits = new Map([...byCust].filter(([id]) => realIds.has(id)));
+
   return (
     <main className="wrap">
       <div className="bar">
@@ -272,9 +283,14 @@ export default async function StatsPage() {
 
         {/* 자주 볼 일 없는 것들 — 접어 둔다(UX 계획 v3 결정 5) */}
         <details className="more-sec">
-          <summary>더 보기 <span className="sect-n">시술별 · 성별 · 추천 적중률 · 누적</span></summary>
+          <summary>더 보기 <span className="sect-n">시술별 · 성별 · 연락 효과 · 적중률 · 누적</span></summary>
           <ServiceCard rows={svcRows} vacation={settings.off_dates.length > 0} />
           {gDecided > 0 ? <GenderCard g={gender} /> : null}
+          <ContactEffectCard
+            groups={contactEffectByGroup(realContacts, realVisits, booked)}
+            hello={helloEffect(realContacts, realVisits)}
+            since={contactSince}
+          />
           <RecommendHitCard hits={hits} />
           <TotalsCard customers={totalCustomers} revenue={totalRevenue} tx={tx.length} />
         </details>

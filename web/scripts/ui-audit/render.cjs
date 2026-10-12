@@ -106,7 +106,7 @@ items.push({ id: 'f2', name: names[9], phone: '01012345678', state: 'back', why:
   note: '첫 방문 9.4(금) · 뿌리염색 보통 5주 · 10주 지나면 목록에서 내려가요',
   draft: `${names[9]}님, 하예원이에요! 5주 전 처음 오셨을 때 뿌리염색 해드렸는데, 뿌리 올라올 때쯤이라 연락드려요. 편하신 시간에 예약 도와드릴게요!` });
 out.alerts = screen(bar('챙길 고객 <span class="sect-n">84명</span>', { back: false, sync: true }),
-  r(load('app/alerts/alerts-list.js').default, { items, quiet: 3, quietDays: 14 }));
+  r(load('app/alerts/alerts-list.js').default, { items, quiet: 3, quietDays: 14, effect: { contacted: 32, came: 11, booked: 4 } }));
 
 // 방문(app/visits/page.tsx) — 어제 셋 · 토 셋 · 목 넷, 셋 중 하나꼴로 매장 메모
 const visits = names.map((n, i) => ({
@@ -175,13 +175,15 @@ out.stats = screen(bar('통계', { sync: true }),
       .map(([key, label, rev], i) => ({ key, label, rev, partial: i === 5 })),
     work: [26, 25, 12, 26, 25, 9], syncLabel: '10.11',
   })
-  + '<details class="more-sec"><summary>더 보기 <span class="sect-n">시술별 · 성별 · 추천 적중률 · 누적</span></summary>'
+  + '<details class="more-sec"><summary>더 보기 <span class="sect-n">시술별 · 성별 · 연락 효과 · 적중률 · 누적</span></summary>'
   + r(S.ServiceCard, {
     rows: [['여자컷(원장)', 410, 33000, 186, 300], ['뿌리염색', 220, 65000, 114, 160], ['남자컷(원장)', 180, 18000, 72, 130], ['디지털펌', 60, 180000, 18, 45], ['클리닉', 40, 40000, 4, 9], ['앞머리컷', 35, 5000, 20, 25]]
       .map(([service, count, avg, back, base]) => ({ service, count, avg, back, base })),
     vacation: true,
   })
   + r(S.GenderCard, { g: { M: { n: 420, perVisit: 21000, cycle: 32, share: 24 }, F: { n: 760, perVisit: 64000, cycle: 49, share: 76 }, unknown: 212, noClue: 190, proxy: 22, manual: 14, rate: 85, kids: 38, total: 1392 } })
+  + r(S.ContactEffectCard, { groups: { first: { contacted: 12, came: 3, booked: 1 }, repeat: { contacted: 40, came: 14, booked: 4 } },
+    hello: { sent: { n: 12, back: 3 }, unsent: { n: 9, back: 1 } }, since: '2026-10-12' })
   + r(S.RecommendHitCard, { hits: { due: { n: 1240, hit: 719, base: 0.31 }, cross: { n: 310, hit: 28, base: 0.04 } } })
   + r(S.TotalsCard, { customers: 1393, revenue: 410000000, tx: 9307 })
   + '</details>');

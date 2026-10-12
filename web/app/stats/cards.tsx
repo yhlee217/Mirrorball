@@ -5,6 +5,8 @@ import { MIN_WORKED, type Forecast } from '@/lib/forecast';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
 import type { Hit } from '@/lib/recommend';
+import { HELLO_SINCE, type Effect } from '@/lib/effect';
+import { shortDate } from '@/lib/week';
 
 /**
  * 통계 화면의 카드들. 계산은 page.tsx · lib/trends.ts · lib/forecast.ts, 이 파일은 표시만.
@@ -459,6 +461,67 @@ export function RecommendHitCard({ hits }: { hits: { due: Hit; cross: Hit } }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 연락 효과(개선 계획 v4 P2) — 챙길 고객에서 연락한 분이 그 뒤 오셨나. 연락하던 때 첫 방문 손님이었는지
+ * (그 전 방문 1회) 2회 이상이었는지로 나누고, 첫 방문 손님은 안부를 보낸 분과 안 보낸 분을 견준다 —
+ * 견줄 상대가 있는 곳은 거기뿐이다. 계산은 lib/effect.
+ */
+export function ContactEffectCard({
+  groups,
+  hello,
+  since,
+}: {
+  groups: { first: Effect; repeat: Effect };
+  hello: { sent: { n: number; back: number }; unsent: { n: number; back: number } };
+  since: string | null; // 연락 기록이 시작된 날
+}) {
+  const rows = [
+    { name: '첫 방문 손님', e: groups.first },
+    { name: '2회 이상 손님', e: groups.repeat },
+  ];
+  const pct = (a: number, n: number) => (n ? `${Math.round((a * 100) / n)}%` : '-');
+  return (
+    <div className="card" style={{ padding: '14px 15px' }}>
+      <Title name="연락 효과" n={since ? `${shortDate(since)}부터` : undefined} />
+      <Help>
+        챙길 고객에서 문자·전화·복사를 한 분 중 연락한 날 뒤에 다녀가신 분(오심)과, 아직 안 오셨지만 예약이 잡힌
+        분(예약)이에요. 같은 분께 여러 번 연락해도 한 번 세고, 연락하던 때 방문이 1회였으면 첫 방문 손님이에요.
+        방문은 주 1회 수집이라 최대 한 주 늦게 잡혀요. 아래 첫 방문 비교는 {shortDate(HELLO_SINCE)} 이후 첫 방문한
+        분들이라, 첫 방문 뒤 시간이 지나야 결과가 나와요 — 석 달쯤 쌓이면 견줄 만해요.
+      </Help>
+      {groups.first.contacted + groups.repeat.contacted ? (
+        <>
+          <div className="tablewrap">
+            <table className="gtab svc-tab">
+              <thead>
+                <tr><th>손님</th><th>연락</th><th>오심</th><th>예약</th></tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.name}>
+                    <td>{r.name}</td>
+                    <td>{r.e.contacted.toLocaleString()}명</td>
+                    <td>
+                      {r.e.came.toLocaleString()}명<span className="sub2">{pct(r.e.came, r.e.contacted)}</span>
+                    </td>
+                    <td>{r.e.booked.toLocaleString()}명</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="coh-h" style={{ marginTop: 10, marginBottom: 0 }}>
+            첫 방문 안부 — 보낸 분 {hello.sent.n}명 중 <b>{hello.sent.back}명</b> 다시 오심 · 안 보낸 분 {hello.unsent.n}명 중{' '}
+            <b>{hello.unsent.back}명</b>
+          </div>
+        </>
+      ) : (
+        <Empty title="연락 기록이 아직 없어요" hint="챙길 고객에서 문자·전화를 하면 여기 쌓여요." />
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
 import { MSG } from '@/lib/copy';
 import { smsHref, telHref, type ContactVia } from '@/lib/contact';
+import type { Effect } from '@/lib/effect';
 
 // why = 한 줄 사유('2개월째 · 평소 5주 · 뿌리염색' · '안부 · 6일 전 · 뿌리염색'), note = 펼친 곳의 한 줄(방문일·휴가)
 type Item = { id: string; name: string; phone: string | null; state: string; why: string; note: string; draft: string };
@@ -14,7 +15,20 @@ type Item = { id: string; name: string; phone: string | null; state: string; why
 const STATE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', hello: '첫 방문', back: '첫 방문' };
 const STEP = 50; // 한 번에 펼치는 수 — 급한 분(이탈 위험)부터 정렬돼 온다
 
-export default function AlertsList({ items, quiet, quietDays }: { items: Item[]; quiet: number; quietDays: number }) {
+// 연락 효과는 사람 수가 이만큼은 돼야 보여준다 — 서너 명이면 한 명에 크게 흔들린다
+const EFFECT_MIN = 10;
+
+export default function AlertsList({
+  items,
+  quiet,
+  quietDays,
+  effect,
+}: {
+  items: Item[];
+  quiet: number;
+  quietDays: number;
+  effect: Effect | null; // 지난 4주 연락 → 그 뒤 오심·예약(lib/effect) — 연락 기록이 없으면 null
+}) {
   const router = useRouter();
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState('');
@@ -121,13 +135,36 @@ export default function AlertsList({ items, quiet, quietDays }: { items: Item[];
       <Empty title="챙길 고객이 없어요" hint="재방문 시기가 된 분이 생기면 여기에 올라와요." action={<Link href="/visits">최근 방문 보기 ›</Link>} />
     );
 
+  // 맨 위 한 줄 — 연락 효과(보낸 뒤 오셨나)와 잠시 숨긴 수. 설명은 ? 하나에.
+  const eff = effect && effect.contacted > 0 ? effect : null;
   return (
     <>
-      {quiet > 0 && (
+      {eff || quiet > 0 ? (
         <div className="crow-q">
-          연락한 {quiet}명 숨김<Help inline>{quietNote}</Help>
+          {eff ? (
+            eff.contacted >= EFFECT_MIN ? (
+              <span>
+                4주 연락 {eff.contacted}명 → <b>{eff.came}명 오심</b>
+                {eff.booked ? ` · ${eff.booked}명 예약` : ''}
+              </span>
+            ) : (
+              <span>4주 연락 {eff.contacted}명 · 효과는 쌓이는 중</span>
+            )
+          ) : null}
+          {eff && quiet > 0 ? ' · ' : ''}
+          {quiet > 0 ? <span>{eff ? `${quiet}명 숨김` : `연락한 ${quiet}명 숨김`}</span> : null}
+          <Help inline>
+            {eff ? (
+              <>
+                지난 4주 연락한 분 중 연락한 날 뒤에 다녀가신 분은 &lsquo;오심&rsquo;, 아직 안 오셨지만 예약이 잡힌 분은
+                &lsquo;예약&rsquo;이에요(같은 분께 여러 번 연락해도 한 번). 방문은 주 1회 수집이라 최대 한 주 늦게 잡히고,
+                {EFFECT_MIN}명이 넘어야 숫자를 보여드려요.{' '}
+              </>
+            ) : null}
+            {quiet > 0 ? quietNote : null}
+          </Help>
         </div>
-      )}
+      ) : null}
       <div className="card">
         {items.slice(0, shown).map((it) => {
           const isOpen = open === it.id;

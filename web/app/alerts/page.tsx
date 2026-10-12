@@ -20,6 +20,7 @@ import { CONTACT_QUIET_DAYS, phoneDigits, recentlyContactedIds } from '@/lib/con
 import { friendlyService } from '@/lib/service-name';
 import { careFor, soonestCare } from '@/lib/care-cycle';
 import { draftFor, whenWord } from '@/lib/drafts';
+import { contactEffect, kstDay, type ContactRow } from '@/lib/effect';
 import { lastSynced } from '@/lib/sync';
 import { SyncChip } from '@/components/sync-chip';
 import { kstNow } from '@/lib/kst';
@@ -41,6 +42,7 @@ type Cust = {
 type Tx = { customer_id: string | null; date: string | null; service: string | null; kind: string | null };
 
 const COLS = 'id,ext_id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count,churned_at';
+const EFFECT_DAYS = 28; // 연락 효과를 보는 기간 — 지난 4주
 // 줄 순서 — 안부는 첫 방문 2주 안에만 뜨는 짧은 할 일이라 맨 위, 다시 오실 때는 맨 아래.
 const ORDER: Record<string, number> = { hello: 0, overdue: 1, due: 2, back: 3 };
 
@@ -48,7 +50,7 @@ export default async function AlertsPage() {
   const { supabase, tenantId } = await requireTenant();
   const today = kstNow().date;
 
-  const [{ data: tenant }, customers, firsts, booked, contacted, synced] = await Promise.all([
+  const [{ data: tenant }, customers, firsts, booked, contacted, synced, recentContacts] = await Promise.all([
     supabase.from('tenants').select('designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select(COLS).in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
@@ -59,6 +61,10 @@ export default async function AlertsPage() {
     bookedCustomerIds(supabase, tenantId), // 이미 예약한 분께 '예약 도와드릴게요'를 보내지 않게
     recentlyContactedIds(supabase, tenantId), // 최근 연락한 분은 할 일에서 잠시 뺀다
     lastSynced(supabase), // 재방문 판정의 기준일(워커가 판정한 날) — 휴가를 빼고 셀 때 쓴다
+    // 연락 효과(맨 위 한 줄) — 지난 4주 연락 기록
+    fetchAllRows<ContactRow>((from, to) =>
+      supabase.from('care_items').select('customer_id,sent_at').eq('tenant_id', tenantId).eq('kind', 'contact')
+        .gte('sent_at', new Date(Date.now() - EFFECT_DAYS * 86400000).toISOString()).order('id').range(from, to)),
   ]);
 
   const tRow = tenant as { designer_name: string | null; dek_wrapped: string | null; settings: unknown } | null;
@@ -126,6 +132,23 @@ export default async function AlertsPage() {
     }
   }
 
+  // 연락 효과 — 지난 4주 연락한 분이 그 뒤 오셨나(lib/effect). 그분들의 연락 뒤 방문만 받는다.
+  const effSince = addDays(today, -(EFFECT_DAYS - 1));
+  const effIds = [...new Set(recentContacts.map((r) => r.customer_id).filter(Boolean) as string[])];
+  const effDay = recentContacts.map((r) => (r.sent_at ? kstDay(r.sent_at) : '')).filter(Boolean).sort()[0] ?? effSince;
+  const effChunks: string[][] = [];
+  for (let i = 0; i < effIds.length; i += 50) effChunks.push(effIds.slice(i, i + 50));
+  const effTx = (
+    await Promise.all(effChunks.map((ids) =>
+      supabase.from('transactions').select('customer_id,date,service,kind').in('customer_id', ids).gte('date', effDay).limit(3000)))
+  ).flatMap(({ data }) => (data as Tx[] | null) ?? []);
+  const effVisits = new Map<string, string[]>();
+  for (const t of effTx) {
+    if (!t.customer_id || !t.date || txKind(t.kind, t.service) !== 'service') continue;
+    effVisits.set(t.customer_id, [...(effVisits.get(t.customer_id) ?? []), t.date]);
+  }
+  const effect = effIds.length ? contactEffect(recentContacts, effVisits, booked, effSince) : null;
+
   const items = rows.map(({ c, state }, i) => {
     const name = contacts[i].name;
     const last = c.last_visit ? c.last_visit.slice(0, 10) : null;
@@ -181,7 +204,7 @@ export default async function AlertsPage() {
         <SyncChip synced={synced} />
       </div>
       <div className="body">
-        <AlertsList items={items} quiet={quiet} quietDays={CONTACT_QUIET_DAYS} />
+        <AlertsList items={items} quiet={quiet} quietDays={CONTACT_QUIET_DAYS} effect={effect} />
       </div>
     </main>
   );
