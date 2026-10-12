@@ -55,6 +55,9 @@ RLS·워커 HIGH↑는 실행 검증(임시 Postgres 하네스 / pytest)으로 �
 - **왜 미룸**: 키 관리(Vault/KMS)·재래핑 잡·kid 분기 복호가 얽힌 운영 설계.
 - **권장**: (1) kid 기반 복호 분기부터 도입(코드), (2) 이후 KEK 로테이션 잡(DEK 재래핑) + 자격증명
   재암호화. M8 과 함께 "kid 살리기"로 묶으면 효율적.
+- **2026-10-12 (개선 계획 v5 P0)**: 로테이션 경로를 만들었다 — kid 대신 '교체 중 옛 키도 읽기'(`MIRRORBALL_KEK_OLD`,
+  웹 `lib/crypto.ts` · 워커 `mirrorball_crypto.py`) + `worker/rotate_kek.py`(DEK·자격증명·백업 파일 재래핑, 샘플 복호 확인).
+  순서는 `playbook/KEY_ROTATION.md`. 단일 글로벌 KEK 구조 자체(Vault/KMS)는 그대로 남은 과제.
 
 ### M10 — tenant_rw 가 role 무시 (LOW→MEDIUM, 확장 함정)
 `customers/transactions/bookings` 정책이 멤버면 전부 RW. 파일럿(1인 owner)은 무해하나,

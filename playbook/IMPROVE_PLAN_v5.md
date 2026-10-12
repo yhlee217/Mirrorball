@@ -87,3 +87,16 @@ P0 → P1 → P2 → P3 → P4. 단계마다 tsc · 테스트 · Pages 빌드 ·
 3. 오류 알림 — **sync-health 에 붙이기(추천: 지금 쓰는 길, 따로 가입할 것 없음)** / 외부 서비스
 4. 개인정보 문서 — **초안을 쓰고 검토는 따로 받기(추천)** / 지금은 보류
 5. 선불 손님(P3) — **이번에 함께(추천)** / 다음으로
+
+## 6. 진행 기록 (2026-10-12 — 정해야 할 것 모두 추천대로)
+
+| 단계 | 한 것 | 확인 |
+|---|---|---|
+| **P0 키** | 웹·워커가 교체 중 옛 키(`MIRRORBALL_KEK_OLD`)로도 읽는다 · `worker/rotate_kek.py`(미리 보기/`--apply` — 매장 키·HandSOS 접속 정보·백업 파일을 새 KEK로 다시 감싸고 매장마다 이름 20명이 풀리는지 확인) · 서비스 키·KEK 교체 순서표 `playbook/KEY_ROTATION.md` | `test_kek_backup`(교체 중 옛 키 읽기 — 웹도, 다시 감싸기 · 이미 새 키 · 다른 키 거부) |
+| **P1 백업** | `worker/backup.py` — 앱에만 있는 데이터를 매장별로 KEK 로 감싸 `~/Mirrorball-backups/날짜/`(8주), 손님·거래는 고객번호로 · 일요일 수집 직후 `run_mac.sh` 가 부른다 · `--restore 파일 [--apply]` 되살리기 | 담기 → 감싸기 → 풀기 → 되살릴 일 왕복 · 8주 정리 · 키 교체 때 다시 감싸기 |
+| **P2 오류** | 한국어 오류 안내(`error.tsx` · `global-error.tsx` · `not-found.tsx`) · 오류 기록(`/api/client-error` — 화면 경로는 id 를 지우고, 오류 번호만) · 마이그레이션 `0023_ops_events.sql`(기록 표 + 감시용 `ops_health()`) · sync-health 가 매장별 백업 8일·화면 오류 하루 5건을 본다(**2026-10-20 부터** 백업 기록이 없으면 실패 — 그 전엔 경고) | `test_ops`(감시 규칙 · 이름 맞춤 · 경로 id 지우기) |
+| **P3 선불** | 챙길 고객 줄에 '선불 52만'(디자이너만 — 문자엔 안 넣음) · 같은 상태 안에서 선불 먼저 · 고객 목록 이름 옆 '선불 X' + 조건 '선불 3개월+' · 통계 할 일 알약 '선불 3개월+ N' — 같은 함수(`prepaidAway`) | `test_prepaid` |
+| **P4 사용 현황** | `worker/usage_probe.py` — 매장별 마지막 접속 · 연락 1주/4주(수단별) · 이탈 처리 수. 이메일·이름 없음 | `test_usage_probe` |
+| **개인정보** | `playbook/PRIVACY_DRAFT.md` — 위탁 계약 체크리스트 · 처리방침 초안(재위탁·국외 이전 표 포함) · 운영자가 정할 것. 검토 전이라 앱에 게시하지 않음 | — |
+
+**운영자가 할 일** — ① Supabase SQL Editor 에서 `supabase/migrations/0023_ops_events.sql` 실행(백업 시각·화면 오류 기록 표) ② 맥에서 `git pull` — 다음 일요일 수집 뒤 백업이 처음 돈다 ③ 키 교체(`playbook/KEY_ROTATION.md` — 서비스 키 먼저) ④ (선택) `worker/retention_probe.py` · `worker/usage_probe.py` 실행 ⑤ 개인정보 초안 §3 채우고 검토 맡기기.

@@ -54,11 +54,11 @@
 - [ ] **Supabase Auth**: 배포 도메인을 Site URL·Redirect URLs에 추가 (`/auth/callback`, `/auth/confirm`)
 - [ ] **실제 로그인 발송**: 지금은 dev 매직링크(수동). 이메일 발송 켜기 — Supabase 내장(저볼륨 OK) 또는 무료 SMTP(Resend 등). 그 후 디자이너 3명 각자 이메일로 온보딩
 - [ ] **AI 활성화**: Cloudflare Workers AI 바인딩 `AI` 추가 + `@cloudflare/next-on-pages` 런타임 의존성 → '문구 다듬기'가 진짜 LLM으로 (지금은 템플릿 폴백)
-- [ ] **시크릿 로테이션**: 채팅에 노출된 `SUPABASE_SERVICE_ROLE_KEY`(재발급·쉬움) + `MIRRORBALL_KEK`(신규 KEK로 **테넌트 DEK만 재래핑** — PII 재암호화 아님, 스크립트로 가능). 로테이션 후 모든 env(맥·Cloudflare) 갱신
+- [ ] **시크릿 로테이션**: 채팅에 노출된 `SUPABASE_SERVICE_ROLE_KEY`(재발급·쉬움) + `MIRRORBALL_KEK`(신규 KEK로 **테넌트 DEK만 재래핑** — PII 재암호화 아님, 스크립트로 가능). 로테이션 후 모든 env(맥·Cloudflare) 갱신 → 도구·순서: `playbook/KEY_ROTATION.md`(2026-10-12, `worker/rotate_kek.py`)
 
 ## Phase 2 — 런치 전 권장 (신뢰·법무)
 
-- [ ] **개인정보처리방침 + 이용약관**: 고객 이름·전화 처리 → 한국 PIPA상 필요. 살롱=개인정보 관리자, 우리=수탁(처리)자 구조·위탁 계약·처리 목적/보관기간 명시. 공개 페이지에 링크
+- [ ] **개인정보처리방침 + 이용약관**: 고객 이름·전화 처리 → 한국 PIPA상 필요. 살롱=개인정보 관리자, 우리=수탁(처리)자 구조·위탁 계약·처리 목적/보관기간 명시. 공개 페이지에 링크 → 초안: `playbook/PRIVACY_DRAFT.md`(법률 검토 전)
 - [ ] **각 디자이너 소개 페이지**: 최주환·이다운 공개 프로필(/p/slug) 채우기 (현재 비어있음)
 - [ ] **수집 실패 알림**: `secrets/stores.yaml`의 `notify_url`(슬랙/디스코드 webhook) → 수집 끊기면 즉시 알림
 - [ ] **커스텀 도메인**(선택): 전문성·신뢰
