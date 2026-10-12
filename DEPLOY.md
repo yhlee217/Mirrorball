@@ -21,28 +21,54 @@ Cloudflare Pages가 `claude/charming-planck-hmgazi` 브랜치에 연결돼 있�
 
 ### A-2. 맥 워커 — 수동
 
+저장소는 **`~/Dev/Mirrorball`** 에 있다(2026-10-06 `~/Desktop` 에서 이동 — 아래 ⚠).
+
+> 아래 명령은 zsh 에 그대로 붙여넣도록 **주석 없이** 적었다. 맥의 zsh 는 `interactive_comments`
+> 가 꺼져 있어서 `# …` 가 섞이면 `parse error near ')'` 로 블록 전체가 실패한다.
+
+**1. 최신 코드 받기**
+
 ```bash
-cd ~/Desktop/Dev/Mirrorball
-git pull origin claude/charming-planck-hmgazi
+cd ~/Dev/Mirrorball && git pull origin claude/charming-planck-hmgazi
+```
 
-# 크로미움은 이제 run_mac.sh 가 없으면 스스로 설치한다(2026-10-06). 수동 설치는 불필요.
-# 다만 플레이라이트 자체를 올렸다면 한 번 돌려두는 게 빠르다.
-.venv/bin/python -m playwright install chromium
+**2. claude CLI 가 Stop hook 에 끌려가지 않는지 확인** (`claude` 1회 호출)
 
-# 수집 주기 plist(주 1회) 등록·갱신. plist 에 경로를 직접 적지 않는다(아래 ⚠ 참조)
+```bash
+CHECK=1 .venv/bin/python worker/summarize_memos.py
+```
+
+`실행 위치: …/mirrorball-claude-cli` 가 찍히고 답이 한 단어("안녕")면 정상. '완료'면 ⚠ 경고가
+뜬다 — 저장소의 Stop hook(`.claude/settings.json`)이 끼어든 것이다. 메모 정리·노출 측정·자가치유는
+모두 저장소 밖 전용 폴더에서 `claude` 를 부른다(`worker/claude_cli.py` 의 `cli_cwd`).
+
+**3. 수집 주기 등록·갱신** — plist 가 바뀐 배포일 때만. 경로는 자리표로 채워진다(아래 ⚠).
+
+```bash
 bash scripts/mac/install_schedule.sh collect
+```
 
-# 즉시 1회 — 이걸 돌려야 sync_jobs 에 기록이 남아 앱에 '수집 기준일'이 뜬다
+**4. 즉시 1회 수집** — 필요할 때만. `sync_jobs` 에 기록이 남아 앱에 '수집 기준일'이 뜬다.
+
+```bash
 FORCE=1 bash worker/run_mac.sh
 ```
 
+크로미움은 `run_mac.sh` 가 없으면 스스로 설치한다(2026-10-06~). 수동 설치는 필요 없다.
+
 확인:
 
-```bash
-launchctl list | grep mirrorball          # 2번째 칸이 종료코드 — 0 이어야 정상
-.venv/bin/python worker/gap_check.py      # 어디까지 모았는지
-.venv/bin/python worker/sync_log.py       # 예정된 일요일이 실제로 돌았는지
-```
+| 명령 | 정상 |
+|---|---|
+| `launchctl list \| grep mirrorball` | `-  0  com.mirrorball.collect` 한 줄 (2번째 칸 = 종료코드) |
+| `.venv/bin/python worker/sync_log.py` | 예정된 일요일마다 성공 3 |
+| `.venv/bin/python worker/gap_check.py` | 마지막 거래가 최근 |
+| `tail -5 ~/Library/Logs/Mirrorball/collect.out.log` | `메모 정리 종료` 로 끝남 |
+
+로그: 수집 `~/Library/Logs/Mirrorball/collect.out.log` · 메모 정리 `runs/memoai.log`.
+
+> 이 저장소에서 Claude Code 를 쓰면 Stop hook 이 적용된다 — 멈출 때 최대 3번까지 다음 작업을
+> 이어서 하고, 할 게 없으면 '완료'로 끝난다. 세션마다 끄려면 `/hooks`.
 
 > ### ⚠ 저장소를 `~/Desktop`·`~/Documents`·`~/Downloads` 에 두지 말 것
 >
@@ -54,9 +80,9 @@ launchctl list | grep mirrorball          # 2번째 칸이 종료코드 — 0 �
 > 터미널에서 `bash worker/run_mac.sh` 를 직접 돌리면 Terminal 의 권한을 쓰므로 **잘 된다.**
 > "수동은 되는데 자동은 안 된다"가 이 증상의 모양이다.
 >
-> 옮기기(`.venv` 재생성·plist 재등록·실제 spawn 확인까지 한 번에):
+> 옮기기 — `~/Dev/Mirrorball` 로, `.venv` 재생성·plist 재등록·실제 spawn 확인까지 한 번에:
 > ```bash
-> bash scripts/mac/relocate.sh          # → ~/Dev/Mirrorball
+> bash scripts/mac/relocate.sh
 > ```
 > `install_schedule.sh` 는 보호 폴더에서 실행하면 등록을 거부한다. launchd 로그는
 > 저장소 위치와 무관하게 `~/Library/Logs/Mirrorball/` 에 쓴다.
@@ -67,10 +93,10 @@ launchctl list | grep mirrorball          # 2번째 칸이 종료코드 — 0 �
 > log show --predicate 'process == "launchd"' --last 10m --info | grep -i mirrorball
 > ```
 
-> **수집이 조용히 멈추는 걸 두 번 당했다.** 둘 다 로그 파일에만 흔적이 있었다.
-> 지금은 실패하면 ① 맥 알림센터에 뜨고 ② `sync_jobs` 에 error 행이 남아
-> `sync_log.py` 와 앱이 '안 돌았다/돌다가 실패했다'를 구분한다. 그래도 가장 확실한
-> 점검은 위 세 줄이니, 배포 때마다 돌려볼 것.
+> **2026-08~10 공백의 진짜 원인은 위 TCC 였다.** 그 사이 영업시간 가드·크로미움 누락도 실재해서
+> 고쳤지만, 둘 다 '스크립트가 돌다가 실패했다'는 전제였고 실제로는 스크립트가 시작조차 못 했다 —
+> 그래서 로그·알림·종료코드가 하나도 남지 않았다. 맥 안의 신호는 전부 bash 가 떠야 생기므로,
+> **맥 밖 감시(A-2.5)가 유일하게 믿을 만한 신호다.**
 
 ### A-2.5. 수집 감시 — 최초 1회만 (GitHub Actions)
 
@@ -85,6 +111,8 @@ launchctl list | grep mirrorball          # 2번째 칸이 종료코드 — 0 �
    | `SUPABASE_ANON_KEY` | anon 키 (`NEXT_PUBLIC_SUPABASE_ANON_KEY` 와 같은 값) |
    | `ALERT_WEBHOOK` | *(선택)* 슬랙·디스코드 웹훅 URL |
 3. **Actions → sync-health → Run workflow** 로 지금 한 번 돌려 확인
+
+예약은 01:00 UTC(10:00 KST)지만 GitHub 스케줄이 밀려 실제로는 **오후 3~4시쯤** 돈다(2026-10 관측).
 
 > anon 키면 충분하다 — 감시자는 `sync_health()` 함수만 호출하고, 그 함수는 수집
 > 시각만 돌려준다(고객 정보에 구조적으로 닿을 수 없다). service_role 키는 주지 않는다.

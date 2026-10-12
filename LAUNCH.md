@@ -25,7 +25,7 @@
 > 못 메우므로, **재개 직후 넓은 창으로 1회만** 돌린다. 맥에서:
 >
 > ```bash
-> cd ~/Desktop/Dev/Mirrorball && git pull origin claude/charming-planck-hmgazi
+> cd ~/Dev/Mirrorball && git pull origin claude/charming-planck-hmgazi
 > SYNC_DAYS=60 FORCE=1 bash worker/run_mac.sh      # 60일 = 공백 37일 + 여유
 > ```
 >
