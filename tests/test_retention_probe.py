@@ -23,8 +23,9 @@ def d(days: int) -> str:
     return (TODAY + dt.timedelta(days=days)).isoformat()
 
 
-def cust(cid: str, ext: str = "100", churned: str | None = None) -> dict:
-    return {"id": cid, "ext_id": ext, "churned_at": churned}
+def cust(cid: str, ext: str = "100", churned: str | None = None, last: int | None = None, prepaid: int = 0) -> dict:
+    return {"id": cid, "ext_id": ext, "churned_at": churned,
+            "last_visit": d(last) if last is not None else None, "prepaid_balance": prepaid}
 
 
 def tx(cid: str, day: int, service: str = "여자컷", kind: str | None = "service") -> dict:
@@ -32,7 +33,11 @@ def tx(cid: str, day: int, service: str = "여자컷", kind: str | None = "servi
 
 
 CUSTOMERS = [
-    cust("A"), cust("B"), cust("C"), cust("D"), cust("E"), cust("F"),
+    cust("A", last=-90, prepaid=300000),   # 선불 남음 · 90일째(90일 '넘게'는 아님)
+    cust("B", last=-100, prepaid=520000),  # 선불 남음 · 100일
+    cust("C", last=-150), cust("D", last=-6),
+    cust("E", last=-40, prepaid=100000),   # 선불 남음 · 40일
+    cust("F"),
     cust("W", ext="손님"),                 # 워크인 집계 — 세지 않는다
     cust("X", churned="2026-09-01T00:00:00Z"),  # 이탈 표시 — 세지 않는다
 ]
@@ -113,3 +118,12 @@ def test_pages_and_report_print_counts_only():
     assert "거래" in out and "첫 방문" in out
     for name in ("김", "010"):              # 이름·번호는 측정에 들어오지 않는다
         assert name not in out
+
+
+def test_prepaid_customers_gone_quiet():
+    r = m()
+    assert r["prepaid"] == (3, 920000)
+    # 60일 넘게: A(90)·B(100) · 90일 넘게: B · 180일 넘게: 없음
+    assert r["prepaid_away"] == [(60, 2, 820000), (90, 1, 520000), (180, 0, 0)]
+    out = "\n".join(rp.report("demo", r) + rp.verdicts([r]))
+    assert "선불 잔액        3명 · 92만원" in out

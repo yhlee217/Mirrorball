@@ -6,6 +6,7 @@ v4(playbook/IMPROVE_PLAN_v4.md)의 기본값을 추측하지 않고 실제 기�
   · 방문 1회로 남은 분이 지금 몇 명인가 — '다시 오실 때' 목록이 첫 주에 몇 명으로 시작하나
   · 연락 기록과 그 뒤 방문·예약 — '연락 효과'의 기준선
   · 거래 건수 — 화면을 한 번 열 때 몇 번에 나눠 받나(1,000건씩)
+  · 선불 잔액이 남은 채 발길이 끊긴 손님 — 개선 계획 v5 P3(선불 손님 챙기기)의 규모
 이름·전화번호는 읽지 않는다. 날짜와 건수만 센다. 판정(실고객·활성 예약)은 ux_probe 와 같다.
 
 사용:
@@ -26,6 +27,7 @@ import supa  # noqa: E402
 PAGE = 1000  # PostgREST 한 번에 최대 행 수(web/lib/customers fetchAllRows 와 같다)
 REACH = (28, 42, 56, 90)  # 첫 방문 뒤 이 날수 안에 다시 오신 비율을 본다
 POOL = ((0, 13), (14, 27), (28, 56), (57, 90), (91, 180))  # 방문 1회 손님 — 첫 방문 뒤 지난 날
+AWAY = (60, 90, 180)  # 선불 잔액 남은 손님 — 마지막 방문 뒤 이 날수를 넘겨 안 오신 분
 
 
 def visit_dates(txs: list[dict]) -> dict[str, list[str]]:
@@ -122,6 +124,13 @@ def measure(customers: list[dict], txs: list[dict], bookings: list[dict], contac
                  for b in bookings):
             booked += 1
 
+    # ⑤ 선불 잔액이 남은 손님 — 잔액은 워커의 추정(충전 뒤 시술은 잔액에서 쓴 것으로 봄)
+    prepaid = [c for c in real.values() if (c.get("prepaid_balance") or 0) > 0]
+    away = []
+    for n in AWAY:
+        gone = [c for c in prepaid if c.get("last_visit") and _days(c["last_visit"][:10], t_iso) > n]
+        away.append((n, len(gone), sum(c["prepaid_balance"] for c in gone)))
+
     year_ago = (today - dt.timedelta(days=365)).isoformat()
     tx_year = sum(1 for t in txs if (t.get("date") or "") >= year_ago)
     return {
@@ -139,11 +148,17 @@ def measure(customers: list[dict], txs: list[dict], bookings: list[dict], contac
         "booked": booked,
         "tx": len(txs),
         "tx_year": tx_year,
+        "prepaid": (len(prepaid), sum(c["prepaid_balance"] for c in prepaid)),
+        "prepaid_away": away,
     }
 
 
 def pct(a: int, b: int) -> str:
     return f"{round(a * 100 / b)}% ({a:,}/{b:,})" if b else "— (대상 없음)"
+
+
+def man(n: int) -> str:
+    return f"{round(n / 10000):,}만원"
 
 
 def pages(n: int) -> int:
@@ -165,6 +180,9 @@ def report(slug: str, m: dict) -> list[str]:
          f"그 뒤 오심 {m['came']}명 · 예약 잡힘 {m['booked']}명 · 수단 "
          + " ".join(f"{k} {v}" for k, v in sorted(m["via"].items()))) if m["contacts"] else "  연락 기록        아직 없음",
         f"  거래             전체 {m['tx']:,}건({pages(m['tx'])}번에 나눠 받음) · 최근 1년 {m['tx_year']:,}건({pages(m['tx_year'])}번)",
+        (f"  선불 잔액        {m['prepaid'][0]}명 · {man(m['prepaid'][1])} — 그중 안 오신 지 "
+         + " · ".join(f"{n}일+ {k}명({man(w)})" for n, k, w in m["prepaid_away"])) if m["prepaid"][0]
+        else "  선불 잔액        남은 손님 없음",
     ]
     return out
 
@@ -196,7 +214,14 @@ def verdicts(ms: list[dict]) -> list[str]:
                + (" → 첫 주는 오래된 분이 몰린다. 처음엔 최근 90일 안만" if start > 60 else ""))
     out.append(f"연락 기록 {contacts}건" + (" → 4주 넘게 쌓인 뒤 효과 표시(P2)" if contacts < 100 else " → 효과 표시를 바로 해도 된다"))
     if tx:
-        out.append(f"거래 가장 많은 매장 {tx:,}건 → 고객 목록·통계가 {pages(tx)}번 차례로 받는다(0-3 '덜 기다리게')")
+        out.append(f"거래 가장 많은 매장 {tx:,}건 → 1,000건씩 {pages(tx)}쪽(지금은 넷씩 한꺼번에 받는다)")
+    gone = [(n, sum(dict((x[0], x[1]) for x in m["prepaid_away"])[n] for m in ms),
+             sum(dict((x[0], x[2]) for x in m["prepaid_away"])[n] for m in ms)) for n in AWAY]
+    if sum(m["prepaid"][0] for m in ms):
+        n90 = next(k for n, k, _ in gone if n == 90)
+        w90 = next(w for n, _, w in gone if n == 90)
+        out.append(f"선불 잔액 남은 채 90일 넘게 안 오신 분 {n90}명 · {man(w90)}"
+                   + (" → 선불 손님 챙기기(v5 P3)의 몫이 크다" if n90 >= 20 else " → 선불 손님 챙기기는 작게"))
     return out
 
 
@@ -206,11 +231,11 @@ def main() -> int:
     if not tenants:
         print("테넌트 없음")
         return 1
-    print(f"개선 계획 v4 사전 측정 · {now:%Y-%m-%d %H:%M} KST · 읽기 전용(날짜·건수만)\n")
+    print(f"개선 계획 v4·v5 사전 측정 · {now:%Y-%m-%d %H:%M} KST · 읽기 전용(날짜·건수만)\n")
     ms = []
     for t in tenants:
         tid = t["id"]
-        customers = supa.select_all("customers", tid, "id,ext_id,visit_count,first_visit,last_visit,churned_at")
+        customers = supa.select_all("customers", tid, "id,ext_id,visit_count,first_visit,last_visit,churned_at,prepaid_balance")
         txs = supa.select_all("transactions", tid, "customer_id,date,kind,service")
         bookings = supa.select_all("bookings", tid, "customer_id,date,time,status")
         contacts = [r for r in supa.select_all("care_items", tid, "customer_id,kind,why,sent_at")
