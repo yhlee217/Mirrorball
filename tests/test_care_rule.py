@@ -51,7 +51,26 @@ def test_python_rule(name, c, booked, want):
     assert up.needs_care(c, S, TODAY, booked) is want
 
 
-def _node_results() -> list[bool] | None:
+# 할 일(챙길 고객 탭) = 상태(needsCare) 이면서 최근 연락하지 않은 분
+TODO_CASES = [
+    ("챙길 대상 · 연락 안 함 → 할 일",   {"revisit_state": "due", "last_visit": ago(40), "visit_count": 3}, False, False, True),
+    ("챙길 대상 · 최근 연락함 → 빠짐",   {"revisit_state": "due", "last_visit": ago(40), "visit_count": 3}, False, True, False),
+    ("예약도 있고 연락도 함 → 빠짐",     {"revisit_state": "overdue", "last_visit": ago(60), "visit_count": 4}, True, True, False),
+    ("챙길 대상 아님 · 연락 안 함",      {"revisit_state": "new", "last_visit": ago(20), "visit_count": 1}, False, False, False),
+]
+
+# 전화번호 → 링크 숫자. 9자리 미만은 번호로 보지 않는다
+PHONES = [("010-1234-5678", "01012345678"), ("+82 10-1234-5678", "+821012345678"),
+          ("02)345-6789", "023456789"), ("1234", None), ("", None), (None, None)]
+BODY = "하예원님, 편하신 때 연락 주세요! & 예약?"
+
+
+@pytest.mark.parametrize("name, c, booked, contacted, want", TODO_CASES, ids=[c[0] for c in TODO_CASES])
+def test_python_todo_rule(name, c, booked, contacted, want):
+    assert up.on_care_list(c, S, TODAY, booked, contacted) is want
+
+
+def _node_results() -> dict | None:
     if not shutil.which("node") or not shutil.which("npx"):
         return None
     web = ROOT / "web"
@@ -59,31 +78,61 @@ def _node_results() -> list[bool] | None:
         return None                      # customers.ts 의 타입 import 를 풀 수 없다
     with tempfile.TemporaryDirectory() as tmp:
         c = subprocess.run(
-            ["npx", "tsc", "lib/customers.ts", "lib/settings.ts", "--outDir", tmp,
+            ["npx", "tsc", "lib/customers.ts", "lib/settings.ts", "lib/contact.ts", "--outDir", tmp,
              "--module", "commonjs", "--target", "es2020", "--esModuleInterop", "--skipLibCheck"],
             cwd=web, capture_output=True, text=True, timeout=300,
         )
-        if c.returncode != 0 or not (Path(tmp) / "customers.js").exists():
+        if c.returncode != 0 or not (Path(tmp) / "contact.js").exists():
             return None
-        cases = Path(tmp) / "cases.json"
-        cases.write_text(json.dumps([{"c": c_, "booked": b} for _, c_, b, _ in CASES]), encoding="utf-8")
+        data = Path(tmp) / "cases.json"
+        data.write_text(json.dumps({
+            "needs": [{"c": c_, "booked": b} for _, c_, b, _ in CASES],
+            "todo": [{"c": c_, "booked": b, "contacted": k} for _, c_, b, k, _ in TODO_CASES],
+            "phones": [ph for ph, _ in PHONES],
+            "body": BODY,
+        }), encoding="utf-8")
         runner = Path(tmp) / "run.cjs"
         runner.write_text(
-            "const { needsCare } = require('./customers.js');\n"
-            "const { DEFAULT_SETTINGS } = require('./settings.js');\n"
-            f"const cases = JSON.parse(require('node:fs').readFileSync({json.dumps(str(cases))}, 'utf8'));\n"
-            "process.stdout.write(JSON.stringify(cases.map((k) => needsCare(k.c,\n"
-            "  { settings: DEFAULT_SETTINGS, churned: !!k.c.churned_at, booked: k.booked }))));\n",
+            "const { needsCare, onCareList } = require('./customers.js');\n"
+            "const { DEFAULT_SETTINGS: S } = require('./settings.js');\n"
+            "const { phoneDigits, smsHref, telHref } = require('./contact.js');\n"
+            f"const d = JSON.parse(require('node:fs').readFileSync({json.dumps(str(data))}, 'utf8'));\n"
+            "process.stdout.write(JSON.stringify({\n"
+            "  needs: d.needs.map((k) => needsCare(k.c, { settings: S, churned: !!k.c.churned_at, booked: k.booked })),\n"
+            "  todo: d.todo.map((k) => onCareList(k.c, { settings: S, churned: !!k.c.churned_at, booked: k.booked, contacted: k.contacted })),\n"
+            "  phones: d.phones.map((p) => phoneDigits(p)),\n"
+            "  sms: smsHref('01012345678', d.body), tel: telHref('01012345678'),\n"
+            "}));\n",
             encoding="utf-8",
         )
         r = subprocess.run(["node", str(runner)], capture_output=True, text=True, timeout=120)
         return json.loads(r.stdout) if r.returncode == 0 else None
 
 
-def test_web_rule_matches_python():
+@pytest.fixture(scope="module")
+def web():
     got = _node_results()
     if got is None:
         pytest.skip("node/npx 또는 web/node_modules 가 없거나 컴파일 실패 — TS 대조 생략")
-    for (name, c, booked, want), web in zip(CASES, got):
-        assert web is want, f"[TS] {name}"
-        assert web == up.needs_care(c, S, TODAY, booked), f"[TS↔PY 불일치] {name}"
+    return got
+
+
+def test_web_rule_matches_python(web):
+    for (name, c, booked, want), got in zip(CASES, web["needs"]):
+        assert got is want, f"[TS] {name}"
+        assert got == up.needs_care(c, S, TODAY, booked), f"[TS↔PY 불일치] {name}"
+
+
+def test_web_todo_rule_matches_python(web):
+    for (name, c, booked, contacted, want), got in zip(TODO_CASES, web["todo"]):
+        assert got is want, f"[TS] {name}"
+        assert got == up.on_care_list(c, S, TODAY, booked, contacted), f"[TS↔PY 불일치] {name}"
+
+
+def test_web_phone_links(web):
+    """문자·전화 링크 — 번호는 숫자만, 문구는 그대로 실려야 한다(& ? 가 깨지면 본문이 잘린다)."""
+    assert web["phones"] == [want for _, want in PHONES]
+    assert web["tel"] == "tel:01012345678"
+    assert web["sms"].startswith("sms:01012345678?&body=")
+    from urllib.parse import unquote
+    assert unquote(web["sms"].split("body=", 1)[1]) == BODY

@@ -32,18 +32,14 @@ export default async function ProfilePage() {
 
   return (
     <main className="wrap">
+      {/* 탭이 아니라 설정 안의 화면이다 — 한 번 만들고 거의 안 고치는 공개 페이지라 탭 한 칸을
+          차지할 이유가 없었다(UX 계획 v2 2-3). '콘텐츠 제안' 칸은 없는 화면(404)을 가리켜 뺐다. */}
+      <div className="bar">
+        <Link href="/settings" className="back">‹ 설정</Link>
+        <div className="ttl" style={{ marginLeft: 10 }}>소개</div>
+      </div>
       <div className="body">
-        <div className="hello">
-          <div className="e">
-            <span>Profile</span>
-          </div>
-          <h2>소개</h2>
-          <div className="s">손님에게 보이는 공개 소개예요. 저장하면 바로 반영됩니다.</div>
-        </div>
-        <div className="seg">
-          <span className="seg-b on">소개 편집</span>
-          <Link href="/profile/content" className="seg-b">콘텐츠 제안</Link>
-        </div>
+        <p className="note" style={{ marginTop: 0 }}>손님에게 보이는 공개 소개예요. 저장하면 바로 반영됩니다.</p>
         {slug && (
           <a href={`/p/${slug}`} target="_blank" rel="noopener" className="pub-link">공개 페이지 미리보기 ↗</a>
         )}

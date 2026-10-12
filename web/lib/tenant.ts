@@ -67,3 +67,19 @@ export function nameReader(dek: Uint8Array | null) {
     }
   };
 }
+
+/** 이름과 전화번호를 함께 연다 — 챙길 고객 카드의 문자·전화 버튼용. 번호는 있을 때만. */
+export function contactReader(dek: Uint8Array | null) {
+  return async (pii: string | null | undefined): Promise<{ name: string; phone: string | null }> => {
+    if (!dek || !pii) return { name: '고객', phone: null };
+    try {
+      const p = await decryptPII(pii, dek);
+      return {
+        name: typeof p.name === 'string' && p.name ? p.name : '고객',
+        phone: typeof p.phone === 'string' && p.phone.trim() ? p.phone : null,
+      };
+    } catch {
+      return { name: '고객', phone: null };
+    }
+  };
+}

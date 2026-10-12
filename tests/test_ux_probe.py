@@ -102,7 +102,7 @@ def test_measure_counts_like_the_screen():
 def test_verdicts_flag_booked_customers():
     m = up.measure(CUSTOMERS, TXS, BOOKINGS, PHONES, S, NOW)
     v = "\n".join(up.verdicts([m]))
-    assert "챙길 고객 1명 — 이미 예약해서 빠진 1명" in v
+    assert "챙길 고객 1명 — 이미 예약해서 빠진 1명 · 최근 연락해서 빠진 0명" in v
     assert "노쇼 기록 1건" in v
 
 
@@ -111,4 +111,10 @@ def test_report_only_prints_counts():
     m = up.measure(CUSTOMERS, TXS, BOOKINGS, PHONES, S, NOW)
     lines = up.report("daunbu", "살롱톤", m)
     assert lines[0] == "[daunbu] 살롱톤"
-    assert any("1-1 챙길 고객 1명 — 이미 예약해서 빠진 1명" in ln for ln in lines)
+    assert any("1-1 챙길 고객 1명 — 이미 예약해서 빠진 1명 · 최근 연락해서 빠진 0명" in ln for ln in lines)
+
+
+def test_recently_contacted_leave_the_todo_list_only():
+    """연락한 분은 할 일(탭)에서만 빠지고, 상태(타일)로는 그대로 센다."""
+    m = up.measure(CUSTOMERS, TXS, BOOKINGS, PHONES, S, NOW, contacted={"c2"})
+    assert m["care"] == 0 and m["care_quiet"] == 1 and m["care_booked"] == 1

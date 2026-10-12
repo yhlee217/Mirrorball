@@ -1,10 +1,11 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import { nameReader, openDek, requireTenant } from '@/lib/tenant';
-import { fetchAllRows, isRealCustomer, isChurned, needsCare } from '@/lib/customers';
+import { contactReader, openDek, requireTenant } from '@/lib/tenant';
+import { fetchAllRows, isRealCustomer, isChurned, needsCare, onCareList } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookedCustomerIds } from '@/lib/bookings';
+import { CONTACT_QUIET_DAYS, phoneDigits, recentlyContactedIds } from '@/lib/contact';
 import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
 import { lastSynced, syncLine } from '@/lib/sync';
@@ -24,23 +25,29 @@ type Cust = {
 export default async function AlertsPage() {
   const { supabase, tenantId } = await requireTenant();
 
-  const [{ data: tenant }, customers, booked] = await Promise.all([
+  const [{ data: tenant }, customers, booked, contacted] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select('id,ext_id,pii_enc,revisit_state,revisit_cycle_days,last_visit,visit_count,churned_at').in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
     bookedCustomerIds(supabase, tenantId), // 이미 예약한 분께 '예약 도와드릴게요'를 보내지 않게
+    recentlyContactedIds(supabase, tenantId), // 최근 연락한 분은 할 일에서 잠시 뺀다
   ]);
 
   const tRow = tenant as { dek_wrapped: string | null; settings: unknown } | null;
   const settings = mergeSettings(tRow?.settings);
   const dek = await openDek(tRow?.dek_wrapped);
-  const nameFrom = nameReader(dek);
+  const readContact = contactReader(dek);
 
-  const base = ((customers as Cust[]) ?? [])
-    .filter((c) => isRealCustomer(c.ext_id) && needsCare(c, { settings, churned: isChurned(c), booked: booked.has(c.id) }))
+  const flags = (c: Cust) => ({ settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id) });
+  const real = ((customers as Cust[]) ?? []).filter((c) => isRealCustomer(c.ext_id));
+  // 연락해서 잠시 빠진 분 — 목록이 왜 줄었는지 밝힌다
+  const quiet = real.filter((c) => needsCare(c, flags(c)) && contacted.has(c.id)).length;
+  const base = real
+    .filter((c) => onCareList(c, flags(c)))
     .sort((a, b) => (a.revisit_state === 'overdue' ? 0 : 1) - (b.revisit_state === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count)
     .slice(0, 50);
-  const names = await Promise.all(base.map((c) => nameFrom(c.pii_enc)));
+  const contacts = await Promise.all(base.map((c) => readContact(c.pii_enc)));
+  const names = contacts.map((x) => x.name);
 
   // 개인화용: 각 고객의 마지막 시술
   const ids = base.map((c) => c.id);
@@ -88,7 +95,7 @@ export default async function AlertsPage() {
           ? `${name}님, 지난 ${svc} ${care.phrase} 연락드려요. 편하신 시간에 예약 도와드릴게요!`
           : `${name}님, ${svc ? '지난 ' + svc : '지난 시술'} 이제 관리해주실 시기예요${c.revisit_cycle_days ? ` (평소 ${c.revisit_cycle_days}일 주기)` : ''}. 편하신 시간에 예약 도와드릴게요!`;
     }
-    return { id: c.id, name, state: c.revisit_state as string, why, draft };
+    return { id: c.id, name, phone: phoneDigits(contacts[i].phone), state: c.revisit_state as string, why, draft };
   });
 
   // 이탈·재방문 판정은 월 단위라 주 1회 수집으로도 충분하지만, 어느 시점 기준인지는 밝힌다.
@@ -101,8 +108,8 @@ export default async function AlertsPage() {
         <div className="ttl">챙길 고객</div>
       </div>
       <div className="body">
-        <div className="sec-h">자동 발송 X · 문구만 복사해서 직접{basis ? ` · ${basis}` : ''}</div>
-        <AlertsList items={items} />
+        <div className="sec-h">자동 발송 X · 문자·전화는 버튼으로 바로{basis ? ` · ${basis}` : ''}</div>
+        <AlertsList items={items} quiet={quiet} quietDays={CONTACT_QUIET_DAYS} />
       </div>
     </main>
   );

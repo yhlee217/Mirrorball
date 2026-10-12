@@ -24,6 +24,7 @@ import mirrorball_crypto as mc  # noqa: E402
 import supa  # noqa: E402
 
 KST = dt.timezone(dt.timedelta(hours=9))
+CONTACT_QUIET_DAYS = 14   # web/lib/contact.ts 와 같은 값 — 연락 뒤 이 기간은 '할 일'에서 빠진다
 # web/lib/settings.ts DEFAULT_SETTINGS 와 같은 값 — 테넌트 설정에 없으면 이걸 쓴다
 LAPSE_DEFAULTS = {"lapsed_months": 12, "lapsed_soft_months": 6, "lapsed_soft_visits": 3}
 
@@ -79,6 +80,11 @@ def needs_care(c: dict, s: dict, today: dt.date, booked: bool) -> bool:
     return not is_lapsed(c, s, today)
 
 
+def on_care_list(c: dict, s: dict, today: dt.date, booked: bool, contacted: bool) -> bool:
+    """web/lib/customers.ts onCareList — 할 일(챙길 고객 탭)은 최근 연락한 분도 뺀다."""
+    return not contacted and needs_care(c, s, today, booked)
+
+
 def last_n_months(today: dt.date, n: int) -> list[str]:
     """이번 달 포함 최근 n개월 'YYYY-MM'. 달 단위로 센다(31일씩 빼면 달을 건너뛴다)."""
     y, m, out = today.year, today.month, []
@@ -93,13 +99,16 @@ def last_n_months(today: dt.date, n: int) -> list[str]:
 # ── 측정 (네트워크·복호화와 분리 — 테스트 가능) ──────────────────────────────
 
 def measure(customers: list[dict], txs: list[dict], bookings: list[dict],
-            has_phone: dict, settings: dict, now: dt.datetime) -> dict:
+            has_phone: dict, settings: dict, now: dt.datetime,
+            contacted: frozenset | set = frozenset()) -> dict:
     today = now.date()
     real = [c for c in customers if is_real(c.get("ext_id"))]
     active = {b["customer_id"] for b in bookings if b.get("customer_id") and is_active_booking(b, now)}
     # 화면의 챙길 고객 = 예약 확인 전 후보에서 이미 예약한 분을 뺀 것(2026-10-12 P0 1번)
     cand = [c for c in real if needs_care(c, settings, today, booked=False)]
-    care = [c for c in real if needs_care(c, settings, today, booked=c["id"] in active)]
+    state = [c for c in real if needs_care(c, settings, today, booked=c["id"] in active)]   # 홈 타일
+    care = [c for c in real
+            if on_care_list(c, settings, today, c["id"] in active, c["id"] in contacted)]  # 챙길 고객 탭
 
     since = (today - dt.timedelta(days=365)).isoformat()
     recent = [t for t in txs if (t.get("date") or "") >= since]
@@ -122,7 +131,8 @@ def measure(customers: list[dict], txs: list[dict], bookings: list[dict],
         "phone": (sum(1 for c in real if has_phone.get(c["id"])), len(real)),
         "care": len(care),
         "care_phone": (sum(1 for c in care if has_phone.get(c["id"])), len(care)),
-        "care_booked": len(cand) - len(care),
+        "care_booked": len(cand) - len(state),
+        "care_quiet": len(state) - len(care),
         "tx_time": (sum(1 for t in recent if (t.get("time") or "").strip()), len(recent)),
         "repeat": (sum(1 for c in real if (c.get("visit_count") or 0) >= 2), len(real)),
         "cycle": (sum(1 for c in real if c.get("revisit_cycle_days")), len(real)),
@@ -152,7 +162,8 @@ def report(slug: str, salon: str, m: dict) -> list[str]:
         f"[{slug}] {salon}",
         f"  고객 {m['customers']:,}명",
         f"  C1  전화번호        {pct(*m['phone'])} · 챙길 고객 중 {pct(*m['care_phone'])}",
-        f"  1-1 챙길 고객 {m['care']}명 — 이미 예약해서 빠진 {m['care_booked']}명",
+        f"  1-1 챙길 고객 {m['care']}명 — 이미 예약해서 빠진 {m['care_booked']}명"
+        f" · 최근 연락해서 빠진 {m['care_quiet']}명",
         f"  D4  시술 시각       채움 {pct(*m['tx_time'])} — 최근 12개월 거래",
         f"  B2  방문 2회 이상   {pct(*m['repeat'])} · 주기 계산됨 {pct(*m['cycle'])}",
         f"  A3  선불 잔액       남은 손님 {n}명 · 합계 {won(total)} (추정)",
@@ -172,6 +183,7 @@ def verdicts(ms: list[dict]) -> list[str]:
     ph, tm, cv = tot("phone"), tot("tx_time"), tot("convert")
     care = sum(m["care"] for m in ms)
     booked = sum(m["care_booked"] for m in ms)
+    quiet = sum(m["care_quiet"] for m in ms)
     no_show = sum(m["bk_status"]["노쇼"] for m in ms)
     prepaid = sum(m["prepaid"][0] for m in ms)
     # 이번 달은 진행 중이라 빼고, 디자이너 한 명 기준 월평균 신규
@@ -182,7 +194,8 @@ def verdicts(ms: list[dict]) -> list[str]:
         return t[0] / t[1] if t[1] else 0
 
     out = []
-    out.append(f"1-1 챙길 고객 {care}명 — 이미 예약해서 빠진 {booked}명(앱 숫자도 같다)")
+    out.append(f"1-1 챙길 고객 {care}명 — 이미 예약해서 빠진 {booked}명 · 최근 연락해서 빠진 {quiet}명"
+               "(앱 숫자도 같다)")
     r = rate(ph)
     out.append(f"C1  전화번호 {round(r * 100)}%"
                + (" → 문자·전화 버튼 효과가 크다" if r >= 0.7 else
@@ -231,6 +244,10 @@ def main() -> int:
             "revisit_cycle_days,churned_at,prepaid_balance,memo_ai")
         txs = supa.select_all("transactions", tid, "date,time")
         bookings = supa.select_all("bookings", tid, "customer_id,date,time,status")
+        since = (now - dt.timedelta(days=CONTACT_QUIET_DAYS)).astimezone(dt.timezone.utc).isoformat()
+        contacted = {r["customer_id"] for r in supa._get("/care_items", {
+            "tenant_id": f"eq.{tid}", "kind": "eq.contact", "sent_at": f"gte.{since}",
+            "select": "customer_id"}) if r.get("customer_id")}
 
         # 전화번호는 '있는지'만 본다 — 값은 이 함수 밖으로 나가지 않는다
         has_phone, bad = {}, 0
@@ -244,7 +261,7 @@ def main() -> int:
             except Exception:  # noqa: BLE001 — 한 행이 깨져도 측정은 계속
                 bad += 1
 
-        m = measure(customers, txs, bookings, has_phone, lapse_settings(t.get("settings")), now)
+        m = measure(customers, txs, bookings, has_phone, lapse_settings(t.get("settings")), now, contacted)
         ms.append(m)
         print("\n".join(report(t.get("slug") or tid[:8], t.get("salon_name") or "", m)))
         if bad:

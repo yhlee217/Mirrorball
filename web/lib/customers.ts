@@ -28,6 +28,19 @@ export function needsCare(
 }
 
 /**
+ * '챙길 고객' 목록(할 일)에 올릴까 — needsCare 이면서 최근 연락하지 않은 분(lib/contact.ts).
+ * 연락했다고 위험이 풀리진 않으니 이탈위험·재방문도래 타일과 고객 목록 필터는 needsCare 로
+ * 세고, 할 일(챙길 고객 탭·홈 카드·'챙길 고객 N'·통계 '지금 할 일')만 이걸로 센다.
+ * 각 숫자는 눌렀을 때 열리는 화면과 같은 기준이어야 한다.
+ */
+export function onCareList(
+  c: { revisit_state: string | null; last_visit: string | null; visit_count: number },
+  o: { settings: TenantSettings; churned: boolean; booked: boolean; contacted: boolean },
+): boolean {
+  return !o.contacted && needsCare(c, o);
+}
+
+/**
  * Supabase/PostgREST 는 요청당 최대 1000행(하드캡)만 반환한다.
  * 1000행이 넘을 수 있는 조회는 range 로 나눠 전부 가져와야 한다
  * (안 그러면 홈·고객목록·통계가 1000행만 본다).

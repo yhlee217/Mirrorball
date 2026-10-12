@@ -2,10 +2,11 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import { requireUser, getTenantId, openDek, nameReader } from '@/lib/tenant';
-import { fetchAllRows, isRealCustomer, isChurned, needsCare } from '@/lib/customers';
+import { fetchAllRows, isRealCustomer, isChurned, needsCare, onCareList } from '@/lib/customers';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
 import { bookedCustomerIds } from '@/lib/bookings';
+import { recentlyContactedIds } from '@/lib/contact';
 import { lastSynced } from '@/lib/sync';
 import { txKind } from '@/lib/tx';
 import HomeView from './home-view';
@@ -43,7 +44,7 @@ export default async function Page() {
     );
   }
 
-  const [{ data: tenant }, { data: bookings }, customers, synced, booked] = await Promise.all([
+  const [{ data: tenant }, { data: bookings }, customers, synced, booked, contacted] = await Promise.all([
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     // 오늘부터 — 날짜 조건 없이 오름차순 200건을 받으면 지난 예약이 쌓일 때 앞으로 올 예약이 잘린다
     supabase
@@ -57,6 +58,7 @@ export default async function Page() {
       supabase.from('customers').select('id,ext_id,revisit_state,tier,visit_count,total_won,pii_enc,last_visit,churned_at,visits_90d,visits_180d,visits_365d').order('id').range(from, to)),
     lastSynced(supabase), // 주 1회라 '이 화면이 언제 기준인지'를 밝혀야 한다
     bookedCustomerIds(supabase, tenantId), // 이미 예약한 손님은 챙길 고객이 아니다
+    recentlyContactedIds(supabase, tenantId), // 최근 연락한 분은 '할 일'에서 잠시 빠진다
   ]);
 
   const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null; settings: unknown } | null;
@@ -70,6 +72,10 @@ export default async function Page() {
   // 이탈위험·재방문도래 신호와 '챙길 고객' 목록은 needsCare 하나로 센다 — 설정의 이탈 판정,
   // 이탈 표시, 이미 잡힌 예약을 모두 뺀다. 타일·칩·카드·탭 숫자가 같아야 믿을 수 있다.
   const isCareTarget = (c: Cust) => needsCare(c, { settings, churned: isChurned(c), booked: booked.has(c.id) });
+  // '할 일'(칩·카드)은 최근 연락한 분도 뺀다 — 눌러서 열리는 챙길 고객 탭과 같은 숫자여야 한다.
+  // 타일(이탈위험·재방문도래)은 손님 상태라 연락 여부와 무관하게 위 기준으로 센다.
+  const isTodo = (c: Cust) =>
+    onCareList(c, { settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id) });
 
   const signals = { overdue: 0, due: 0, new: 0, vip: 0 };
   for (const c of cust) {
@@ -84,8 +90,9 @@ export default async function Page() {
   }
 
   const rank: Record<string, number> = { overdue: 0, due: 1 };
-  const careBase = cust
-    .filter((c) => isRealCustomer(c.ext_id) && isCareTarget(c))
+  const todo = cust.filter((c) => isRealCustomer(c.ext_id) && isTodo(c));
+  const careQuiet = cust.filter((c) => isRealCustomer(c.ext_id) && isCareTarget(c) && contacted.has(c.id)).length;
+  const careBase = [...todo]
     .sort((a, b) => rank[a.revisit_state as string] - rank[b.revisit_state as string] || b.visit_count - a.visit_count)
     .slice(0, 20);
   const careNames = await Promise.all(careBase.map((c) => nameFrom(c.pii_enc)));
@@ -119,6 +126,8 @@ export default async function Page() {
       synced={synced}
       recentVisits={recentVisits}
       signals={signals}
+      careCount={todo.length}
+      careQuiet={careQuiet}
       care={care}
       bookings={bkNamed}
     />

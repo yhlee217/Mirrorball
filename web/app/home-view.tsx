@@ -15,6 +15,8 @@ export default function HomeView({
   synced,
   recentVisits,
   signals,
+  careCount,
+  careQuiet,
   care,
   bookings,
 }: {
@@ -22,10 +24,11 @@ export default function HomeView({
   synced: Synced; // 마지막 수집 시각. 주 1회라 '언제 기준 화면인지'를 밝힌다
   recentVisits: number; // 방문 관리 화면과 같은 최근 14일 기준
   signals: Signals;
+  careCount: number; // '할 일' 수 — 챙길 고객 탭과 같은 기준(최근 연락한 분 제외)
+  careQuiet: number; // 최근 연락해서 잠시 빠진 수
   care: Care[];
   bookings: Booking[];
 }) {
-  const careCount = signals.overdue + signals.due;
   const nameOf = (b: Booking) => b.name || '고객';
   // 취소·노쇼도 '그 시간이 비었다'는 정보라 목록엔 보여주되, 개수에는 넣지 않는다.
   const isOff = (b: Booking) => isCancelled(b.status);
@@ -99,8 +102,10 @@ export default function HomeView({
             ))
           ) : (
             <Empty
-              title="지금 챙길 고객이 없어요"
-              hint="재방문 시기가 지난 분이 없다는 뜻이에요. 시기가 된 분이 생기면 여기에 먼저 올라와요."
+              title={careQuiet ? '지금 연락할 분은 다 연락했어요' : '지금 챙길 고객이 없어요'}
+              hint={careQuiet
+                ? `최근 연락한 ${careQuiet}명은 잠시 빠져 있어요. 그 뒤에도 안 오시면 다시 올라와요.`
+                : '재방문 시기가 지난 분이 없다는 뜻이에요. 시기가 된 분이 생기면 여기에 먼저 올라와요.'}
               action={<Link href="/visits">최근 다녀가신 분 보기 ›</Link>}
             />
           )}

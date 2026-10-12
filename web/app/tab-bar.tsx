@@ -10,7 +10,7 @@ const TABS = [
   // ⏳ 는 '아직 안 오신 분'을 뜻해 방문(✅ 다녀가신 분)과 짝이 된다.
   { href: '/alerts', label: '챙길 고객', icon: '⏳', match: (p: string) => p.startsWith('/alerts') },
   { href: '/visits', label: '방문', icon: '✅', match: (p: string) => p.startsWith('/visits') },
-  { href: '/profile', label: '소개', icon: '📇', match: (p: string) => p.startsWith('/profile') },
+  // '소개'는 설정 안으로 옮겼다 — 공개 페이지는 한 번 만들고 거의 안 고친다(UX 계획 v2 2-3).
 ];
 
 export default function TabBar() {

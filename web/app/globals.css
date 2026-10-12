@@ -38,7 +38,7 @@
 a,button{-webkit-touch-callout:none;touch-action:manipulation}
 /* 순수 조작 요소는 길게 눌러도 글자가 잡히지 않게. 고객 이름·메모 같은 '내용'은 선택 가능하게
    남겨둔다(전부 막으면 복사해 쓸 수가 없다). */
-.tab,.chip,.hs,.btn,.fchip,.gear,.back,.sug,.tagx,.churn-set,.churn-undo,.seg a,.seg button,button{
+.tab,.chip,.hs,.btn,.fchip,.gear,.back,.sug,.tagx,.churn-set,.churn-undo,button{
   -webkit-user-select:none;user-select:none}
 input,textarea,select{-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
 /* 접기(details)는 방문 관리·카르테 두 곳뿐이고 둘 다 기본 삼각형을 감추고 제 표식을 쓴다.
@@ -161,6 +161,16 @@ a.hs:active{background:var(--soft)}
 /* 카톡에 붙여넣을 추천 문구 — 그대로 나갈 말이라 화면에서도 말풍선처럼 보이게 */
 .draft{background:#F2ECE1;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#3a332c;line-height:1.55}
 .draft .lab{font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--accent);font-weight:800;margin-bottom:3px}
+/* 연락 — 문자·전화·복사 중 하나를 누르면 '연락함'으로 남고, 일정 기간 목록에서 빠진다.
+   흐리게(opacity) 하면 버튼이 꺼진 것처럼 보여서, 테두리·배경색으로만 표시한다. */
+.care.done{border-color:var(--sage);background:#F5F9F4}
+.care .contacted{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px;font-weight:700;color:var(--sage)}
+.care .contacted .undo{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--muted);background:none;border:none;
+  padding:2px 0;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:3px}
+.care .acts2{display:flex;gap:16px;justify-content:flex-end;margin-top:9px}
+.care .acts2 a,.care .acts2 button{font-size:11.5px;color:var(--muted);background:none;border:none;padding:2px 0;
+  cursor:pointer;font-family:inherit;text-decoration:none}
+.care .acts2 button:disabled{opacity:.5}
 
 /* ── 6. 방문 관리 (/visits) ───────────────────────────────────────────────── */
 /* 홈케어 팁은 손님께 전할 말투라 모든 줄에 펼쳐두면 목록이 지저분하다.
@@ -350,9 +360,6 @@ a.hs:active{background:var(--soft)}
 .churn-undo{flex-shrink:0;font-size:11.5px;font-weight:700;font-family:inherit;color:var(--accent-d);background:var(--soft);border:none;border-radius:9px;padding:6px 11px;cursor:pointer}
 
 /* ── 11. 소개 편집 (/profile) ─────────────────────────────────────────────── */
-.seg{display:flex;gap:6px;background:var(--soft);border-radius:12px;padding:4px;margin:14px 0}
-.seg-b{flex:1;text-align:center;padding:8px 6px;border-radius:9px;font-size:13px;font-weight:700;color:var(--muted);text-decoration:none}
-.seg-b.on{background:var(--paper);color:var(--accent-d)}
 .del{border:none;background:var(--soft);color:var(--rose);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
 .pub-link{display:inline-block;color:var(--accent);font-weight:700;font-size:13px;text-decoration:none;margin:0 0 14px}
 
