@@ -2,7 +2,10 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MSG } from '@/lib/copy';
-import { isVip, isLapsed, type TenantSettings } from '@/lib/settings';
+import { isVip, isLapsed, cleanOffDates, type TenantSettings } from '@/lib/settings';
+import { dayLabel } from '@/lib/week';
+
+const WEEK = ['월', '화', '수', '목', '금', '토', '일']; // 월=0 — lib/week dowMon 과 같은 번호
 
 // 판정 기준은 숫자만 보면 감이 안 온다("20회가 적당한가?"의 근거는 사실 인원수다).
 // 그래서 값을 바꾸는 즉시 '지금 몇 명이 되는지' 다시 세어 보여준다. 판정은 화면에서 다시
@@ -48,6 +51,11 @@ export default function SettingsForm({
   const [revMid, setRevMid] = useState(Math.round(initSettings.revenue_mid / 10000));
   const [revHigh, setRevHigh] = useState(Math.round(initSettings.revenue_high / 10000));
   const [bDays, setBDays] = useState(initSettings.booking_days_ahead);
+  // 휴무 — 통계가 영업한 날끼리 견주게(lib/offdays). 정기 휴무 요일 + 휴가 기간.
+  const [offW, setOffW] = useState<number[]>(initSettings.off_weekdays);
+  const [offD, setOffD] = useState(initSettings.off_dates);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -62,6 +70,24 @@ export default function SettingsForm({
     revenue_mid: revMid * 10000,
     revenue_high: revHigh * 10000,
     booking_days_ahead: bDays,
+    off_weekdays: offW,
+    off_dates: offD,
+  };
+  // 휴무는 고르자마자 저장되는 게 아니라 아래 '저장'으로 함께 저장된다 — 잊지 않게 바뀌면 알린다.
+  const offDirty =
+    JSON.stringify([offW, offD]) !== JSON.stringify([initSettings.off_weekdays, initSettings.off_dates]);
+  const toggleW = (d: number) => setOffW((w) => (w.includes(d) ? w.filter((x) => x !== d) : [...w, d].sort((a, b) => a - b)));
+  // 겹치거나 맞닿은 기간은 저장할 때처럼 바로 합친다(lib/settings cleanOffDates) — 목록이 서버와 같게.
+  const addRange = () => {
+    if (!from) return;
+    setOffD((d) => cleanOffDates([...d, { from, to: to || from }]));
+    setFrom('');
+    setTo('');
+  };
+  const rangeLabel = (r: { from: string; to: string }) => {
+    if (r.from === r.to) return dayLabel(r.from);
+    const n = Math.round((Date.parse(r.to) - Date.parse(r.from)) / 86400000) + 1;
+    return `${dayLabel(r.from)} ~ ${dayLabel(r.to)} · ${n}일`;
   };
 
   const counts = useMemo(() => {
@@ -121,6 +147,55 @@ export default function SettingsForm({
           <a className="btn ghost" href="/profile">소개 편집</a>
           <button type="button" className="btn ghost" onClick={copyUrl}>공개 링크 복사</button>
         </div>
+      </div>
+
+      <div className="card" style={{ padding: '14px 15px' }}>
+        <div className="ch" style={{ padding: 0, marginBottom: 3 }}>휴무</div>
+        <div className="crit-sub">쉬는 날을 알려주시면 통계가 영업한 날끼리 견줘요</div>
+
+        <div className="crit">
+          <div className="crit-nm" style={{ marginBottom: 8 }}>정기 휴무</div>
+          <div className="fchips" style={{ margin: 0 }}>
+            {WEEK.map((d, i) => (
+              <button
+                key={d}
+                type="button"
+                className={'fchip' + (offW.includes(i) ? ' on' : '')}
+                aria-pressed={offW.includes(i)}
+                onClick={() => toggleW(i)}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+          <div className="crit-hint">매주 쉬는 요일 · 그날 일한 기록이 있으면 영업한 날로 셉니다</div>
+        </div>
+
+        <div className="crit">
+          <div className="crit-nm" style={{ marginBottom: 6 }}>휴가 · 임시 휴무</div>
+          {offD.length ? (
+            [...offD].reverse().map((r) => (
+              <div className="off-r" key={r.from}>
+                <span>{rangeLabel(r)}</span>
+                <button type="button" className="off-x" onClick={() => setOffD((d) => d.filter((x) => x !== r))}>
+                  삭제
+                </button>
+              </div>
+            ))
+          ) : (
+            <div className="crit-hint" style={{ marginTop: 0 }}>등록된 휴가가 없어요</div>
+          )}
+          <div className="off-add">
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="쉬는 첫날" />
+            <span>~</span>
+            <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} aria-label="쉬는 마지막 날" />
+          </div>
+          <button type="button" className="btn ghost" style={{ marginTop: 8, width: '100%' }} onClick={addRange} disabled={!from}>
+            기간 추가
+          </button>
+          <div className="crit-hint">하루만 쉬면 마지막 날은 비워 두세요</div>
+        </div>
+        {offDirty ? <div className="off-dirty">아래 &lsquo;저장&rsquo;을 눌러야 반영돼요</div> : null}
       </div>
 
       <div className="card" style={{ padding: '14px 15px' }}>

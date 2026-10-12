@@ -26,6 +26,12 @@ export function lastWeek(syncDate: string | null | undefined, today: string): { 
   };
 }
 
+/** 월요일 0 … 일요일 6 — 정기 휴무(설정)·요일 × 시간대(통계)가 같은 번호를 쓴다. */
+export function dowMon(date: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+}
+
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
 /** '10.4(일)' — 요일을 붙여야 어느 주인지 바로 읽힌다. */

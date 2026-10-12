@@ -22,7 +22,16 @@ export async function POST(request: Request) {
   const tid = (mem as { tenant_id: string }).tenant_id;
 
   const body = await request.json();
-  const update: Record<string, unknown> = { settings: mergeSettings(body.settings) };
+  // 지금 저장된 설정 위에 덮는다 — 보내지 않은 키는 그대로 둔다. 휴무가 생기기 전의 설정 화면이
+  // 열려 있던 채로 저장해도(그 화면은 휴무를 모른다) 휴무가 지워지지 않게.
+  const { data: cur } = await auth.from('tenants').select('settings').eq('id', tid).maybeSingle();
+  const stored = (cur as { settings: unknown } | null)?.settings;
+  const update: Record<string, unknown> = {
+    settings: mergeSettings({
+      ...(stored && typeof stored === 'object' ? stored : {}),
+      ...(body.settings && typeof body.settings === 'object' ? body.settings : {}),
+    }),
+  };
   if (typeof body.designer_name === 'string') update.designer_name = body.designer_name.trim() || null;
   if (typeof body.salon_name === 'string' && body.salon_name.trim()) update.salon_name = body.salon_name.trim();
 

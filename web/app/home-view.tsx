@@ -45,7 +45,8 @@ export default function HomeView({
   synced: Synced; // 마지막 수집 시각. 주 1회라 '언제 기준 화면인지'를 밝힌다
   today: string; // KST — 날짜 머리말의 '오늘·내일'
   signals: Signals;
-  week: { label: string; cur: WeekNums; prev: WeekNums }; // 지난 한 주와 그 전주(lib/week.ts)
+  // 지난 한 주와 그 전주(lib/week.ts). work = 두 주에 영업한 날 — 휴무를 정했을 때만(lib/offdays.ts)
+  week: { label: string; cur: WeekNums; prev: WeekNums; work: { cur: number; prev: number } | null };
   careCount: number; // '할 일' 수 — 챙길 고객 탭과 같은 기준(최근 연락한 분 제외)
   careQuiet: number; // 최근 연락해서 잠시 빠진 수
   briefs: Brief[]; // 앞으로 7일 예약(날짜·시각 순)
@@ -96,7 +97,10 @@ export default function HomeView({
             (전에는 칩 줄과 카드가 같은 곳을 가리켰다). */}
         <div className="card">
           <div className="ch">이번 주 요약</div>
-          <div className="csub">지난 한 주 · {week.label} · 수집된 거래 기준</div>
+          <div className="csub">
+            지난 한 주 · {week.label}
+            {week.work ? ` · 영업 ${week.work.cur}일(전주 ${week.work.prev}일)` : ' · 수집된 거래 기준'}
+          </div>
           <div className="wk-nums">
             <div>
               <span className="wl">방문</span>

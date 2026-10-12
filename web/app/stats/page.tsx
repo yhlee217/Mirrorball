@@ -12,6 +12,7 @@ import { bookedCustomerIds } from '@/lib/bookings';
 import { recentlyContactedIds } from '@/lib/contact';
 import { addDays } from '@/lib/week';
 import { activeTrend, datesByCustomer, newcomerCohorts, serviceTable, toVisits, weekHeat } from '@/lib/trends';
+import { hasOffDays, workedDays } from '@/lib/offdays';
 import { ActiveTile, CohortCard, HeatCard, ServiceCard } from './cards';
 
 export default async function StatsPage() {
@@ -53,9 +54,10 @@ export default async function StatsPage() {
   const visits = toVisits(tx);
   const byCust = datesByCustomer(visits);
   const realIds = new Set(cs.map((c) => c.id));
-  const cohort = newcomerCohorts(cs, byCust, asOf); // D2
-  const heat = weekHeat(visits, addDays(asOf, -182), asOf); // D4 — 최근 6개월(26주)
-  const svcRows = serviceTable(tx, byCust, realIds, addDays(asOf, -364), asOf); // D5 — 최근 1년
+  // 휴무(설정)를 반영한다 — 요일 × 시간대는 영업한 날 하루 평균, '90일 안에 다시'는 휴가만큼 늘려서.
+  const cohort = newcomerCohorts(cs, byCust, asOf, settings); // D2
+  const heat = weekHeat(visits, addDays(asOf, -182), asOf, settings); // D4 — 최근 6개월(26주)
+  const svcRows = serviceTable(tx, byCust, realIds, addDays(asOf, -364), asOf, settings); // D5 — 최근 1년
   const active = activeTrend(byCust, realIds, asOf); // D3
   // 선불 잔액(D6) — 손님별 추정 잔액의 합. 앞으로 시술로 갚을 돈이라 매출과 따로 본다.
   const prepaidSum = cs.reduce((s, c) => s + Math.max(0, c.prepaid_balance || 0), 0);
@@ -88,6 +90,15 @@ export default async function StatsPage() {
     }
   }
   const maxRev = Math.max(1, ...months.map((m) => m.rev));
+  // 달마다 영업한 날 — 휴가 간 달의 매출이 낮은 까닭이 막대 밑에 바로 보이게. 휴무를 정했을 때만.
+  // 진행 중인 달은 마지막 수집일까지만 센다(그 뒤는 아직 비어 있다).
+  const visitedDays = new Set(visits.map((v) => v.date));
+  const showWork = hasOffDays(settings);
+  const monthWork = months.map((m) => {
+    const [y, mo] = m.key.split('-').map(Number);
+    const end = m.partial ? asOf : new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
+    return workedDays(`${m.key}-01`, end, settings, visitedDays);
+  });
   // ── 성별(시술명 추정) ──
   // 판정된 고객만으로 비교한다. 미상을 0으로 섞으면 평균이 무너지므로 분모에서 뺀다.
   // 추정이라 판정률을 함께 보여주지 않으면 오해를 부른다.
@@ -130,9 +141,10 @@ export default async function StatsPage() {
   // ── 이번 달 (지난달 같은 기간과 비교) ──
   // 누적 매출은 평생 수치라 보고 나서 할 게 없다. 진행 중인 달을 지난달 '같은 날짜까지'와
   // 견줘야 늘었는지 줄었는지가 판단이 된다(달 전체와 비교하면 월초엔 늘 줄어 보인다).
+  // 그 '같은 날짜'는 오늘이 아니라 마지막 수집일 — 수집 뒤 날짜는 아직 비어 있어 이번 달만 손해를 본다.
   const kToday = kstNow().date;
-  const dayOfMonth = Number(kToday.slice(8, 10));
   const thisMonth = kToday.slice(0, 7);
+  const dayOfMonth = Number((asOf.slice(0, 7) === thisMonth ? asOf : kToday).slice(8, 10));
   const prevMonth = (() => {
     const [y, m] = thisMonth.split('-').map(Number);
     return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
@@ -152,7 +164,21 @@ export default async function StatsPage() {
     const b = which(v.date);
     if (b) b.visits++;
   }
-  const revDelta = period.prev.rev ? Math.round(((period.now.rev - period.prev.rev) / period.prev.rev) * 100) : null;
+  // 쉰 날이 다르면 그대로 견줄 수 없다 — 영업한 날 하루 평균 매출로 견준다. 영업일이 같으면 그냥
+  // 견준 것과 같은 숫자다(휴무를 안 정한 매장은 예전과 같다).
+  const upTo = (ym: string) => {
+    const [y, m] = ym.split('-').map(Number);
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return `${ym}-${String(Math.min(dayOfMonth, last)).padStart(2, '0')}`;
+  };
+  const work = {
+    now: workedDays(`${thisMonth}-01`, upTo(thisMonth), settings, visitedDays),
+    prev: workedDays(`${prevMonth}-01`, upTo(prevMonth), settings, visitedDays),
+  };
+  const revDelta =
+    period.prev.rev > 0 && work.now > 0 && work.prev > 0
+      ? Math.round(((period.now.rev / work.now - period.prev.rev / work.prev) / (period.prev.rev / work.prev)) * 100)
+      : null;
 
   // ── 지금 할 일 ── 홈 신호와 같은 기준으로 센다(숫자가 다르면 어느 쪽을 믿을지 모른다)
   // 누르면 챙길 고객 탭이 열린다 — 그 목록과 같은 '할 일' 기준(최근 연락한 분 제외)
@@ -188,6 +214,12 @@ export default async function StatsPage() {
               <span className="delta">지난달 {period.prev.visits.toLocaleString()}건</span>
             </div>
           </div>
+          {showWork || work.now !== work.prev ? (
+            <p className="note">
+              영업 {work.now}일 · 지난달 같은 기간 {work.prev}일
+              {work.now !== work.prev ? ' — 쉰 날이 달라 매출 증감은 영업한 날 하루 평균으로 견줬어요.' : '.'}
+            </p>
+          ) : null}
         </div>
 
         {/* 지금 할 일 — 통계를 보고 '그래서 뭘 하지'로 이어지게. 숫자는 홈 신호와 같은 기준. */}
@@ -232,7 +264,13 @@ export default async function StatsPage() {
         </div>
 
         {/* 평생 재방문율(두 번 이상/전체)은 최근 변화가 안 보인다 → 최근 신규가 다시 오는지로 바꿨다 */}
-        <CohortCard cohorts={cohort.cohorts} medianDays={cohort.medianDays} repeat={repeatCust} total={totalCustomers} />
+        <CohortCard
+          cohorts={cohort.cohorts}
+          medianDays={cohort.medianDays}
+          repeat={repeatCust}
+          total={totalCustomers}
+          vacation={settings.off_dates.length > 0}
+        />
 
         {gDecided > 0 && (
           <div className="card" style={{ padding: '14px 15px' }}>
@@ -308,7 +346,7 @@ export default async function StatsPage() {
         <div className="card" style={{ padding: '14px 15px' }}>
           <div className="ch" style={{ padding: 0, marginBottom: 10 }}>월별 매출 (최근 6개월 · 만원)</div>
           <div className="bars">
-            {months.map((m) => (
+            {months.map((m, i) => (
               <div className="b" key={m.key}>
                 <div className="bv">{Math.round(m.rev / 10000)}</div>
                 <div
@@ -316,20 +354,22 @@ export default async function StatsPage() {
                   style={{ height: `${Math.round((m.rev / maxRev) * 80) + 3}px` }}
                 />
                 <div className="bl">{m.label}{m.partial ? '*' : ''}</div>
+                {showWork ? <div className="bw">{monthWork[i]}일</div> : null}
               </div>
             ))}
           </div>
           <p className="note">
             * 이번 달은 아직 진행 중이고{synced ? ` ${synced.label} 수집 기준이라` : ' 수집 시점 기준이라'} 마지막 며칠이 빠져 있어요.
             다른 달과 바로 비교하지 마세요.
+            {showWork ? ' 달 이름 아래 숫자는 그달 영업한 날이에요(휴무·휴가 제외).' : ''}
           </p>
         </div>
 
         {/* 요일만 보던 막대를 요일 × 시간대로 — 같은 요일도 오전과 저녁은 다르다 */}
-        <HeatCard heat={heat} />
+        <HeatCard heat={heat} hasOff={showWork} />
 
         {/* 건수·매출만 보던 시술별을 객단가·다시 오는 비율까지 */}
-        <ServiceCard rows={svcRows} />
+        <ServiceCard rows={svcRows} vacation={settings.off_dates.length > 0} />
 
         <p className="note">
           거래 {tx.length.toLocaleString()}건 · 고객 {totalCustomers.toLocaleString()}명 기준.

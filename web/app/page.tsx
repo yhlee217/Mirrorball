@@ -10,6 +10,8 @@ import { recentlyContactedIds } from '@/lib/contact';
 import { lastSynced } from '@/lib/sync';
 import { lastWeek, spanLabel, weekNums, type WeekTx } from '@/lib/week';
 import { gapLine, lastServices, latestRecent, memoLines, visitTag } from '@/lib/briefing';
+import { toVisits } from '@/lib/trends';
+import { hasOffDays, workedDays } from '@/lib/offdays';
 import HomeView, { type Brief } from './home-view';
 import OnboardButton from './onboard-button';
 
@@ -134,10 +136,18 @@ export default async function Page() {
 
   // 지난 한 주 — 첫 방문은 실고객만 센다(워크인 집계는 '첫 방문'이 의미가 없다).
   const firsts = real.map((c) => c.first_visit);
+  // 휴무를 정했으면 두 주에 영업한 날도 — 이틀 쉰 주를 전주와 그냥 견주면 손님이 준 것처럼 읽힌다.
+  const weekDays = new Set(toVisits(weekTx).map((v) => v.date));
   const week = {
     label: spanLabel(wk.cur),
     cur: weekNums(weekTx, firsts, wk.cur),
     prev: weekNums(weekTx, firsts, wk.prev),
+    work: hasOffDays(settings)
+      ? {
+          cur: workedDays(wk.cur.start, wk.cur.end, settings, weekDays),
+          prev: workedDays(wk.prev.start, wk.prev.end, settings, weekDays),
+        }
+      : null,
   };
 
   const det = new Map(details.map((d) => [d.id, d]));

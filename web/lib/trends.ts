@@ -1,6 +1,9 @@
 import { txKind } from './tx';
-import { addDays } from './week';
+import { addDays, dowMon } from './week';
 import { daysBetween } from './briefing';
+import { windowEnd, workedByWeekday, type OffDays } from './offdays';
+
+export { dowMon };
 
 /**
  * 통계를 '변화'로(UX 계획 P2) — 평생 누적 숫자는 보고 나서 할 게 없다. 최근 신규가 다시 오는지(D2),
@@ -9,7 +12,12 @@ import { daysBetween } from './briefing';
  *
  * 기준일(asOf)은 오늘이 아니라 마지막 수집일이다. 수집 뒤 날짜는 비어 있어서, 오늘로 세면
  * 덜 찬 기간을 다 찬 것처럼 읽게 된다.
+ *
+ * 휴무(설정)를 반영한다 — 요일 × 시간대는 '영업한 날 하루 평균'으로, '90일 안에 다시'는 휴가 기간만큼
+ * 늘려서 센다(lib/offdays.ts). 휴무가 없으면 예전과 같은 숫자가 나온다.
  */
+
+const NO_OFF: OffDays = { off_weekdays: [], off_dates: [] };
 
 /** 다시 오셨는지 보는 기간 — 표준 주기 중 가장 긴 펌(90일, lib/care-cycle)까지 들어오게. */
 export const BACK_DAYS = 90;
@@ -17,7 +25,7 @@ export const BACK_DAYS = 90;
 export type TrendTx = {
   customer_id: string | null;
   date: string | null;
-  time: string | null;
+  time?: string | null;
   kind: string | null;
   service: string | null;
 };
@@ -49,11 +57,10 @@ export function datesByCustomer(visits: Visit[]): Map<string, string[]> {
   return m;
 }
 
-/** d 바로 다음 방문이 window 일 안이면 그 날짜. dates 는 오름차순. */
-function nextWithin(dates: string[] | undefined, d: string, window: number): string | null {
+/** d 바로 다음 방문이 end 까지 있으면 그 날짜. dates 는 오름차순. */
+function nextWithin(dates: string[] | undefined, d: string, end: string): string | null {
   if (!dates) return null;
-  const limit = addDays(d, window);
-  for (const x of dates) if (x > d) return x <= limit ? x : null;
+  for (const x of dates) if (x > d) return x <= end ? x : null;
   return null;
 }
 
@@ -82,12 +89,13 @@ export type Cohort = { month: string; label: string; total: number; back: number
  * 90일이 아직 다 안 지난 달은 open — 숫자가 더 늘 수 있다.
  * 디자이너당 신규가 한 달 열댓 명이라 %는 한두 명에 크게 흔들린다 → 화면은 'N명 중 M명'으로 쓴다.
  * 첫 방문은 실고객의 first_visit(워커 집계 — 홈 '첫 방문'과 같은 값). medianDays 는 다시 오신
- * 분들이 첫 방문 뒤 며칠 만에 오셨는지(중앙값).
+ * 분들이 첫 방문 뒤 며칠 만에 오셨는지(중앙값). 90일 사이에 휴가가 끼면 그만큼 늘려서 본다.
  */
 export function newcomerCohorts(
   firsts: { id: string; first_visit: string | null }[],
   byCust: Map<string, string[]>,
   asOf: string,
+  off: OffDays = NO_OFF,
   months = 6,
   window = BACK_DAYS,
 ): { cohorts: Cohort[]; medianDays: number | null } {
@@ -98,14 +106,14 @@ export function newcomerCohorts(
     label: `${Number(m.slice(5))}월`,
     total: 0,
     back: 0,
-    open: addDays(monthEnd(m), window) > asOf,
+    open: windowEnd(monthEnd(m), window, off) > asOf,
   }));
   const gaps: number[] = [];
   for (const c of firsts) {
     const i = c.first_visit ? at.get(c.first_visit.slice(0, 7)) : undefined;
     if (i === undefined || !c.first_visit) continue;
     cohorts[i].total++;
-    const next = nextWithin(byCust.get(c.id), c.first_visit, window);
+    const next = nextWithin(byCust.get(c.id), c.first_visit, windowEnd(c.first_visit, window, off));
     if (next) {
       cohorts[i].back++;
       gaps.push(daysBetween(c.first_visit, next));
@@ -125,14 +133,10 @@ export function bandOf(time: string | null): number | null {
   return h < 12 ? 0 : h < 14 ? 1 : h < 16 ? 2 : h < 18 ? 3 : 4;
 }
 
-/** 월요일 0 … 일요일 6. */
-export function dowMon(date: string): number {
-  const [y, m, d] = date.split('-').map(Number);
-  return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
-}
-
 /**
- * 언제 바쁘고 언제 한가하지(D4) — 요일 × 시간대 방문 수. grid[시간대][요일(월=0)].
+ * 언제 바쁘고 언제 한가하지(D4) — 요일 × 시간대. grid[시간대][요일(월=0)] 은 방문 수,
+ * avg 는 그 요일에 영업한 날 하루 평균(days = 요일별 영업한 날 수). 휴가 간 요일이 한산한 요일로
+ * 꼽히지 않게 평균으로 견준다. 정기 휴무로 영업한 날이 하나도 없는 요일은 off.
  * 시각은 그날 첫 시술 시각. 시각이 비어 있는 방문은 칸에 넣지 않고 noTime 으로 따로 센다
  * (2026-10-12 실측: 시각 채움 95~99%).
  */
@@ -140,12 +144,15 @@ export function weekHeat(
   visits: Visit[],
   since: string,
   asOf: string,
-): { grid: number[][]; max: number; total: number; noTime: number } {
+  off: OffDays = NO_OFF,
+): { grid: number[][]; avg: number[][]; days: number[]; off: boolean[]; max: number; total: number; noTime: number } {
   const grid = BANDS.map(() => DOW_MON.map(() => 0));
+  const visited = new Set<string>();
   let total = 0;
   let noTime = 0;
   for (const v of visits) {
     if (v.date < since || v.date > asOf) continue;
+    visited.add(v.date);
     const b = bandOf(v.time);
     if (b === null) {
       noTime++;
@@ -154,7 +161,17 @@ export function weekHeat(
     grid[b][dowMon(v.date)]++;
     total++;
   }
-  return { grid, max: Math.max(0, ...grid.flat()), total, noTime };
+  const days = workedByWeekday(since, asOf, off, visited);
+  const avg = grid.map((row) => row.map((n, d) => (days[d] ? n / days[d] : 0)));
+  return {
+    grid,
+    avg,
+    days,
+    off: days.map((n, d) => n === 0 && off.off_weekdays.includes(d)),
+    max: Math.max(0, ...avg.flat()),
+    total,
+    noTime,
+  };
 }
 
 export type SvcRow = { service: string; count: number; avg: number; back: number; base: number };
@@ -164,7 +181,7 @@ export type SvcRow = { service: string; count: number; avg: number; back: number
  * 객단가는 받은 금액 그대로 — 선불 잔액으로 결제한 건도 시술 가격은 같다.
  * 다시 오신 비율은 90일이 다 지난 시술만 센다(최근 시술은 아직 돌아올 시간이 안 됐다).
  * 워크인 집계('손님')는 여러 사람이 한 번호를 써서 '다시 옴'이 부풀므로 실고객만 센다.
- * 충전·제품은 시술이 아니라 뺀다.
+ * 충전·제품은 시술이 아니라 뺀다. 90일 사이에 휴가가 끼면 그만큼 늘려서 본다.
  */
 export function serviceTable(
   tx: (TrendTx & { amount_won: number | null })[],
@@ -172,10 +189,10 @@ export function serviceTable(
   realIds: Set<string>,
   since: string,
   asOf: string,
+  off: OffDays = NO_OFF,
   top = 6,
   window = BACK_DAYS,
 ): SvcRow[] {
-  const mature = addDays(asOf, -window);
   const acc = new Map<string, { count: number; sum: number; back: number; base: number }>();
   for (const t of tx) {
     if (!t.date || t.date < since || t.date > asOf || txKind(t.kind, t.service) !== 'service') continue;
@@ -184,9 +201,10 @@ export function serviceTable(
     const e = acc.get(s) ?? { count: 0, sum: 0, back: 0, base: 0 };
     e.count++;
     e.sum += t.amount_won || 0;
-    if (t.customer_id && realIds.has(t.customer_id) && t.date <= mature) {
+    const end = t.customer_id && realIds.has(t.customer_id) ? windowEnd(t.date, window, off) : null;
+    if (t.customer_id && end && end <= asOf) {
       e.base++;
-      if (nextWithin(byCust.get(t.customer_id), t.date, window)) e.back++;
+      if (nextWithin(byCust.get(t.customer_id), t.date, end)) e.back++;
     }
     acc.set(s, e);
   }

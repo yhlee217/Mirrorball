@@ -10,6 +10,9 @@ export type TenantSettings = {
   revenue_mid: number; // 매출 구간 경계(중, 원)
   revenue_high: number; // 매출 구간 경계(상, 원)
   booking_days_ahead: number; // 다가오는 예약 표시 기간(일)
+  // 휴무 — 통계가 '영업한 날'끼리 견주는 데 쓴다(lib/offdays.ts).
+  off_weekdays: number[]; // 정기 휴무 요일, 월=0 … 일=6
+  off_dates: { from: string; to: string }[]; // 휴가·임시 휴무 기간(YYYY-MM-DD, 양 끝 포함)
 };
 
 export const DEFAULT_SETTINGS: TenantSettings = {
@@ -23,17 +26,62 @@ export const DEFAULT_SETTINGS: TenantSettings = {
   revenue_mid: 500000,
   revenue_high: 1000000,
   booking_days_ahead: 31,
+  off_weekdays: [],
+  off_dates: [],
 };
 
-const KEYS = Object.keys(DEFAULT_SETTINGS) as (keyof TenantSettings)[];
+type NumKey = { [K in keyof TenantSettings]: TenantSettings[K] extends number ? K : never }[keyof TenantSettings];
+const NUM_KEYS = (Object.keys(DEFAULT_SETTINGS) as (keyof TenantSettings)[]).filter(
+  (k): k is NumKey => typeof DEFAULT_SETTINGS[k] === 'number',
+);
+
+/** 휴가 기간을 몇 개까지 둘지 — 오래된 것부터 버린다(통계는 길어야 1~2년을 본다). */
+export const OFF_DATES_MAX = 60;
+
+/** 'YYYY-MM-DD' 이고 달력에 있는 날인가(2026-02-30 같은 날은 아니다). */
+const isDay = (s: unknown): s is string => {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const t = Date.parse(s + 'T00:00:00Z');
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
+};
+
+/** 정기 휴무 요일 — 0~6 정수만, 중복 없이 정렬. */
+export function cleanWeekdays(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b);
+}
+
+/**
+ * 휴가 기간 — 올바른 날짜만, 거꾸로 넣으면 뒤집고, 겹치거나 맞닿은 기간은 하나로 합친다.
+ * 합쳐 두면 '며칠 쉬었나'를 셀 때 같은 날을 두 번 세지 않는다. 날짜순, 최근 OFF_DATES_MAX 개.
+ */
+export function cleanOffDates(raw: unknown): { from: string; to: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const rs = raw
+    .filter((r): r is { from: string; to: string } => !!r && typeof r === 'object' && isDay((r as { from?: unknown }).from) && isDay((r as { to?: unknown }).to))
+    .map((r) => (r.from <= r.to ? { from: r.from, to: r.to } : { from: r.to, to: r.from }))
+    .sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
+  const out: { from: string; to: string }[] = [];
+  for (const r of rs) {
+    const last = out[out.length - 1];
+    const next = last ? new Date(Date.parse(last.to + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10) : '';
+    if (last && r.from <= next) {
+      if (r.to > last.to) last.to = r.to;
+    } else out.push({ ...r });
+  }
+  return out.slice(-OFF_DATES_MAX);
+}
 
 export function mergeSettings(raw: unknown): TenantSettings {
-  const out = { ...DEFAULT_SETTINGS };
+  const out: TenantSettings = { ...DEFAULT_SETTINGS, off_weekdays: [], off_dates: [] };
   if (raw && typeof raw === 'object') {
-    for (const k of KEYS) {
-      const v = (raw as Record<string, unknown>)[k];
+    const r = raw as Record<string, unknown>;
+    for (const k of NUM_KEYS) {
+      const v = r[k];
       if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[k] = v;
     }
+    out.off_weekdays = cleanWeekdays(r.off_weekdays);
+    out.off_dates = cleanOffDates(r.off_dates);
   }
   return out;
 }

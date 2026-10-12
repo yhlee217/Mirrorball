@@ -59,6 +59,9 @@ SVC_TX = [
 ]
 REAL = ["R1", "R2", "R3"]
 
+# 휴무 — 화요일 정기 휴무 + 7.1~7.14 휴가(14일). 토요일 하나(10.3)도 휴가
+OFF = {"off_weekdays": [1], "off_dates": [{"from": "2026-07-01", "to": "2026-07-14"}, {"from": "2026-10-03", "to": "2026-10-03"}]}
+
 SCRIPT = """
 const T = require('./trends.js');
 const W = require('./week.js');
@@ -68,10 +71,13 @@ const svcBy = byC(D.svc);
 out({
   visitsA: heatVisits.filter((v) => v.customer_id === 'A'),
   cohort: T.newcomerCohorts(D.firsts, byC(D.cohort), D.asOf),
+  cohortOff: T.newcomerCohorts(D.firsts, byC(D.cohort), D.asOf, D.off),
   heat: T.weekHeat(heatVisits, W.addDays(D.asOf, -182), D.asOf),
+  heatOff: T.weekHeat(heatVisits, W.addDays(D.asOf, -182), D.asOf, D.off),
   bands: D.times.map(T.bandOf),
   dows: ['2026-10-12', '2026-10-11', '2026-10-10'].map(T.dowMon),
   svc: T.serviceTable(D.svc, svcBy, new Set(D.real), W.addDays(D.asOf, -365), D.asOf),
+  svcOff: T.serviceTable(D.svc, svcBy, new Set(D.real), W.addDays(D.asOf, -365), D.asOf, D.off),
   active: T.activeTrend(svcBy, new Set(D.real), D.asOf),
 });
 """
@@ -82,7 +88,7 @@ TIMES = ["09:59", "12:00", "13:59", "14:00", "17:59", "18:00", "23:10", None, "a
 def ts():
     got = run_ts(["lib/trends.ts"], SCRIPT, {
         "asOf": AS_OF, "cohort": COHORT_TX, "firsts": FIRSTS, "heat": HEAT_TX,
-        "svc": SVC_TX, "real": REAL, "times": TIMES,
+        "svc": SVC_TX, "real": REAL, "times": TIMES, "off": OFF,
     })
     if got is None:
         pytest.skip("node/npx 또는 web/node_modules 가 없다 — TS 실행 생략")
@@ -105,6 +111,15 @@ def test_newcomer_cohorts(ts):
     assert ts["cohort"]["medianDays"] == 35                  # 21·35일 → 통계 화면과 같은 중앙값 규칙
 
 
+def test_newcomer_cohorts_stretch_for_vacation(ts):
+    """90일 사이에 14일 휴가가 끼면 104일까지 본다 — 103일 만에 오신 분(n2)도 다시 오신 분."""
+    c = {x["month"]: x for x in ts["cohortOff"]["cohorts"]}
+    assert c["2026-06"]["back"] == 2
+    # 6월 말 + 90일 + 휴가 14일 = 10.12 > 수집일(10.11) → 아직 진행 중
+    assert c["2026-06"]["open"] is True
+    assert c["2026-05"]["open"] is False
+
+
 def test_week_heat(ts):
     h = ts["heat"]
     grid = h["grid"]
@@ -112,8 +127,24 @@ def test_week_heat(ts):
     assert grid[0][2] == 1          # 수 오전(9:05)
     assert grid[2][5] == 2          # 토 14–16시
     assert grid[4][5] == 1          # 토 18시~
-    assert h["total"] == 5 and h["noTime"] == 1 and h["max"] == 2
+    assert h["total"] == 5 and h["noTime"] == 1
     assert sum(map(sum, grid)) == 5  # 기간 밖·수집일 뒤·충전·연결 없는 거래는 없다
+    # 4.12(일)~10.11(일) 183일 — 휴무가 없으면 요일마다 26일, 일요일만 27일. 칸 값은 하루 평균
+    assert h["days"] == [26, 26, 26, 26, 26, 26, 27]
+    assert h["avg"][2][5] == pytest.approx(2 / 26) and h["max"] == pytest.approx(2 / 26)
+    assert h["off"] == [False] * 7
+
+
+def test_week_heat_with_off_days(ts):
+    """화요일 정기 휴무 · 휴가는 영업한 날에서 빠진다. 휴무로 정한 날이라도 방문이 있었으면 영업한 날."""
+    h = ts["heatOff"]
+    # 화요일: 26일 모두 휴무지만 10.6(E, 시각 없음)에 방문이 있었다 → 그날 하루만 영업한 날
+    assert h["days"][1] == 1 and h["off"][1] is False
+    # 토요일: 26일 중 휴가 2일(7.4·7.11)과 10.3 → 23일. 평균의 분모가 줄어 같은 2회도 더 붐빈다
+    assert h["days"][5] == 23
+    assert h["avg"][2][5] == pytest.approx(2 / 23)
+    # 목요일: 휴가 7.2·7.9 두 번 → 24일
+    assert h["days"][3] == 24
 
 
 def test_band_and_weekday(ts):
@@ -127,6 +158,8 @@ def test_service_table(ts):
     assert rows["여자컷"] == {"service": "여자컷", "count": 3, "avg": 31000, "back": 1, "base": 2}
     assert rows["남자컷"]["base"] == 0          # 워크인 집계는 '다시 옴'을 세지 않는다
     assert rows["뿌리염색"] == {"service": "뿌리염색", "count": 1, "avg": 60000, "back": 0, "base": 1}
+    # 휴가(7.1~14)가 끼어도 이 사례들은 기간 안 — 결과는 같다
+    assert ts["svcOff"] == ts["svc"]
 
 
 def test_active_trend(ts):
