@@ -77,18 +77,26 @@ export function onCareList(
  * 1000행이 넘을 수 있는 조회는 range 로 나눠 전부 가져와야 한다
  * (안 그러면 홈·고객목록·통계가 1000행만 본다).
  * makeQuery 는 반드시 안정 정렬(.order)과 .range(from, to) 를 포함해야 한다.
+ *
+ * 첫 쪽이 꽉 차면 다음 쪽들은 BATCH 개씩 한꺼번에 받는다 — 1만 행이면 차례로 열 번 기다리던 것이
+ * 첫 쪽 + 세 묶음, 네 번이 된다(개선 계획 v4 0-3). 끝을 넘긴 쪽은 빈 배열이라 해가 없다.
  */
+const PAGE = 1000;
+const BATCH = 4;
+
 export async function fetchAllRows<T = Record<string, unknown>>(
   makeQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>,
 ): Promise<T[]> {
-  const PAGE = 1000;
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await makeQuery(from, from + PAGE - 1);
+  const page = async (n: number): Promise<T[]> => {
+    const { data, error } = await makeQuery(n * PAGE, n * PAGE + PAGE - 1);
     if (error) throw error;
-    const rows = (data ?? []) as T[];
-    out.push(...rows);
-    if (rows.length < PAGE) break;
+    return (data ?? []) as T[];
+  };
+  const out = await page(0);
+  if (out.length < PAGE) return out;
+  for (let n = 1; ; n += BATCH) {
+    const parts = await Promise.all(Array.from({ length: BATCH }, (_, i) => page(n + i)));
+    for (const p of parts) out.push(...p);
+    if (parts.some((p) => p.length < PAGE)) return out;
   }
-  return out;
 }

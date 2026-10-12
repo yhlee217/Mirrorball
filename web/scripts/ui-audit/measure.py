@@ -3,6 +3,8 @@
 재는 것
   · 보이는 글자 수(접힌 ?·더 보기 안은 빼고) · 설명글 비율 · 12px 미만 · 대비 4.5:1 미만 · 회색 글자
   · 화면 길이(몇 화면인지) · 첫 화면(아래 탭바 위 784px)에 다 들어오는 줄
+  · 누르는 곳의 실제 눌리는 크기 — 보이는 상자가 아니라 화면을 한 점씩 찍어 그 요소가 잡히는 넓이
+    (보이는 모양은 작게 두고 누르는 영역만 넓힌 것까지 잡힌다). WCAG 2.2 최소 24px, 손가락 권장 44px
 '설명글'은 계산 방법·근거처럼 매번 읽을 필요 없는 글이 쓰던 자리(EXPL)다 — v3 전 측정과 같은 목록이라
 전후를 견줄 수 있다.
 
@@ -92,6 +94,30 @@ JS = r"""
 """
 
 
+# 누르는 곳마다 가운데에서 위아래·좌우로 한 칸씩 찍어, 그 요소(또는 그 안)가 잡히는 넓이를 잰다.
+# 화면 밖은 찍을 수 없어 하나씩 가운데로 굴려 온다. 아래 탭바는 화면 공통이라 뺀다.
+HIT_JS = r"""
+() => {
+  const els = [...document.querySelectorAll('a, button, summary, input, select, textarea, [role=button]')]
+    .filter((e) => !e.closest('.tabbar') && e.checkVisibility());
+  const MAX = 30;
+  const out = [];
+  for (const e of els) {
+    e.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    const r = e.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const on = (x, y) => { const h = document.elementFromPoint(x, y); return !!h && (h === e || e.contains(h)); };
+    if (!on(cx, cy)) { out.push({ w: 0, h: 0, t: (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 12) }); continue; }
+    const reach = (dx, dy) => { let n = 0; while (n < MAX && on(cx + dx * (n + 1), cy + dy * (n + 1))) n++; return n; };
+    out.push({ w: reach(-1, 0) + reach(1, 0) + 1, h: reach(0, -1) + reach(0, 1) + 1,
+               t: (e.innerText || e.getAttribute('aria-label') || e.getAttribute('title') || '').trim().slice(0, 12) });
+  }
+  window.scrollTo(0, 0);
+  return out;
+}
+"""
+
+
 def pct(a: int, b: int) -> float:
     return a * 100 / b if b else 0.0
 
@@ -110,6 +136,9 @@ TARGETS = [
      lambda r, t: f"{sum(r['carte']['carteTop'])}/5"),
     ("통계: 숫자 4개 + 할 일 첫 화면", lambda r, t: r["stats"]["nums"] >= 4 and r["stats"]["pills"] >= 1,
      lambda r, t: f"숫자 {r['stats']['nums']} · 할 일 {r['stats']['pills']}"),
+    ("누르는 곳 24px 미만 0곳", lambda r, t: sum(len(m["tiny"]) for m in r.values()) == 0,
+     lambda r, t: f"{sum(len(m['tiny']) for m in r.values())}곳 / {sum(m['targets'] for m in r.values())}곳"
+                  f" (44px 미만 {sum(m['under44'] for m in r.values())}곳)"),
 ]
 
 
@@ -144,6 +173,10 @@ def main() -> int:
         for s in SCREENS:
             pg.goto((html / f"{s}.html").resolve().as_uri())
             res[s] = pg.evaluate(JS, [FOLD, EXPL, ROWS.get(s)])
+            hits = pg.evaluate(HIT_JS)
+            res[s]["targets"] = len(hits)
+            res[s]["tiny"] = [h for h in hits if min(h["w"], h["h"]) < 24]
+            res[s]["under44"] = sum(1 for h in hits if min(h["w"], h["h"]) < 44)
             if a.shots:
                 shots = Path(a.out) / "shots"
                 shots.mkdir(parents=True, exist_ok=True)
@@ -165,6 +198,8 @@ def main() -> int:
     for s, m in res.items():
         if m["lowSamples"]:
             print(f"  대비 미달 {s}: {' | '.join(m['lowSamples'])}")
+        if m["tiny"]:
+            print(f"  24px 미만 {s}: " + " | ".join(f"{h['t'] or '?'} {h['w']}×{h['h']}" for h in m["tiny"][:6]))
 
     print("\n목표(UX 계획 v3)")
     failed = 0

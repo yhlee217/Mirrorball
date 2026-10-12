@@ -52,22 +52,30 @@ export default async function AlertsPage() {
   // 연락해서 잠시 빠진 분 — 목록이 왜 줄었는지 밝힌다
   const quiet = real.filter((c) => needsCare(c, flags(c)) && contacted.has(c.id)).length;
   const todo = real.filter((c) => onCareList(c, flags(c)));
+  // 전원을 그린다 — 화면은 50명씩 펼친다(alerts-list). 머리말 숫자와 목록이 같은 사람을 가리키게.
   const base = [...todo]
-    .sort((a, b) => (stateOf(a) === 'overdue' ? 0 : 1) - (stateOf(b) === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count)
-    .slice(0, 50);
+    .sort((a, b) => (stateOf(a) === 'overdue' ? 0 : 1) - (stateOf(b) === 'overdue' ? 0 : 1) || b.visit_count - a.visit_count);
   const contacts = await Promise.all(base.map((c) => readContact(c.pii_enc)));
   const names = contacts.map((x) => x.name);
 
-  // 개인화용: 각 고객의 마지막 시술
-  const ids = base.map((c) => c.id);
+  // 개인화용: 각 고객의 마지막 시술. 50명씩 나눠 받는다 — 한 번에 묶으면 주소가 길어지고,
+  // 단골 몇 분의 긴 이력이 상한(3000행)을 채워 다른 분 마지막 시술이 빠질 수 있다.
   const lastSvc = new Map<string, string>();
-  if (ids.length) {
-    const { data: txs } = await supabase
-      .from('transactions')
-      .select('customer_id,date,service')
-      .in('customer_id', ids)
-      .order('date', { ascending: false })
-      .limit(3000);
+  const chunks: Cust[][] = [];
+  for (let i = 0; i < base.length; i += 50) chunks.push(base.slice(i, i + 50));
+  const parts = await Promise.all(
+    chunks.map((cs) => {
+      const since = cs.map((c) => (c.last_visit ?? '').slice(0, 10)).filter(Boolean).sort()[0] ?? '1970-01-01';
+      return supabase
+        .from('transactions')
+        .select('customer_id,date,service')
+        .in('customer_id', cs.map((c) => c.id))
+        .gte('date', since)
+        .order('date', { ascending: false })
+        .limit(3000);
+    }),
+  );
+  for (const { data: txs } of parts) {
     for (const t of (txs as { customer_id: string | null; service: string | null }[]) ?? []) {
       if (t.customer_id && t.service && !lastSvc.has(t.customer_id)) lastSvc.set(t.customer_id, t.service);
     }

@@ -61,11 +61,12 @@ body{background:var(--bg);color:var(--ink);
 .bar .ttl{font-weight:800;font-size:17px;flex:1}
 .linkbtn{border:none;background:none;color:var(--accent);font-weight:700;font-size:13px;cursor:pointer}
 .body{padding:18px 18px 82px}     /* 아래 82px 은 고정 탭바에 가리지 않게 */
-.back{display:inline-block;border:none;background:none;color:var(--accent);font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;padding:0}
+.back{display:inline-block;border:none;background:none;color:var(--accent);font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;
+  padding:10px 14px 10px 0;margin:-10px -14px -10px 0}   /* 누르는 영역 44px — 모양·자리는 그대로 */
 /* 한 줄 머리말 — 이름(제목) · 기준 표시 · 설정. 홈 · 방문. 큰 인사는 첫 화면 자리만 차지했다(UX 계획 v3) */
 .top{display:flex;align-items:center;gap:9px;margin:0 2px 12px}
 .top b{font-size:17px;font-weight:800}
-.top .gear{margin-left:auto;font-size:21px;line-height:1;color:var(--muted);text-decoration:none}
+.top .gear{margin:-11px -11px -11px auto;padding:11px;font-size:21px;line-height:1;color:var(--muted);text-decoration:none}
 
 /* ── 3. 공통 부품 ─────────────────────────────────────────────────────────── */
 
@@ -164,8 +165,9 @@ body{background:var(--bg);color:var(--ink);
   border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
   font-size:12px;font-weight:800;color:var(--muted);background:var(--paper);cursor:pointer;
   -webkit-tap-highlight-color:transparent}
+.help>summary::before{content:'';position:absolute;inset:-11px}   /* 원은 22px, 누르는 영역은 44px */
 .help.inl{display:inline}
-.help.inl>summary{position:static;display:inline-flex;vertical-align:middle;margin-left:5px}
+.help.inl>summary{position:relative;display:inline-flex;vertical-align:middle;margin-left:5px}
 .help[open]>summary{background:var(--soft);color:var(--accent-d)}
 .help-b{font-size:12.5px;line-height:1.6;color:var(--ink);background:var(--soft);border-radius:10px;padding:9px 11px;margin:6px 0 10px}
 .help-b.inset{margin:6px 15px 10px}
@@ -186,6 +188,12 @@ body{background:var(--bg);color:var(--ink);
 .moreh>summary::after{content:' ▾'}
 .moreh[open]>summary::after{content:' ▴'}
 .moreh>summary:active{background:var(--soft)}
+/* 화면 아래 접기·더 보기 — 통계 '더 보기' · 챙길 고객 '더 보기'. 카드처럼 보이지 않게 점선 */
+.more-sec>summary,.more-btn{display:flex;align-items:baseline;justify-content:center;gap:7px;width:100%;padding:12px;margin-bottom:13px;
+  border:1px dashed var(--line);border-radius:12px;background:none;font-family:inherit;font-size:14px;font-weight:800;
+  color:var(--accent-d);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.more-sec>summary::after,.more-btn::after{content:'▾';font-size:12px}
+.more-sec[open]>summary::after{content:'▴'}
 
 /* ── 4. 홈 (/) ────────────────────────────────────────────────────────────── */
 /* 열자마자 '오늘 누가 오나'가 보이게(UX 계획 v3). 머리말은 한 줄 — 큰 인사는 첫 화면 자리만 차지했다 */
@@ -245,6 +253,7 @@ body{background:var(--bg);color:var(--ink);
   display:flex;align-items:center;justify-content:center;border-radius:50%;
   font-size:12px;line-height:1;color:var(--muted);cursor:pointer;
   -webkit-tap-highlight-color:transparent}
+.tipd>summary::before{content:'';position:absolute;inset:-9px}   /* 표식은 26px, 누르는 영역은 44px */
 .tipd>summary::after{content:'▾'}
 .tipd>summary:active{background:var(--soft)}
 .tipd[open]>summary{color:var(--accent)}
@@ -317,10 +326,10 @@ body{background:var(--bg);color:var(--ink);
 
 /* 메모·취향 태그 */
 .tags{display:flex;flex-wrap:wrap;gap:6px}
-.tagx{background:var(--soft);color:var(--accent-d);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer}
+.tagx{background:var(--soft);color:var(--accent-d);border:none;border-radius:20px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
 .tagin{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:15px;background:var(--paper);color:var(--ink);font-family:inherit}
-.tagsug{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
-.sug{font-size:12.5px;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:20px;padding:3px 9px;cursor:pointer;font-family:inherit}
+.tagsug{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.sug{font-size:12.5px;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:20px;padding:6px 11px;cursor:pointer;font-family:inherit}
 
 /* 선불 충전 — 잔액은 추정이라 강조하지 않고, 사비 토글로 사람이 고칠 수 있게 한다 */
 .prepaid{display:flex;gap:18px;margin-bottom:8px}
@@ -328,9 +337,10 @@ body{background:var(--bg);color:var(--ink);
 .prepaid .pl{font-size:12px;color:var(--muted)}
 .prepaid b{font-size:16px;font-weight:800}
 .prepaid b.pos{color:var(--accent-d)}
-.pocket{font-size:12px;font-weight:700;color:var(--muted);background:var(--soft);
+.pocket{position:relative;font-size:12px;font-weight:700;color:var(--muted);background:var(--soft);
   border:1px solid var(--line);border-radius:20px;padding:2px 7px;cursor:pointer;
   -webkit-tap-highlight-color:transparent}
+.pocket::before{content:'';position:absolute;inset:-10px -4px}   /* 누르는 영역 — 위아래 10px 더 */
 .pocket.on{color:#fff;background:var(--accent);border-color:var(--accent)}
 .pocket:disabled{opacity:.5}
 .pocket.busy{min-width:52px}      /* '…' 로 바뀔 때 줄이 밀리지 않게 */
@@ -340,7 +350,7 @@ body{background:var(--bg);color:var(--ink);
   background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
 .gp-l{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.5px}
 .gp-b{font-size:12px;font-weight:700;color:var(--muted);background:var(--soft);
-  border:1px solid var(--line);border-radius:20px;padding:4px 12px;cursor:pointer;
+  border:1px solid var(--line);border-radius:20px;padding:7px 14px;cursor:pointer;
   -webkit-tap-highlight-color:transparent}
 .gp-b.inf{color:var(--accent-d);border-color:var(--accent);background:transparent}
 .gp-b.on{color:#fff;background:var(--accent);border-color:var(--accent)}
@@ -356,13 +366,6 @@ body{background:var(--bg);color:var(--ink);
 /* 맨 위 요약 — 홈 숫자 띠(.strip · .num)와 같은 모양. 이번 달 숫자 아래 마감 예상의 곁말, 점선 아래 손님 기반 */
 .sum-s{font-size:12.5px;color:var(--muted);margin-top:5px}
 .sum-2{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
-
-/* 더 보기 — 자주 볼 일 없는 카드를 접는다. 접힌 손잡이는 카드처럼 보이지 않게 점선 */
-.more-sec>summary{display:flex;align-items:baseline;justify-content:center;gap:7px;padding:12px;margin-bottom:13px;
-  border:1px dashed var(--line);border-radius:12px;font-size:14px;font-weight:800;color:var(--accent-d);cursor:pointer;
-  -webkit-tap-highlight-color:transparent}
-.more-sec>summary::after{content:'▾';font-size:12px}
-.more-sec[open]>summary::after{content:'▴'}
 
 /* 월별 매출 막대 */
 .bars{display:flex;align-items:flex-end;gap:8px;min-height:112px;padding-top:6px}   /* 높이를 못 박으면 아래 줄(영업일)이 넘친다 */
@@ -439,7 +442,8 @@ body{background:var(--bg);color:var(--ink);
 /* 휴무 — 정기 휴무는 요일 칩, 휴가는 기간 목록 + 두 날짜로 추가. 저장 전이면 알린다 */
 .off-r{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
 .crit-nm + .off-r{border-top:none}   /* 목록 첫 줄 — :first-of-type 은 앞의 제목 div 에 걸린다 */
-.off-x{font-size:12.5px;font-weight:700;font-family:inherit;color:var(--rose-ink);background:none;border:none;cursor:pointer;padding:2px 0}
+.off-x{font-size:12.5px;font-weight:700;font-family:inherit;color:var(--rose-ink);background:none;border:none;cursor:pointer;
+  padding:11px 0 11px 14px;margin:-9px 0}
 .off-add{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;margin-top:8px;color:var(--muted)}
 .card .off-add input{margin:0;padding:9px 8px;min-width:0}
 .off-dirty{font-size:12.5px;font-weight:700;color:var(--gold-ink);margin-top:10px}

@@ -11,6 +11,7 @@ import { smsHref, telHref, type ContactVia } from '@/lib/contact';
 type Item = { id: string; name: string; phone: string | null; state: string; why: string; note: string; draft: string };
 
 const STATE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래' };
+const STEP = 50; // 한 번에 펼치는 수 — 급한 분(이탈 위험)부터 정렬돼 온다
 
 export default function AlertsList({ items, quiet, quietDays }: { items: Item[]; quiet: number; quietDays: number }) {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function AlertsList({ items, quiet, quietDays }: { items: Item[];
   const [done, setDone] = useState<Record<string, true>>({});
   // 펼친 줄 — 문구·복사·카르테·이탈 처리는 펼쳤을 때만(첫 화면에 여러 분이 들어오게, UX 계획 v3)
   const [open, setOpen] = useState<string | null>(null);
+  const [shown, setShown] = useState(STEP);
 
   const flash = (m: string) => {
     setToast(m);
@@ -126,7 +128,7 @@ export default function AlertsList({ items, quiet, quietDays }: { items: Item[];
         </div>
       )}
       <div className="card">
-        {items.map((it) => {
+        {items.slice(0, shown).map((it) => {
           const isOpen = open === it.id;
           const sent = !!done[it.id];
           return (
@@ -182,6 +184,11 @@ export default function AlertsList({ items, quiet, quietDays }: { items: Item[];
           );
         })}
       </div>
+      {items.length > shown ? (
+        <button type="button" className="more-btn" onClick={() => setShown((n) => n + STEP)}>
+          더 보기 <span className="sect-n">{Math.min(STEP, items.length - shown)}명 · 남은 {items.length - shown}명</span>
+        </button>
+      ) : null}
       {toast && <div className="toast">{toast}</div>}
     </>
   );

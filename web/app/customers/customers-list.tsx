@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { man } from '@/lib/format';
 import { agoWords, daysBetween } from '@/lib/week';
 import Link from 'next/link';
@@ -27,7 +27,6 @@ type Row = {
   visits_90d: number | null; // VIP 판정(최근 자주 오심)용 — 워커가 미리 집계
   visits_180d: number | null;
   visits_365d: number | null;
-  services: string[];
 };
 
 // '필터' 안에 접어 두는 칩. 늘 보이는 건 홈 타일과 같은 넷(이탈위험·재방문도래·신규·VIP)뿐이다.
@@ -61,6 +60,21 @@ export default function CustomersList({
   // 화면에 남겨 두고 표시만 바꾼다(다음 진입 때 필터가 자연히 걸러낸다).
   const [picked, setPicked] = useState<Record<string, 'M' | 'F'>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  // 손님별 시술 갈래 — '시술' 필터를 처음 고를 때 받는다(목록을 열 때마다 거래 전체를 받지 않게).
+  const [svcMap, setSvcMap] = useState<Record<string, string[]> | null>(null);
+  const [svcErr, setSvcErr] = useState(false);
+  useEffect(() => {
+    if (!svcF || svcMap || svcErr) return;
+    let live = true;
+    fetch('/api/customer-services')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((m: Record<string, string[]>) => live && setSvcMap(m))
+      .catch(() => live && setSvcErr(true));
+    return () => {
+      live = false;
+    };
+  }, [svcF, svcMap, svcErr]);
+  const svcWaiting = !!svcF && !svcMap;
 
   const pickGender = async (id: string, g: 'M' | 'F') => {
     if (saving) return;
@@ -142,7 +156,7 @@ export default function CustomersList({
     else if (recF === '3m') f = f.filter((r) => daysSince(r.last_visit) <= 90);
     else if (recF === '6m') f = f.filter((r) => daysSince(r.last_visit) <= 180);
     else if (recF === '1y') f = f.filter((r) => daysSince(r.last_visit) > 365);
-    if (svcF) f = f.filter((r) => r.services.includes(svcF));
+    if (svcF) f = svcMap ? f.filter((r) => svcMap[r.id]?.includes(svcF)) : [];
 
     const arr = [...f];
     arr.sort((a, b) => {
@@ -154,7 +168,7 @@ export default function CustomersList({
       return (b.last_visit || '').localeCompare(a.last_visit || ''); // recent
     });
     return arr;
-  }, [rows, q, chips, visitF, revF, recF, svcF, sort, settings, asOf, today]);
+  }, [rows, q, chips, visitF, revF, recF, svcF, svcMap, sort, settings, asOf, today]);
 
   // 접힌 조건 중 켜진 수 — 손잡이에 보여야 '왜 목록이 줄었지'가 안 생긴다.
   const hiddenOn = FOLDED.filter((k) => chips.has(k)).length + [visitF, revF, recF, svcF].filter(Boolean).length;
@@ -286,6 +300,15 @@ export default function CustomersList({
               </div>
             );
           })
+        ) : svcWaiting ? (
+          svcErr ? (
+            <Empty
+              title="시술 기록을 불러오지 못했어요"
+              action={<button type="button" onClick={() => setSvcErr(false)}>다시 시도</button>}
+            />
+          ) : (
+            <Empty title="시술 기록 불러오는 중…" />
+          )
         ) : sweeping ? (
           // 훑기를 끝낸 자리 — '없다'가 아니라 '다 채웠다'는 뜻이라 문구가 달라야 한다.
           <Empty

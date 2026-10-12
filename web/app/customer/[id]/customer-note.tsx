@@ -45,9 +45,9 @@ export default function CustomerNote({ id, initMemo, initTags }: { id: string; i
       {tags.length > 0 && (
         <div className="tags" style={{ marginBottom: 8 }}>
           {tags.map((t) => (
-            <span key={t} className="tagx" onClick={() => rmTag(t)}>
+            <button type="button" key={t} className="tagx" onClick={() => rmTag(t)} aria-label={`${t} 지우기`}>
               {t} ✕
-            </span>
+            </button>
           ))}
         </div>
       )}

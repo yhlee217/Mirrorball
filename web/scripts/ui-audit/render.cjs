@@ -113,7 +113,7 @@ out.visits = screen('', `<div class="top"><b>방문</b><span class="sect-n">2주
 const rows = Array.from({ length: 20 }, (_, i) => ({
   id: 'c' + i, name: names[i % 10], visit_count: 1 + i, total_won: 50000 * (i + 1), last_visit: `2026-0${1 + (i % 9)}-1${i % 9}`,
   first_visit: '2024-01-01', state: ['overdue', 'due', null, 'new'][i % 4], cycle: 35, hasBooking: i % 7 === 0, hasPhone: true,
-  tail: '1234', churned: false, gender: 'F', visits_90d: 1, visits_180d: 2, visits_365d: 4, services: ['염색'],
+  tail: '1234', churned: false, gender: 'F', visits_90d: 1, visits_180d: 2, visits_365d: 4,
 }));
 out.customers = screen(bar('고객 <span class="sect-n">1,136명</span>'),
   r(load('app/customers/customers-list.js').default, { rows, settings: DEFAULT_SETTINGS, asOf: SYNC.date, today: TODAY, initialFilter: null }));
