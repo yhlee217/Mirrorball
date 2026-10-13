@@ -115,7 +115,7 @@ export default function AlertsList({
   // '이 분은 확실히 안 오신다'는 판단이 드는 자리가 바로 여기라, 목록에서 곧장 처리하게 뒀다.
   // 표시하면 이 목록·홈 신호에서 빠지고, 고객 카르테에서 되돌릴 수 있다.
   async function markChurned(id: string, name: string) {
-    if (!window.confirm(`${name} 님을 이탈로 표시할까요?\n\n챙길 고객에서 빠집니다. 이력은 그대로 남고, 고객 카르테에서 언제든 되돌릴 수 있어요.`)) return;
+    if (!window.confirm(`${name} 님을 이탈로 표시할까요?\n\n챙길 고객에서 빠집니다. 이력은 그대로 남고, 손님 상세보기에서 언제든 되돌릴 수 있어요.`)) return;
     setBusy(id);
     try {
       const r = await fetch('/api/customer-churn', {
@@ -215,7 +215,7 @@ export default function AlertsList({
                         문구 복사
                       </button>
                     ) : null}
-                    <Link href={`/customer/${it.id}`}>카르테</Link>
+                    <Link href={`/customer/${it.id}`}>상세보기</Link>
                     {sent ? (
                       <button type="button" onClick={() => undoContacted(it.id)}>연락 되돌리기</button>
                     ) : (

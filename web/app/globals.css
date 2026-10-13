@@ -218,7 +218,7 @@ body{background:var(--bg);color:var(--ink);
 .bkd[open]>summary{background:var(--soft)}
 .bk-x{padding:6px 15px 12px 66px;font-size:13px;line-height:1.6;background:var(--soft)}
 .bk-x a{display:inline-block;margin-top:3px;color:var(--accent);font-weight:800;text-decoration:none}
-.bk-a{display:flex;gap:18px}   /* 펼친 곳 손잡이 줄 — 📞 전화 · 카르테 */
+.bk-a{display:flex;justify-content:flex-end;gap:18px}   /* 펼친 곳 손잡이 줄 — 📞 전화 · 상세보기, 엄지 쪽(오른쪽)에 */
 .bk-a a{padding:8px 0}
 .later>summary{border-top:none}
 

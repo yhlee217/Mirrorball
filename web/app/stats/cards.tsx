@@ -383,7 +383,7 @@ export function GenderCard({ g }: { g: GenderStat }) {
         {g.manual > 0 ? <> — 그중 <b>{g.manual.toLocaleString()}명</b>은 직접 지정</> : null}. 미상
         {' '}{g.unknown.toLocaleString()}명은 성별이 적힌 시술을 받은 적이 없는 고객 {g.noClue.toLocaleString()}명(다운펌·앞머리컷·
         뿌리염색처럼 메뉴에 성별이 없는 시술만 받은 경우)과, 남·여가 섞여 대신 결제로 보이는 고객 {g.proxy.toLocaleString()}명이에요.
-        둘 다 아래 비교에서 뺐어요. 카르테에서 성별을 직접 지정하면 바로 반영돼요.
+        둘 다 아래 비교에서 뺐어요. 손님 상세보기에서 성별을 직접 지정하면 바로 반영돼요.
       </Help>
       <div className="gbar">
         <div className="gm" style={{ width: w(g.M.n) }} />
@@ -445,7 +445,7 @@ export function RecommendHitCard({ hits }: { hits: { due: Hit; cross: Hit } }) {
       <Title name="추천 적중률" n="1년" />
       <Help>
         방문마다 그 전 기록만으로 이렇게 권했다면 그날 실제로 받았는지 셌어요. &lsquo;찍었을 때&rsquo;는 아무 근거 없이
-        같은 걸 골랐을 때예요 — 추천이 그보다 높아야 쓸모가 있어요. 추천은 카르테와 홈 예약 줄의 &lsquo;권할 것&rsquo;이에요.
+        같은 걸 골랐을 때예요 — 추천이 그보다 높아야 쓸모가 있어요. 추천은 손님 상세보기와 홈 예약 줄의 &lsquo;권할 것&rsquo;이에요.
       </Help>
       <div className="tablewrap">
         <table className="gtab svc-tab">

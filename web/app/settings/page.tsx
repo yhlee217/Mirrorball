@@ -103,7 +103,7 @@ export default async function SettingsPage() {
         <div className="card">
           <div className="ch">이탈 고객{churnedRows.length > 0 ? <span className="ch-n"> {churnedRows.length}명</span> : null}</div>
           <Help inset>
-            카르테에서 직접 이탈로 표시한 고객이에요. 챙길 고객·홈 신호에서 빠져 있고, 이력과 매출은 그대로 남아 있어요.
+            손님 상세보기나 챙길 고객에서 직접 이탈로 표시한 고객이에요. 챙길 고객·홈 신호에서 빠져 있고, 이력과 매출은 그대로 남아 있어요.
           </Help>
           <ChurnedList rows={churnedRows} />
         </div>

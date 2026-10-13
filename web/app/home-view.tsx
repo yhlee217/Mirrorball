@@ -202,7 +202,7 @@ function BookRow({ b, today }: { b: Brief; today: string }) {
         ) : null}
         <div className="bk-a">
           {b.phone ? <a href={`tel:${b.phone}`}>📞 전화</a> : null}
-          {b.customer_id ? <Link href={`/customer/${b.customer_id}`}>카르테 ›</Link> : null}
+          {b.customer_id ? <Link href={`/customer/${b.customer_id}`}>상세보기 ›</Link> : null}
         </div>
       </div>
     </details>
