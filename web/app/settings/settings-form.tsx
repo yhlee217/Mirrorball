@@ -20,7 +20,9 @@ const n = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
 function Num({ v, set, unit, w }: { v: number; set: (x: number) => void; unit: string; w?: number }) {
   return (
     <div className="crit-in">
-      <input type="number" value={v} onChange={(e) => set(n(e.target.value))} style={w ? { width: w } : undefined} />
+      {/* 숫자 패드로(type=number 는 아이폰에서 기호 키보드가 뜬다) */}
+      <input type="text" inputMode="numeric" pattern="[0-9]*" enterKeyHint="done" value={v}
+        onChange={(e) => set(n(e.target.value))} style={w ? { width: w } : undefined} />
       <span className="u">{unit}</span>
     </div>
   );
@@ -197,7 +199,7 @@ export default function SettingsForm({
             기간 추가
           </button>
         </div>
-        {offDirty ? <div className="off-dirty">아래 &lsquo;저장&rsquo;을 눌러야 반영돼요</div> : null}
+        {offDirty ? <div className="off-dirty">화면 아래 &lsquo;저장&rsquo;을 눌러야 반영돼요</div> : null}
       </div>
 
       <div className="card" style={{ padding: '14px 15px' }}>
@@ -298,10 +300,13 @@ export default function SettingsForm({
         </div>
       </div>
 
-      <button className="primary" style={{ width: '100%', maxWidth: 'none', marginTop: 0 }} onClick={save} disabled={saving}>
-        {saving ? '저장 중…' : '저장'}
-      </button>
-      {msg ? <div className="set-msg">{msg}</div> : null}
+      {/* 저장은 화면 아래(탭바 위)에 붙어 있다 — 긴 양식 끝까지 내려가지 않아도 된다(모바일 개선 M4) */}
+      <div className="savebar">
+        <button className="primary" style={{ width: '100%', maxWidth: 'none', marginTop: 0 }} onClick={save} disabled={saving}>
+          {saving ? '저장 중…' : '저장'}
+        </button>
+        {msg ? <div className="set-msg">{msg}</div> : null}
+      </div>
     </>
   );
 }

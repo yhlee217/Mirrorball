@@ -94,7 +94,7 @@ export function SummaryCard({
         ) : (
           <>마감 예상은 이번 달 영업일이 {MIN_WORKED}일 지나면 보여요{fc.worked ? `(지금 ${fc.worked}일)` : ''}.</>
         )}{' '}
-        활성 고객은 최근 90일 안에 다녀가신 손님 수예요.
+        활성 고객은 최근 90일 안에 다녀가신 손님 수이고, ▲▼는 그때(괄호 안 달의 말)와 견준 값이에요.
         {prepaid.n > 0 ? ' 선불 잔액은 손님별 남은 잔액의 합인데, 결제수단이 기록되지 않아 추정이에요.' : ''}
       </Help>
       <div className="strip-r">
@@ -112,7 +112,7 @@ export function SummaryCard({
       ) : null}
       <div className="strip-r sum-2">
         <Num label="활성 고객" v={last.count.toLocaleString()}
-          sub={aDelta ? `${arrow(aDelta)}${Math.abs(aDelta).toLocaleString()} · ${first.label} 말보다` : `${first.label} 말과 같음`}
+          sub={aDelta ? `${arrow(aDelta)}${Math.abs(aDelta).toLocaleString()} (${first.label} 말)` : `${first.label} 말과 같음`}
           dir={aDelta > 0 ? 'up' : aDelta < 0 ? 'down' : undefined} />
         {prepaid.n > 0 ? <Num label="선불 잔액" v={`약 ${man(prepaid.sum)}`} sub={`${prepaid.n.toLocaleString()}명`} /> : null}
       </div>

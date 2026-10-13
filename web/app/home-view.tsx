@@ -26,6 +26,7 @@ export type Brief = {
   recent: string | null; // 매장 메모 정리 — 근황 중 가장 최근 한 줄
   prepaid: number; // 선불 잔액(추정)
   rec: { label: string; short: string } | null; // 권해볼 것(lib/recommend) — 추정, 하나만
+  phone: string | null; // 예약 손님 번호(숫자만) — 펼친 곳의 📞(늦으시거나 시간을 바꿀 때)
 };
 type Later = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; status: string | null; name: string; off: boolean };
 
@@ -186,7 +187,7 @@ function BookRow({ b, today }: { b: Brief; today: string }) {
       </div>
     </div>
   );
-  const more = !b.off && (b.prefer.length > 0 || !!b.recent || !!b.rec || !!b.customer_id);
+  const more = !b.off && (b.prefer.length > 0 || !!b.recent || !!b.rec || !!b.customer_id || !!b.phone);
   if (!more) return <div className={'li' + (b.off ? ' li-off' : '')}>{head}</div>;
   return (
     <details className="bkd">
@@ -199,7 +200,10 @@ function BookRow({ b, today }: { b: Brief; today: string }) {
             권할 것 <b>{b.rec.label}</b> <span className="bk-s">{b.rec.short}</span>
           </div>
         ) : null}
-        {b.customer_id ? <Link href={`/customer/${b.customer_id}`}>카르테 ›</Link> : null}
+        <div className="bk-a">
+          {b.phone ? <a href={`tel:${b.phone}`}>📞 전화</a> : null}
+          {b.customer_id ? <Link href={`/customer/${b.customer_id}`}>카르테 ›</Link> : null}
+        </div>
       </div>
     </details>
   );

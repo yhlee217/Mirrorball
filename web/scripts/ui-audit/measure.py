@@ -3,6 +3,7 @@
 재는 것
   · 보이는 글자 수(접힌 ?·더 보기 안은 빼고) · 설명글 비율 · 12px 미만 · 대비 4.5:1 미만 · 회색 글자
   · 화면 길이(몇 화면인지) · 첫 화면(아래 탭바 위 784px)에 다 들어오는 줄
+  · 360px(보급형 안드로이드 폭)에서 가로 넘침 · 한 줄 고정인데 잘린 글자 · 줄바꿈으로 쪼개진 이름
   · 누르는 곳의 실제 눌리는 크기 — 보이는 상자가 아니라 화면을 한 점씩 찍어 그 요소가 잡히는 넓이
     (보이는 모양은 작게 두고 누르는 영역만 넓힌 것까지 잡힌다). WCAG 2.2 최소 24px, 손가락 권장 44px
 '설명글'은 계산 방법·근거처럼 매번 읽을 필요 없는 글이 쓰던 자리(EXPL)다 — v3 전 측정과 같은 목록이라
@@ -24,6 +25,7 @@ from pathlib import Path
 
 SCREENS = ["home", "alerts", "visits", "customers", "carte", "stats", "settings"]
 VIEW = {"width": 390, "height": 844}
+NARROW = {"width": 360, "height": 780}  # 보급형 안드로이드 폭 — 여기서 깨지면 디자이너 폰에서도 깨진다
 FOLD = 784  # 844 − 아래 탭바 60
 
 # 설명글이 쓰던 자리 — v3 전 측정(playbook/UX_PLAN_v3.md §1)과 같은 목록
@@ -118,6 +120,29 @@ HIT_JS = r"""
 """
 
 
+# 좁은 폭(360px)에서 깨지는 곳 — 가로로 넘치는 페이지, 한 줄 고정인데 잘린 글자, 이름이 줄바꿈으로 쪼개진 줄
+NARROW_JS = r"""
+() => {
+  const de = document.documentElement;
+  const out = { overflow: de.scrollWidth > de.clientWidth, clipped: [], broken: [] };
+  for (const el of document.querySelectorAll('body *')) {
+    if (!el.checkVisibility() || el.closest('.tabbar')) continue;
+    const cs = getComputedStyle(el);
+    if (cs.whiteSpace === 'nowrap' && el.children.length === 0 && el.scrollWidth > el.clientWidth + 1)
+      out.clipped.push(el.textContent.trim().slice(0, 14));
+  }
+  for (const el of document.querySelectorAll('.crow-n b, .li .nm, .bk-n b, .chd h2')) {
+    const first = el.firstChild;
+    if (!first || first.nodeType !== 3 || !el.checkVisibility()) continue;
+    const range = document.createRange();
+    range.selectNodeContents(first);
+    if (range.getClientRects().length > 1) out.broken.push(first.textContent.trim().slice(0, 10));
+  }
+  return out;
+}
+"""
+
+
 def pct(a: int, b: int) -> float:
     return a * 100 / b if b else 0.0
 
@@ -136,6 +161,10 @@ TARGETS = [
      lambda r, t: f"{sum(r['carte']['carteTop'])}/5"),
     ("통계: 숫자 4개 + 할 일 첫 화면", lambda r, t: r["stats"]["nums"] >= 4 and r["stats"]["pills"] >= 1,
      lambda r, t: f"숫자 {r['stats']['nums']} · 할 일 {r['stats']['pills']}"),
+    ("360px: 가로 넘침 · 잘린 글자 · 쪼개진 이름 0",
+     lambda r, t: sum(m["narrow"]["overflow"] + len(m["narrow"]["clipped"]) + len(m["narrow"]["broken"]) for m in r.values()) == 0,
+     lambda r, t: " · ".join(f"{s} {'넘침 ' if m['narrow']['overflow'] else ''}{m['narrow']['clipped'] + m['narrow']['broken']}"
+                             for s, m in r.items() if m["narrow"]["overflow"] or m["narrow"]["clipped"] or m["narrow"]["broken"]) or "0곳"),
     ("누르는 곳 24px 미만 0곳", lambda r, t: sum(len(m["tiny"]) for m in r.values()) == 0,
      lambda r, t: f"{sum(len(m['tiny']) for m in r.values())}곳 / {sum(m['targets'] for m in r.values())}곳"
                   f" (44px 미만 {sum(m['under44'] for m in r.values())}곳)"),
@@ -169,6 +198,7 @@ def main() -> int:
         except Exception as e:  # 브라우저가 없는 환경
             print(f"브라우저를 띄우지 못했어요: {e}", file=sys.stderr)
             return 2
+        narrow = b.new_page(viewport=NARROW)
         pg = b.new_page(viewport=VIEW)
         for s in SCREENS:
             pg.goto((html / f"{s}.html").resolve().as_uri())
@@ -177,6 +207,8 @@ def main() -> int:
             res[s]["targets"] = len(hits)
             res[s]["tiny"] = [h for h in hits if min(h["w"], h["h"]) < 24]
             res[s]["under44"] = sum(1 for h in hits if min(h["w"], h["h"]) < 44)
+            narrow.goto((html / f"{s}.html").resolve().as_uri())
+            res[s]["narrow"] = narrow.evaluate(NARROW_JS)
             if a.shots:
                 shots = Path(a.out) / "shots"
                 shots.mkdir(parents=True, exist_ok=True)

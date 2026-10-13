@@ -1,12 +1,12 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import { requireUser, getTenantId, openDek, nameReader } from '@/lib/tenant';
+import { requireUser, getTenantId, openDek, nameReader, contactReader } from '@/lib/tenant';
 import { careState, fetchAllRows, firstCare, isRealCustomer, isChurned, needsCare, onCareList, onFirstList, servicesOn } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
 import { bookedCustomerIds, isCancelled } from '@/lib/bookings';
-import { recentlyContactedIds } from '@/lib/contact';
+import { phoneDigits, recentlyContactedIds } from '@/lib/contact';
 import { lastSynced } from '@/lib/sync';
 import { addDays, lastWeek, spanLabel, weekNums, type WeekTx } from '@/lib/week';
 import { gapLine, lastServices, latestRecent, memoLines, visitTag } from '@/lib/briefing';
@@ -82,6 +82,7 @@ export default async function Page() {
 
   const dek = await openDek(t?.dek_wrapped);
   const nameFrom = nameReader(dek);
+  const readContact = contactReader(dek);
 
   // 이탈위험·재방문도래 신호는 needsCare 로 센다 — 설정의 이탈 판정, 이탈 표시, 이미 잡힌 예약을
   // 모두 뺀다. 고객 목록의 같은 필터와 숫자가 같아야 믿을 수 있다.
@@ -166,9 +167,10 @@ export default async function Page() {
   const recVisits = visitsByCustomer(yearTx);
   const pairs = pairStats(recVisits, today);
   const toBrief = async (b: Booking): Promise<Brief> => {
-    const name = await nameFrom(b.pii_enc);
+    const { name, phone } = await readContact(b.pii_enc);
     const off = isCancelled(b.status);
-    const base = { id: b.id, date: b.date, time: b.time, service: b.service, customer_id: b.customer_id, status: b.status, name, off };
+    const base = { id: b.id, date: b.date, time: b.time, service: b.service, customer_id: b.customer_id, status: b.status, name, off,
+      phone: off ? null : phoneDigits(phone) };
     const none = { gap: null, last: null, prefer: [], recent: null, prepaid: 0, rec: null };
     if (off) return { ...base, ...none, tag: null };
     // 손님 기록에 연결되지 않은 예약 — 고객번호·전화·이름 어느 것으로도 못 찾았다는 뜻이라 첫 방문으로 본다

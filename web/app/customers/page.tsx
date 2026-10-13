@@ -1,7 +1,6 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import Link from 'next/link';
 import { openDek, requireTenant } from '@/lib/tenant';
 import { decryptPII } from '@/lib/crypto';
 import { careState, fetchAllRows, isRealCustomer } from '@/lib/customers';
@@ -31,15 +30,7 @@ type Cust = {
   prepaid_balance: number | null;
 };
 
-// 홈의 신호 타일(이탈위험/재방문도래/신규/VIP)에서 넘어올 때 초기 필터를 받는다.
-const FILTERS = new Set(['overdue', 'due', 'new', 'vip', 'booking', 'nophone', 'churned', 'nogender', 'prepaid']);
-
-export default async function CustomersPage({
-  searchParams,
-}: {
-  searchParams: { filter?: string };
-}) {
-  const initialFilter = searchParams?.filter && FILTERS.has(searchParams.filter) ? searchParams.filter : null;
+export default async function CustomersPage() {
   const { supabase, tenantId } = await requireTenant();
 
   const [{ data: tenant }, customers, bookingSet, synced] = await Promise.all([
@@ -106,11 +97,11 @@ export default async function CustomersPage({
   return (
     <main className="wrap">
       <div className="bar">
-        <Link href="/" className="back">‹ 홈</Link>
-        <div className="ttl" style={{ marginLeft: 10 }}>고객 <span className="sect-n">{rows.length.toLocaleString()}명</span></div>
+        <div className="ttl">고객 <span className="sect-n">{rows.length.toLocaleString()}명</span></div>
       </div>
       <div className="body">
-        <CustomersList rows={rows} settings={settings} asOf={asOf} today={kstNow().date} initialFilter={initialFilter} />
+        {/* 검색·조건(?filter= 포함)은 목록이 주소에서 직접 읽는다(lib/list-state) */}
+        <CustomersList rows={rows} settings={settings} asOf={asOf} today={kstNow().date} />
       </div>
     </main>
   );

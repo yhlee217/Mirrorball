@@ -1,6 +1,8 @@
 'use client';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { NAV_KEY } from '@/components/back-button';
 
 const TABS = [
   { href: '/', label: '홈', icon: '🏠', match: (p: string) => p === '/' },
@@ -15,6 +17,17 @@ const TABS = [
 
 export default function TabBar() {
   const p = usePathname() || '/';
+  // 처음 연 화면에서 다른 화면으로 옮겨 가면 '앱 안에서 다니는 중'을 남긴다 — '‹ 뒤로'가 이전 화면으로 갈지,
+  // 앱 밖으로 나가지 않게 홈으로 갈지 정하는 근거(components/back-button).
+  const first = useRef(p);
+  useEffect(() => {
+    if (p === first.current) return;
+    try {
+      sessionStorage.setItem(NAV_KEY, '1');
+    } catch {
+      /* 저장소를 못 쓰면 '‹ 뒤로'는 늘 홈으로 — 앱 밖으로 나가는 것보다 낫다 */
+    }
+  }, [p]);
   if (p.startsWith('/login') || p.startsWith('/auth') || p.startsWith('/p/')) return null;
   return (
     <nav className="tabbar">

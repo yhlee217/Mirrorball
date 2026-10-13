@@ -18,6 +18,7 @@
    12 공개 소개        /p/[slug]   (손님이 보는 유일한 화면)
    13 로그인·진입      /login, /
    14 하단 탭바
+   15 좁은 화면        360px 이하(보급형 안드로이드·아이폰 SE) — 화면별 규칙을 좁은 폭에 맞춘다
 
    두 군데 이상에서 쓰는 규칙은 3번에 두고 어디서 쓰는지 적었다. 한 화면만 쓰는
    규칙을 3번에 올리면 그게 공통인 줄 알고 남이 가져다 쓰다가 서로 발목을 잡는다.
@@ -60,8 +61,8 @@ body{background:var(--bg);color:var(--ink);
 .bar{display:flex;align-items:center;padding:16px 18px 12px;border-bottom:1px solid var(--line)}
 .bar .ttl{font-weight:800;font-size:17px;flex:1}
 .linkbtn{border:none;background:none;color:var(--accent);font-weight:700;font-size:13px;cursor:pointer}
-.body{padding:18px 18px 82px}     /* 아래 82px 은 고정 탭바에 가리지 않게 */
-.back{display:inline-block;border:none;background:none;color:var(--accent);font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;
+.body{padding:18px 18px calc(82px + env(safe-area-inset-bottom))}     /* 아래는 고정 탭바(+아이폰 홈 표시줄)에 가리지 않게 */
+.back{display:inline-block;border:none;background:none;color:var(--accent);font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;text-decoration:none;
   padding:10px 14px 10px 0;margin:-10px -14px -10px 0}   /* 누르는 영역 44px — 모양·자리는 그대로 */
 /* 한 줄 머리말 — 이름(제목) · 기준 표시 · 설정. 홈 · 방문. 큰 인사는 첫 화면 자리만 차지했다(UX 계획 v3) */
 .top{display:flex;align-items:center;gap:9px;margin:0 2px 12px}
@@ -124,7 +125,10 @@ body{background:var(--bg);color:var(--ink);
 .loginform button,.primary{padding:13px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:15px;font-weight:800;cursor:pointer}
 .loginform button:disabled,.primary:disabled{opacity:.6}
 .primary{margin-top:16px;width:100%;max-width:260px}
-.toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%);background:var(--accent-d);color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:30px;z-index:20;box-shadow:0 6px 18px rgba(42,38,34,.25)}
+/* 설정 저장 — 화면 아래(탭바 위)에 붙는다. 위로 흐려지는 바탕이라 양식 글자와 겹쳐 보이지 않는다 */
+.savebar{position:sticky;bottom:calc(66px + env(safe-area-inset-bottom));z-index:6;padding:12px 0 8px;
+  background:linear-gradient(to top,var(--paper) 75%,rgba(252,250,246,0))}
+.toast{position:fixed;bottom:calc(88px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--accent-d);color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:30px;z-index:20;box-shadow:0 6px 18px rgba(42,38,34,.25)}
 
 /* 3-5. 입력 — 폰트 16px 아래로 내리면 iOS 가 입력할 때 화면을 확대해버린다 */
 .fld{margin-bottom:13px}
@@ -134,7 +138,7 @@ body{background:var(--bg);color:var(--ink);
 /* 값 한 줄. 설정에서 시작했지만 카르테 '다음 예약'·통계도 같은 줄 모양을 쓴다.
    예전엔 여기 입력칸도 있었지만 지금 판정 기준 입력은 .crit-in 이 맡는다. */
 .set-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:13px;color:var(--ink);margin-bottom:5px}
-.set-msg{font-size:12.5px;color:var(--sage);font-weight:700;margin-top:9px;text-align:center}
+.set-msg{font-size:12.5px;color:var(--sage-ink);font-weight:700;margin-top:9px;text-align:center}
 
 /* 3-6. 숫자 띠 — 숫자가 먼저 크게, 라벨은 위에 작게, ▲▼는 아래. 홈 '지난주' · 통계 '이번 달'·'누적'.
    아래 알약은 그 숫자를 보고 바로 할 일(챙길 고객 등)로 건너가는 손잡이 */
@@ -147,7 +151,7 @@ body{background:var(--bg);color:var(--ink);
 .num .up{color:var(--sage-ink);font-weight:700}
 .num .down{color:var(--rose-ink);font-weight:700}
 .strip-l{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-.pill{font-size:13px;color:var(--ink);background:var(--soft);border-radius:20px;padding:7px 12px;text-decoration:none;
+.pill{font-size:13px;color:var(--ink);background:var(--soft);border-radius:20px;padding:7px 12px;min-height:40px;display:inline-flex;align-items:center;text-decoration:none;
   -webkit-tap-highlight-color:transparent}
 .pill b{font-weight:800;margin-left:3px}
 .pill.main{background:var(--accent);color:#fff}
@@ -180,8 +184,8 @@ body{background:var(--bg);color:var(--ink);
 .sync.stale{color:var(--rose-ink);font-weight:700}
 
 /* 3-8. 켜고 끄는 칩 — 고객 목록 필터 · 설정 정기 휴무 요일 */
-.fchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px}
-.fchip{font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;border:1px solid var(--line);background:var(--paper);color:var(--muted);cursor:pointer;font-family:inherit}
+.fchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 7px}
+.fchip{font-size:12px;font-weight:700;padding:6px 11px;min-height:36px;border-radius:20px;border:1px solid var(--line);background:var(--paper);color:var(--muted);cursor:pointer;font-family:inherit}
 .fchip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 /* 3-9. 카드 아래 접기 — 카르테 시술 이력 · 홈 '그 뒤 예약'. 단골은 이력이 100건을 넘고,
@@ -214,6 +218,8 @@ body{background:var(--bg);color:var(--ink);
 .bkd[open]>summary{background:var(--soft)}
 .bk-x{padding:6px 15px 12px 66px;font-size:13px;line-height:1.6;background:var(--soft)}
 .bk-x a{display:inline-block;margin-top:3px;color:var(--accent);font-weight:800;text-decoration:none}
+.bk-a{display:flex;gap:18px}   /* 펼친 곳 손잡이 줄 — 📞 전화 · 카르테 */
+.bk-a a{padding:8px 0}
 .later>summary{border-top:none}
 
 /* ── 5. 챙길 고객 (/alerts) ───────────────────────────────────────────────── */
@@ -224,11 +230,12 @@ body{background:var(--bg);color:var(--ink);
 .crow-r{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 15px}
 .crow-m{flex:1;min-width:0;text-align:left;background:none;border:none;padding:0;font-family:inherit;color:inherit;cursor:pointer;
   -webkit-tap-highlight-color:transparent}
-.crow-n{display:flex;align-items:center;gap:6px}
-.crow-n b{font-size:15px;font-weight:800}
+.crow-n{display:flex;align-items:center;flex-wrap:wrap;gap:3px 6px}   /* 좁으면 뱃지가 다음 줄로 — 이름은 그대로 */
+.crow-n b{font-size:15px;font-weight:800;white-space:nowrap}
 .crow-w{display:block;font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.45}
 .crow-a{display:flex;gap:6px;flex-shrink:0}
-.cbtn{font-size:13px;font-weight:800;border-radius:18px;padding:8px 11px;background:var(--soft);color:var(--accent-d);
+.cbtn{font-size:13px;font-weight:800;border-radius:22px;padding:0 12px;min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--soft);color:var(--accent-d);
   border:none;text-decoration:none;cursor:pointer;font-family:inherit;white-space:nowrap}
 .cbtn.main{background:var(--accent);color:#fff}
 /* 연락함 — 흐리게 하면 버튼이 꺼진 것처럼 보여서 바탕색과 사유 자리 글로만 표시 */
@@ -269,11 +276,12 @@ body{background:var(--bg);color:var(--ink);
 
 /* ── 7. 고객 목록 (/customers) ────────────────────────────────────────────── */
 .list-n{margin:2px 2px 8px}   /* 걸렀을 때만 나오는 'N명' */
-.search{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:var(--paper);color:var(--ink);margin-bottom:10px}
+.search{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:var(--paper);color:var(--ink);margin-bottom:10px;
+  -webkit-appearance:none;appearance:none}   /* type=search 의 기본 둥근 모양을 지운다 */
 .fsel{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .fsel select,.sbar select{font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);font-family:inherit}
 /* 필터 접기 — 늘 보이는 칩 넷 아래 한 줄에 '필터' 손잡이와 정렬. 펼치면 나머지 조건이 연한 판 위에 */
-.sbar{display:flex;gap:8px;margin:0 0 9px}
+.sbar{display:flex;gap:8px;margin:-8px 0 6px;padding:8px 0 4px;position:sticky;top:0;z-index:5;background:var(--paper)}   /* 긴 목록을 내려도 찾기는 늘 위에 */
 .sbar .search{flex:1;min-width:0;margin:0}
 .sbar select{flex:none}
 .fmore{background:var(--soft);border-radius:12px;padding:10px 10px 3px;margin:-4px 0 12px}
@@ -300,6 +308,11 @@ body{background:var(--bg);color:var(--ink);
 
 /* 머리말의 상태 뱃지 — 예전 '이탈 위험' 띠는 아래 띠·타일과 같은 숫자를 세 번 말했다(UX 계획 v3) */
 .chd h2 .ctag{margin-left:6px;vertical-align:middle}
+/* 머리말 📞·💬 — 이 손님에게 바로. 엄지로 누르기 좋게 44px 동그라미(모바일 개선 M3) */
+.chd .cta{margin-left:auto;display:flex;gap:8px;flex-shrink:0}
+.cta-b{width:44px;height:44px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;
+  font-size:18px;text-decoration:none;-webkit-tap-highlight-color:transparent}
+.cta-b:active{background:var(--line)}
 /* 한 줄 띠 — 마지막 · 다음 · 선불 · 순위. 큰 타일 넷(약 200px)을 한 줄로. 오른쪽 위 ? 자리를 비운다 */
 .facts{display:grid;grid-template-columns:repeat(4,1fr);gap:0 6px;padding:11px 36px 11px 13px}
 .facts .help{grid-column:1/-1}
@@ -485,8 +498,21 @@ body{background:var(--bg);color:var(--ink);
 .loginform .err{color:var(--rose);font-size:12px;min-height:16px}
 
 /* ── 14. 하단 탭바 ────────────────────────────────────────────────────────── */
-.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:var(--paper);border-top:1px solid var(--line);z-index:10}
+.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:var(--paper);border-top:1px solid var(--line);z-index:10;
+  padding-bottom:env(safe-area-inset-bottom)}   /* 아이폰 홈 표시줄 위로 — 탭이 표시줄과 겹치지 않게 */
 .tab{flex:1;text-align:center;padding:8px 0 10px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:700}
 .tab.on{color:var(--accent)}
 .tab .i{font-size:20px;display:block;line-height:1.35}
 .tab .tl{margin-top:1px;white-space:nowrap}   /* '챙길 고객'이 두 줄로 접히지 않게 */
+
+/* ── 15. 좁은 화면 — 보급형 안드로이드(360px)·아이폰 SE ─────────────────── */
+/* 360px 에서 챙길 고객 이름이 한 글자씩 세로로 쪼개지고(뱃지·선불 꼬리표·버튼에 밀려), 통계 숫자가 잘렸다.
+   UI 측정(run.sh --check)이 360px 에서 잘림·넘침·쪼개짐을 본다. */
+@media (max-width: 380px) {
+  .num b{font-size:17px}                 /* '약 2,250만'이 세 칸에 들어가게 */
+  .fchip{padding-left:9px;padding-right:9px}   /* 고객 목록 조건 칩 다섯이 한 줄에 */
+  .cbtn .cbtn-t{display:none}            /* 💬 만 — 이름 자리를 남긴다(누르면 문자, 화면낭독은 '문자 보내기') */
+}
+@media (max-width: 350px) {
+  .facts{grid-template-columns:repeat(2,1fr);gap:6px}   /* 카르테 한 줄 띠 → 2×2 */
+}

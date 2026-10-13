@@ -1,13 +1,14 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
 import { MSG } from '@/lib/copy';
 import { smsHref, telHref, type ContactVia } from '@/lib/contact';
 import type { Effect } from '@/lib/effect';
 import { man } from '@/lib/format';
+import { decodeAlerts, encodeAlerts, replaceQuery } from '@/lib/list-state';
 
 // why = 한 줄 사유('2개월째 · 평소 5주 · 뿌리염색' · '안부 · 6일 전 · 뿌리염색'), note = 펼친 곳의 한 줄(방문일·휴가)
 // prepaid = 선불 잔액(추정) — 디자이너만 보는 꼬리표. 문구엔 넣지 않는다
@@ -37,9 +38,13 @@ export default function AlertsList({
   // 방금 연락한 카드 — 바로 지우면 '내가 뭘 눌렀는지'가 사라진다. 화면엔 남겨 표시만 바꾸고,
   // 다음에 열 때 목록에서 빠진다(onCareList). 문자 보낸 뒤 전화도 걸 수 있게 버튼은 그대로 둔다.
   const [done, setDone] = useState<Record<string, true>>({});
-  // 펼친 줄 — 문구·복사·카르테·이탈 처리는 펼쳤을 때만(첫 화면에 여러 분이 들어오게, UX 계획 v3)
-  const [open, setOpen] = useState<string | null>(null);
-  const [shown, setShown] = useState(STEP);
+  // 펼친 줄 — 문구·복사·카르테·이탈 처리는 펼쳤을 때만(첫 화면에 여러 분이 들어오게, UX 계획 v3).
+  // 펼친 수와 열린 줄은 주소에 남긴다 — 카르테를 보고 돌아와도 보던 자리 그대로(lib/list-state).
+  const sp = useSearchParams();
+  const [init] = useState(() => decodeAlerts((k) => sp.get(k), STEP));
+  const [open, setOpen] = useState<string | null>(init.open);
+  const [shown, setShown] = useState(init.shown);
+  useEffect(() => replaceQuery(encodeAlerts(shown, open, STEP)), [shown, open]);
 
   const flash = (m: string) => {
     setToast(m);
@@ -186,8 +191,8 @@ export default function AlertsList({
                 <div className="crow-a">
                   {it.phone ? (
                     <>
-                      <a className="cbtn main" href={smsHref(it.phone, it.draft)} onClick={() => markContacted(it.id, 'sms')}>
-                        💬 문자
+                      <a className="cbtn main" href={smsHref(it.phone, it.draft)} aria-label="문자 보내기" onClick={() => markContacted(it.id, 'sms')}>
+                        💬<span className="cbtn-t"> 문자</span>
                       </a>
                       <a className="cbtn" href={telHref(it.phone)} aria-label="전화" onClick={() => markContacted(it.id, 'call')}>
                         📞

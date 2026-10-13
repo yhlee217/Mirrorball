@@ -1,7 +1,6 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import Link from 'next/link';
 import { openDek, requireTenant } from '@/lib/tenant';
 import { mergeSettings } from '@/lib/settings';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
@@ -11,6 +10,7 @@ import SettingsForm from './settings-form';
 import ChurnedList from './churned-list';
 import LogoutButton from '../logout-button';
 import { Help } from '@/components/help';
+import { BackButton } from '@/components/back-button';
 
 export default async function SettingsPage() {
   const { supabase, user, tenantId } = await requireTenant();
@@ -88,7 +88,7 @@ export default async function SettingsPage() {
   return (
     <main className="wrap">
       <div className="bar">
-        <Link href="/" className="back">‹ 홈</Link>
+        <BackButton />
         <div className="ttl" style={{ marginLeft: 10 }}>설정</div>
       </div>
       <div className="body">

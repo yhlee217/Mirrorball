@@ -1,7 +1,8 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import Link from 'next/link';
+import { BackButton } from '@/components/back-button';
+import { ContactButtons } from '@/components/contact-buttons';
 import { man } from '@/lib/format';
 import GenderPicker from './gender-picker';
 import CustomerNote from './customer-note';
@@ -27,7 +28,7 @@ const BADGE: Record<string, string> = { overdue: '이탈 위험', due: '재방�
  */
 export default async function CustomerPage({ params }: { params: { id: string } }) {
   const {
-    cust, name, vip, avg,
+    cust, name, phone, vip, avg,
     history, charges, others,
     chargedTotal, balance, pocketIds,
     familyList, nextBk, topSvc,
@@ -40,7 +41,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
   return (
     <main className="wrap">
       <div className="bar">
-        <Link href="/" className="back">‹ 홈</Link>
+        <BackButton />
       </div>
       <div className="body">
         <div className="chd">
@@ -54,6 +55,8 @@ export default async function CustomerPage({ params }: { params: { id: string } 
               {cust.visit_count}회{cust.total_won ? ' · 누적 ' + man(cust.total_won) : ''}
             </div>
           </div>
+          {/* 챙길 고객 대상(뱃지)일 때만 '연락함'으로 남긴다 — 예약 확인 전화까지 세면 연락 효과가 부푼다 */}
+          {phone ? <ContactButtons id={cust.id} phone={phone} log={!!badge} /> : null}
         </div>
 
         {/* 첫 화면에: 누구 · 지금 상태(뱃지) · 한 줄 띠 · 메모 · 권할 것 · 다음 예약(UX 계획 v3) */}

@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { man } from '@/lib/format';
 import { agoWords, daysBetween } from '@/lib/week';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { decodeList, encodeList, replaceQuery, FOLDED } from '@/lib/list-state';
 import { isVip as isVipS, type TenantSettings } from '@/lib/settings';
 import { needsCare, prepaidAway, PREPAID_AWAY_DAYS } from '@/lib/customers';
 import { matchesQuery } from '@/lib/contact';
@@ -30,33 +32,34 @@ type Row = {
   prepaid_balance: number; // 선불 잔액(추정)
 };
 
-// '필터' 안에 접어 두는 칩. 늘 보이는 건 홈 타일과 같은 넷(이탈위험·재방문도래·신규·VIP)뿐이다.
-const FOLDED = ['booking', 'nophone', 'churned', 'nogender', 'prepaid'];
 
 export default function CustomersList({
   rows,
   settings,
   asOf,
   today,
-  initialFilter = null,
 }: {
   rows: Row[];
   settings: TenantSettings;
   asOf: string; // 재방문 판정의 기준일(마지막 수집일)
   today: string; // KST — '3주 전'과 방문시기 필터의 기준
-  initialFilter?: string | null;
 }) {
   const daysSince = (d: string | null) => (d ? daysBetween(d, today) : Infinity);
-  const [q, setQ] = useState('');
-  // 홈 신호 타일(이탈위험/재방문도래/신규/VIP 등)에서 넘어온 초기 필터를 켠 상태로 시작.
-  const [chips, setChips] = useState<Set<string>>(() => new Set(initialFilter ? [initialFilter] : []));
-  // 통계의 '성별 미상'처럼 접힌 조건으로 들어오면 펼친 채로 시작한다 — 켜진 조건이 안 보이면 헷갈린다.
-  const [more, setMore] = useState(() => !!initialFilter && FOLDED.includes(initialFilter));
-  const [visitF, setVisitF] = useState('');
-  const [revF, setRevF] = useState('');
-  const [recF, setRecF] = useState('');
-  const [svcF, setSvcF] = useState('');
-  const [sort, setSort] = useState('recent');
+  // 검색·조건·정렬은 주소에서 시작하고 주소에 남긴다(lib/list-state) — 카르테를 보고 돌아와도 그대로.
+  // 홈·통계 링크의 ?filter=overdue 같은 조건도 여기서 켜지고, 접힌 조건이면 '필터'를 펼친 채로 연다.
+  const sp = useSearchParams();
+  const [init] = useState(() => decodeList((k) => sp.get(k)));
+  const [q, setQ] = useState(init.q);
+  const [chips, setChips] = useState<Set<string>>(() => new Set(init.chips));
+  const [more, setMore] = useState(init.more);
+  const [visitF, setVisitF] = useState(init.visit);
+  const [revF, setRevF] = useState(init.rev);
+  const [recF, setRecF] = useState(init.rec);
+  const [svcF, setSvcF] = useState(init.svc);
+  const [sort, setSort] = useState(init.sort);
+  useEffect(() => {
+    replaceQuery(encodeList({ q, chips: [...chips], more, visit: visitF, rev: revF, rec: recF, svc: svcF, sort }));
+  }, [q, chips, more, visitF, revF, recF, svcF, sort]);
   // 방금 지정한 것들. 저장하자마자 목록에서 빼면 '내가 뭘 눌렀는지'가 사라져 흐름이 끊긴다.
   // 화면에 남겨 두고 표시만 바꾼다(다음 진입 때 필터가 자연히 걸러낸다).
   const [picked, setPicked] = useState<Record<string, 'M' | 'F'>>({});
@@ -186,7 +189,9 @@ export default function CustomersList({
     <>
       {/* 찾기·정렬 한 줄, 조건 한 줄 — 손잡이가 세 줄이던 것을 두 줄로(첫 화면에 손님 10명) */}
       <div className="sbar">
-        <input className="search" placeholder="이름 · 전화 뒷자리" aria-label="이름 또는 전화번호 뒷자리로 찾기" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="search" type="search" enterKeyHint="search" placeholder="이름 · 전화 뒷자리" aria-label="이름 또는 전화번호 뒷자리로 찾기"
+          value={q} onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
         <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="정렬">
           <option value="recent">최근 방문순</option>
           <option value="revenue">매출순</option>

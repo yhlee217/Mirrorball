@@ -1,7 +1,7 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import Link from 'next/link';
+import { BackButton } from '@/components/back-button';
 import { requireTenant } from '@/lib/tenant';
 import ProfileEdit from './profile-edit';
 
@@ -35,7 +35,7 @@ export default async function ProfilePage() {
       {/* 탭이 아니라 설정 안의 화면이다 — 한 번 만들고 거의 안 고치는 공개 페이지라 탭 한 칸을
           차지할 이유가 없었다(UX 계획 v2 2-3). '콘텐츠 제안' 칸은 없는 화면(404)을 가리켜 뺐다. */}
       <div className="bar">
-        <Link href="/settings" className="back">‹ 설정</Link>
+        <BackButton fallback="/settings" />
         <div className="ttl" style={{ marginLeft: 10 }}>소개</div>
       </div>
       <div className="body">

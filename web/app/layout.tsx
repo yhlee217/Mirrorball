@@ -16,6 +16,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: 'cover', // 홈 화면 앱에서 탭바가 홈 표시줄 영역까지 — 아래 safe-area 여백과 짝(globals.css)
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

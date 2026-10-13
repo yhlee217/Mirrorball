@@ -51,7 +51,7 @@ const doc = (main) =>
 /** page.tsx 모양 — <main class="wrap"> 머리줄(.bar) + 본문(.body) */
 const screen = (bar, body) => doc(`<main class="wrap">${bar}<div class="body">${body}</div></main>`);
 const bar = (title, { back = true, sync = false } = {}) =>
-  `<div class="bar">${back ? '<a class="back">‹ 홈</a>' : ''}<div class="ttl"${back ? ' style="margin-left:10px"' : ''}>${title}</div>${sync ? chip : ''}</div>`;
+  `<div class="bar">${back ? '<button type="button" class="back">‹ 뒤로</button>' : ''}<div class="ttl"${back ? ' style="margin-left:10px"' : ''}>${title}</div>${sync ? chip : ''}</div>`;
 
 const out = {};
 
@@ -68,7 +68,7 @@ out.home = doc(
     briefs: [
       { id: 'b1', date: TODAY, time: '11:00', service: '뿌리염색', customer_id: 'c1', status: '예약', name: names[0], off: false, tag: null,
         gap: { text: '6주 만', late: false }, last: '뿌리염색+커트', prefer: ['두피 예민 — 저자극 약제', '뿌리 볼륨 살려 드라이'],
-        recent: '(2026-08) 딸 결혼식 준비 중', prepaid: 520000, rec: { label: '클리닉', short: '뿌리염색 손님 38%가 함께' } },
+        recent: '(2026-08) 딸 결혼식 준비 중', prepaid: 520000, rec: { label: '클리닉', short: '뿌리염색 손님 38%가 함께' }, phone: '01012345678' },
       { id: 'b2', date: TODAY, time: '15:00', service: '남자컷', customer_id: 'c2', status: '예약', name: names[1], off: false, tag: '두 번째 방문',
         gap: { text: '4주 만', late: false }, last: '커트', prefer: [], recent: null, prepaid: 0, rec: { label: '다운펌', short: '남자커트 손님 39%가 함께' } },
       { id: 'b3', date: TODAY, time: '17:30', service: '디지털펌', customer_id: 'c3', status: '예약', name: names[2], off: false, tag: null,
@@ -123,7 +123,7 @@ const rows = Array.from({ length: 20 }, (_, i) => ({
   first_visit: '2024-01-01', state: ['overdue', 'due', null, 'new'][i % 4], cycle: 35, hasBooking: i % 7 === 0, hasPhone: true,
   tail: '1234', churned: false, gender: 'F', visits_90d: 1, visits_180d: 2, visits_365d: 4, prepaid_balance: i % 6 === 2 ? 300000 : 0,
 }));
-out.customers = screen(bar('고객 <span class="sect-n">1,136명</span>'),
+out.customers = screen(bar('고객 <span class="sect-n">1,136명</span>', { back: false }),
   r(load('app/customers/customers-list.js').default, { rows, settings: DEFAULT_SETTINGS, asOf: SYNC.date, today: TODAY, initialFilter: null }));
 
 // 카르테(app/customer/[id]/page.tsx) — 화면 순서대로
@@ -132,9 +132,9 @@ const hist = Array.from({ length: 8 }, (_, i) => ({
   id: 'h' + i, date: `2026-0${9 - i}-0${1 + i}`, time: '14:00', service: i % 2 ? '여자컷(원장)' : '뿌리염색', amount_won: 60000,
   memo: i === 0 ? '뿌리 볼륨 원하심' : null, kind: 'service', paid_out_of_pocket: false,
 }));
-out.carte = screen('<div class="bar"><a class="back">‹ 홈</a></div>',
+out.carte = screen('<div class="bar"><button type="button" class="back">‹ 뒤로</button></div>',
   '<div class="chd"><div class="cav">김</div><div><h2>김서연 님<span class="tag-vip">VIP</span><span class="ctag overdue">이탈 위험</span></h2>'
-  + '<div class="s">14회 · 누적 182만</div></div></div>'
+  + '<div class="s">14회 · 누적 182만</div></div><div class="cta"><a class="cta-b" aria-label="전화 걸기">📞</a><a class="cta-b" aria-label="문자 보내기">💬</a></div></div>'
   + r(C.FactStrip, { lastVisit: '2026-08-01', sinceLast: 72, next: { kind: 'expected', date: '2026-09-05', basis: '평소 5주 주기', estimated: false, overdueDays: 37 },
     prepaid: true, balance: 520000, avg: 85000, top: 3, vacation: 10 })
   + r(C.MemoAiCard, { cust: { memo_ai: '- 두피 예민 — 저자극 약제\n- 뿌리 볼륨 살려 드라이\n- 앞머리 짧게 싫어함', memo_ai_recent: '- (2026-08) 딸 결혼식 준비 중\n- (2026-06) 제주 여행' }, today: TODAY })

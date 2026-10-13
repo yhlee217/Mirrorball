@@ -1,11 +1,11 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import Link from 'next/link';
 import { requireTenant } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { SyncChip } from '@/components/sync-chip';
+import { BackButton } from '@/components/back-button';
 import { fetchAllRows, isRealCustomer, isChurned, onCareList, onFirstList, prepaidAway, servicesOn } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookedCustomerIds, isActiveBooking } from '@/lib/bookings';
@@ -250,7 +250,7 @@ export default async function StatsPage() {
   return (
     <main className="wrap">
       <div className="bar">
-        <Link href="/" className="back">‹ 홈</Link>
+        <BackButton />
         <div className="ttl" style={{ marginLeft: 10 }}>통계</div>
         <SyncChip synced={synced} />
       </div>

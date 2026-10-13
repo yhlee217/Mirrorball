@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
-import { requireUser, openDek, nameReader } from '@/lib/tenant';
+import { requireUser, openDek, nameReader, contactReader } from '@/lib/tenant';
+import { phoneDigits } from '@/lib/contact';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { isActiveBooking } from '@/lib/bookings';
@@ -102,7 +103,10 @@ export async function loadCarte(id: string) {
 
   const dek = await openDek(dw);
   const nameFrom = nameReader(dek);
-  const name = await nameFrom(cust.pii_enc);
+  // 이 손님 이름과 번호 — 머리말의 📞·💬(모바일 개선 M3). 번호는 이 화면 손님 것만 화면으로 보낸다.
+  const contact = await contactReader(dek)(cust.pii_enc);
+  const name = contact.name;
+  const phone = phoneDigits(contact.phone);
 
   // 가족: 같은 tenant 내 동일 family_ext_id. 담당(디자이너)이 다른 가족원은 다른 tenant 라
   // 여기 안 보인다(멀티테넌트 격리 유지) — 각 디자이너는 '자기 고객인 가족원'만 본다.
@@ -206,7 +210,7 @@ export async function loadCarte(id: string) {
     catsOf(nextBk?.service));
 
   return {
-    cust, name, settings, vip, avg,
+    cust, name, phone, settings, vip, avg,
     history, charges, others,
     chargedTotal, balance, pocketIds,
     familyList, nextBk, topSvc,
