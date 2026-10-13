@@ -436,7 +436,7 @@ export function GenderCard({ g }: { g: GenderStat }) {
 export function RecommendHitCard({ hits }: { hits: { due: Hit; cross: Hit } }) {
   const rows = [
     { name: '때가 된 시술', h: hits.due },
-    { name: '함께 권할 것', h: hits.cross },
+    { name: '함께 받는 시술', h: hits.cross },
   ].filter((r) => r.h.n > 0);
   if (!rows.length) return null;
   const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -445,7 +445,7 @@ export function RecommendHitCard({ hits }: { hits: { due: Hit; cross: Hit } }) {
       <Title name="추천 적중률" n="1년" />
       <Help>
         방문마다 그 전 기록만으로 이렇게 권했다면 그날 실제로 받았는지 셌어요. &lsquo;찍었을 때&rsquo;는 아무 근거 없이
-        같은 걸 골랐을 때예요 — 추천이 그보다 높아야 쓸모가 있어요. 추천은 손님 상세보기와 홈 예약 줄의 &lsquo;권할 것&rsquo;이에요.
+        같은 걸 골랐을 때예요 — 추천이 그보다 높아야 쓸모가 있어요. 추천은 손님 상세보기와 홈 예약 줄의 &lsquo;추천 시술&rsquo;이에요.
       </Help>
       <div className="tablewrap">
         <table className="gtab svc-tab">

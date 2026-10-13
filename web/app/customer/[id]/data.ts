@@ -204,7 +204,7 @@ export async function loadCarte(id: string) {
   });
   const top = above?.count != null && total?.count ? rankPercent(above.count, total.count) : null;
 
-  // 다음에 권해볼 것 — 오늘 기준(손님 앞에서 보는 화면). 다음 예약에 이미 잡힌 시술의 갈래는 뺀다.
+  // 추천 시술 — 오늘 기준(손님 앞에서 보는 화면). 다음 예약에 이미 잡힌 시술의 갈래는 뺀다.
   const mine = visitsByCustomer(all.map((h) => ({ customer_id: cust.id, date: h.date, service: h.service, kind: h.kind })));
   const recs = recommend(mine.get(cust.id) ?? [], pairStats(visitsByCustomer(storeTx), today), today, settings,
     catsOf(nextBk?.service));

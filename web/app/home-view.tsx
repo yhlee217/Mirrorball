@@ -25,7 +25,7 @@ export type Brief = {
   prefer: string[]; // 매장 메모 정리 — 선호(최대 2줄)
   recent: string | null; // 매장 메모 정리 — 근황 중 가장 최근 한 줄
   prepaid: number; // 선불 잔액(추정)
-  rec: { label: string; short: string } | null; // 권해볼 것(lib/recommend) — 추정, 하나만
+  rec: { label: string; short: string } | null; // 추천 시술(lib/recommend) — 추정, 하나만. 판단은 디자이너 몫이라 옅게
   phone: string | null; // 예약 손님 번호(숫자만) — 펼친 곳의 📞(늦으시거나 시간을 바꿀 때)
 };
 type Later = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; status: string | null; name: string; off: boolean };
@@ -87,10 +87,13 @@ export default function HomeView({
           {todays.length ? todays.map((b) => <BookRow key={b.id} b={b} today={today} />) : <Empty title="오늘 예약 없음" />}
         </div>
 
+        {/* 통계 입구는 '지난주' 제목 오른쪽 — 숫자를 보다가 더 보고 싶을 때 닿는 자리. 할 일 알약 끝에 붙여 두면
+            폰 폭에서 혼자 다음 줄로 떨어져 작은 버튼처럼 보였다 */}
+        <div className="sect-h">
+          지난주 <span className="sect-n">{week.label}{week.work ? ` · 영업 ${week.work.cur}일` : ''}</span>
+          <Link href="/stats" className="sect-a">통계 ›</Link>
+        </div>
         <div className="card strip">
-          <div className="strip-h">
-            지난주 <span className="sect-n">{week.label}{week.work ? ` · 영업 ${week.work.cur}일` : ''}</span>
-          </div>
           <Help>
             지난주 = 마지막 수집일 전날까지 7일이에요(수집 안 된 날이 섞이지 않게). 방문은 시술을 받은 횟수,
             매출은 선불 잔액으로 낸 금액을 뺀 실매출이고, ▲▼는 그 전주와 견준 값이에요.
@@ -103,11 +106,12 @@ export default function HomeView({
             <Num label="첫 방문" v={week.cur.firsts} prev={week.prev.firsts} />
             <Num label="매출" v={week.cur.revenue} prev={week.prev.revenue} money />
           </div>
-          <div className="strip-l">
+          <div className="strip-l fill">
             <Link href="/alerts" className="pill main">챙길 고객 <b>{careCount.toLocaleString()}</b></Link>
-            <Link href="/customers?filter=overdue" className="pill">이탈위험 <b>{signals.overdue}</b></Link>
-            <Link href="/customers?filter=due" className="pill">재방문도래 <b>{signals.due}</b></Link>
-            <Link href="/stats" className="pill">통계 ›</Link>
+            <div className="pill-2">
+              <Link href="/customers?filter=overdue" className="pill">이탈위험 <b>{signals.overdue.toLocaleString()}</b></Link>
+              <Link href="/customers?filter=due" className="pill">재방문도래 <b>{signals.due.toLocaleString()}</b></Link>
+            </div>
           </div>
         </div>
 
@@ -156,7 +160,7 @@ function Num({ label, v, prev, money = false }: { label: string; v: number; prev
 }
 
 /**
- * 예약 한 줄 — 시각 · 이름 · 시술, 아래 한 줄에 몇 주 만 · 지난번 · 선불. 메모·근황·권할 것은 눌러야
+ * 예약 한 줄 — 시각 · 이름 · 시술, 아래 한 줄에 몇 주 만 · 지난번 · 선불. 메모·근황·추천 시술은 눌러야
  * 펼친다(첫 화면에 오늘 예약이 다 들어오게). 펼친 곳에 카르테로 가는 길.
  */
 function BookRow({ b, today }: { b: Brief; today: string }) {
@@ -196,8 +200,8 @@ function BookRow({ b, today }: { b: Brief; today: string }) {
         {b.prefer.length ? <div>{b.prefer.join(' · ')}</div> : null}
         {b.recent ? <div>💬 {recentWords(b.recent, today)}</div> : null}
         {b.rec ? (
-          <div>
-            권할 것 <b>{b.rec.label}</b> <span className="bk-s">{b.rec.short}</span>
+          <div className="bk-rec">
+            추천 시술 <b>{b.rec.label}</b> <span className="bk-s">{b.rec.short}</span>
           </div>
         ) : null}
         <div className="bk-a">

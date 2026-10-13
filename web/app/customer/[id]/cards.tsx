@@ -45,7 +45,7 @@ export function MemoAiCard({ cust, today }: { cust: Carte['cust']; today: string
 
 /**
  * 한 줄 띠 — 마지막 · 다음 · 선불(또는 객단가) · 매출 순위. 머리말('N회 · 누적 X')과 겹치지 않는,
- * 손님 앞에서 바로 묻게 되는 넷. 큰 타일 넷(약 200px)이던 것을 한 줄로 줄여 메모·권할 것이 첫 화면에
+ * 손님 앞에서 바로 묻게 되는 넷. 큰 타일 넷(약 200px)이던 것을 한 줄로 줄여 메모·추천 시술이 첫 화면에
  * 들어오게 했다. 다음 방문의 근거·휴가·추정은 ? 안에. 계산은 lib/carte-stats.ts.
  */
 export function FactStrip({
@@ -115,14 +115,14 @@ function NextFact({ next }: { next: Carte['next'] }) {
 }
 
 /**
- * 권할 것(lib/recommend) — 때가 된 시술과, 이 매장 손님들이 함께 많이 받는 것. 추정이라 판단은
- * 디자이너 몫 — 이름과 근거 한 줄만.
+ * 추천 시술(lib/recommend) — 때가 된 시술과, 이 매장 손님들이 함께 많이 받는 것. 추정이라 판단은
+ * 디자이너 몫 — 이름과 근거 한 줄만, 옅게(해야 할 일이 아니라 참고로 읽히게).
  */
 export function RecommendCard({ items }: { items: Carte['recs'] }) {
   if (!items.length) return null;
   return (
     <div className="card" style={{ padding: '13px 15px' }}>
-      <div className="ch" style={{ padding: 0, marginBottom: 4 }}>권할 것</div>
+      <div className="ch" style={{ padding: 0, marginBottom: 4 }}>추천 시술</div>
       {items.map((r) => (
         <div className="rec" key={r.kind + r.label}>
           <b>{r.label}</b>

@@ -86,7 +86,7 @@ JS = r"""
   }
   m.rows = rows;
   m.height = document.documentElement.scrollHeight;
-  // 카르테 — 이름·상태 뱃지·한 줄 띠·메모·권할 것이 다 첫 화면에 들어오나
+  // 카르테 — 이름·상태 뱃지·한 줄 띠·메모·추천 시술이 다 첫 화면에 들어오나
   m.carteTop = ['.chd h2', '.chd .ctag', '.facts', '.memo-ai', '.rec'].map((s) => seen(document.querySelector(s)));
   // 통계 — 첫 화면에 다 보이는 숫자 · 할 일 손잡이
   m.nums = [...document.querySelectorAll('.num')].filter(seen).length;
@@ -152,12 +152,13 @@ TARGETS = [
     ("설명글 10% 이하", lambda r, t: pct(t["expl"], t["total"]) <= 10, lambda r, t: f"{pct(t['expl'], t['total']):.0f}%"),
     ("12px 미만 5% 이하", lambda r, t: pct(t["small"], t["total"]) <= 5, lambda r, t: f"{pct(t['small'], t['total']):.0f}%"),
     ("대비 4.5:1 미만 0자", lambda r, t: t["low"] == 0, lambda r, t: f"{t['low']}자"),
-    ("회색 글자 1,200자 이하", lambda r, t: t["gray"] <= 1200, lambda r, t: f"{t['gray']:,}자"),
+    # 1,200 → 1,220 (2026-10-14): 추천 시술을 일부러 옅게 — 추정이고 판단은 디자이너 몫(UX_PLAN_v3 §8)
+    ("회색 글자 1,220자 이하", lambda r, t: t["gray"] <= 1220, lambda r, t: f"{t['gray']:,}자"),
     ("홈: 첫 화면 예약 3줄 이상", lambda r, t: r["home"]["rows"] >= 3, lambda r, t: f"{r['home']['rows']}줄"),
     ("챙길 고객: 첫 화면 6명 이상", lambda r, t: r["alerts"]["rows"] >= 6, lambda r, t: f"{r['alerts']['rows']}명"),
     ("고객 목록: 첫 화면 10줄 이상", lambda r, t: r["customers"]["rows"] >= 10, lambda r, t: f"{r['customers']['rows']}줄"),
     ("방문: 첫 화면 8줄 이상", lambda r, t: r["visits"]["rows"] >= 8, lambda r, t: f"{r['visits']['rows']}줄"),
-    ("카르테: 이름·상태·띠·메모·권할 것 첫 화면", lambda r, t: all(r["carte"]["carteTop"]),
+    ("카르테: 이름·상태·띠·메모·추천 시술 첫 화면", lambda r, t: all(r["carte"]["carteTop"]),
      lambda r, t: f"{sum(r['carte']['carteTop'])}/5"),
     ("통계: 숫자 4개 + 할 일 첫 화면", lambda r, t: r["stats"]["nums"] >= 4 and r["stats"]["pills"] >= 1,
      lambda r, t: f"숫자 {r['stats']['nums']} · 할 일 {r['stats']['pills']}"),

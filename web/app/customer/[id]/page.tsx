@@ -59,7 +59,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           {phone ? <ContactButtons id={cust.id} phone={phone} log={!!badge} /> : null}
         </div>
 
-        {/* 첫 화면에: 누구 · 지금 상태(뱃지) · 한 줄 띠 · 메모 · 권할 것 · 다음 예약(UX 계획 v3) */}
+        {/* 첫 화면에: 누구 · 지금 상태(뱃지) · 한 줄 띠 · 메모 · 추천 시술 · 다음 예약(UX 계획 v3) */}
         <FactStrip
           lastVisit={cust.last_visit}
           sinceLast={sinceLast}

@@ -42,7 +42,7 @@
 a,button{-webkit-touch-callout:none;touch-action:manipulation}
 /* 순수 조작 요소는 길게 눌러도 글자가 잡히지 않게. 고객 이름·메모 같은 '내용'은 선택 가능하게
    남겨둔다(전부 막으면 복사해 쓸 수가 없다). */
-.tab,.pill,.btn,.fchip,.gear,.back,.sug,.tagx,.churn-set,.churn-undo,button{
+.tab,.pill,.btn,.fchip,.gear,.back,.sect-a,.sug,.tagx,.churn-set,.churn-undo,button{
   -webkit-user-select:none;user-select:none}
 input,textarea,select{-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
 /* 접기(details)는 방문 관리·카르테·홈 세 곳이고 모두 기본 삼각형을 감추고 제 표식을 쓴다.
@@ -160,6 +160,10 @@ body{background:var(--bg);color:var(--ink);
 /* 구역 제목 + 옅은 곁말(날짜·인원) — 상자를 겹겹이 두르지 않고 제목과 여백으로 나눈다. 홈 · 고객 목록 · 머리말들 */
 .sect-h{display:flex;align-items:baseline;gap:7px;font-size:15px;font-weight:800;margin:4px 2px 7px}
 .sect-n{font-size:12.5px;font-weight:600;color:var(--muted)}
+/* 구역 제목 오른쪽 끝의 '더 보기' 길 — 홈 '지난주 … 통계 ›'. 글자는 제목보다 작게, 누르는 영역은 위아래로 넓혀 44px
+   (아래 카드 모서리에 겹치는 몇 px 은 이 길이 받는다 — 카드의 ? 는 그 아래에서 눌린다) */
+.sect-a{margin:-12px 0 -12px auto;padding:12px 0 12px 20px;font-size:13.5px;font-weight:700;color:var(--accent);text-decoration:none;
+  white-space:nowrap;position:relative;z-index:1;-webkit-tap-highlight-color:transparent}
 .sec-h{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin:2px 2px 8px}
 .note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
 /* 손님께 그대로 전할 말투의 한 마디(홈케어 팁·시술 메모) */
@@ -205,7 +209,7 @@ body{background:var(--bg);color:var(--ink);
 
 /* ── 4. 홈 (/) ────────────────────────────────────────────────────────────── */
 /* 열자마자 '오늘 누가 오나'가 보이게(UX 계획 v3). 머리말은 한 줄 — 큰 인사는 첫 화면 자리만 차지했다 */
-/* 예약 한 줄 — 시각 · 이름 · 시술, 아래 한 줄에 몇 주 만·지난번·선불. 누르면 메모·근황·권할 것 */
+/* 예약 한 줄 — 시각 · 이름 · 시술, 아래 한 줄에 몇 주 만·지난번·선불. 누르면 메모·근황·추천 시술 */
 .bk{display:flex;gap:11px;align-items:flex-start;width:100%;min-width:0}
 .bk-t{font-size:13px;font-weight:800;color:var(--accent-d);min-width:40px;padding-top:2px;white-space:nowrap}
 .bk-m{flex:1;min-width:0}
@@ -218,9 +222,18 @@ body{background:var(--bg);color:var(--ink);
 .bkd[open]>summary{background:var(--soft)}
 .bk-x{padding:6px 15px 12px 66px;font-size:13px;line-height:1.6;background:var(--soft)}
 .bk-x a{display:inline-block;margin-top:3px;color:var(--accent);font-weight:800;text-decoration:none}
+.bk-rec{color:var(--muted)}             /* 추천 시술 — 메모·근황보다 옅게(참고일 뿐, 카르테 .rec 와 같은 결) */
+.bk-rec b{font-weight:700}
 .bk-a{display:flex;justify-content:flex-end;gap:18px}   /* 펼친 곳 손잡이 줄 — 📞 전화 · 상세보기, 엄지 쪽(오른쪽)에 */
 .bk-a a{padding:8px 0}
 .later>summary{border-top:none}
+/* 지난주 카드 아래 할 일 알약 셋 — 한 줄을 고르게 채운다. 통계(›)가 넷째 알약으로 붙어 있을 땐 폰 폭에서
+   혼자 다음 줄로 떨어져 작은 버튼처럼 보였다 → 통계는 '지난주' 제목 오른쪽(.sect-a).
+   숫자가 세 자리라 한 줄에 안 들어가면 챙길 고객이 윗줄을 다 쓰고 둘은 아랫줄에 반씩 — 둘을 묶어(.pill-2)
+   하나만 떨어지는 일이 없게 했다 */
+.strip-l.fill .pill{justify-content:center;white-space:nowrap;padding-left:8px;padding-right:8px}
+.strip-l.fill>.pill,.pill-2>.pill{flex:1 1 0}
+.pill-2{flex:2 1 0;display:flex;gap:6px}
 
 /* ── 5. 챙길 고객 (/alerts) ───────────────────────────────────────────────── */
 /* 한 줄에 한 분 — 이름·상태·사유 + [💬 문자][📞]. 문구·복사·카르테·이탈 처리는 펼쳤을 때만.
@@ -322,10 +335,11 @@ body{background:var(--bg);color:var(--ink);
 .fact span{font-size:12px;color:var(--muted);line-height:1.35}
 /* 카드 제목 옆 작은 덧말(시술 이력의 자주 받는 시술) — 제목의 대문자·자간을 따르지 않는다 */
 .ch-n{font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted)}
-/* 권할 것 — 이름이 먼저, 근거는 아래 한 줄 */
+/* 추천 시술 — 이름이 먼저, 근거는 아래 한 줄. 추정이고 판단은 디자이너 몫이라 옅게 — 진한 굵은 글씨는
+   '이걸 권하라'는 지시처럼 읽혔다(홈 예약 펼친 곳 .bk-rec 도 같은 결) */
 .rec{padding:7px 0;border-top:1px solid var(--line)}
 .ch + .rec{border-top:none}
-.rec b{font-size:14px;font-weight:800;color:var(--accent-d)}
+.rec b{font-size:14px;font-weight:700;color:var(--muted)}
 .rec-w{display:block;font-size:12.5px;color:var(--muted);margin-top:1px;line-height:1.45}
 .churn-set{display:block;margin:0 0 13px auto;padding:4px 2px;font-size:12.5px;font-family:inherit;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 
@@ -512,6 +526,7 @@ body{background:var(--bg);color:var(--ink);
   .num b{font-size:17px}                 /* '약 2,250만'이 세 칸에 들어가게 */
   .fchip{padding-left:9px;padding-right:9px}   /* 고객 목록 조건 칩 다섯이 한 줄에 */
   .cbtn .cbtn-t{display:none}            /* 💬 만 — 이름 자리를 남긴다(누르면 문자, 화면낭독은 '문자 보내기') */
+  .strip-l.fill .pill{padding-left:6px;padding-right:6px}   /* 홈 할 일 알약 셋이 한 줄에 */
 }
 @media (max-width: 350px) {
   .facts{grid-template-columns:repeat(2,1fr);gap:6px}   /* 카르테 한 줄 띠 → 2×2 */

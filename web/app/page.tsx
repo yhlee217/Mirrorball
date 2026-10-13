@@ -119,7 +119,7 @@ export default async function Page() {
   const lastDates = [...new Set(ids.map((id) => byId.get(id)?.last_visit).filter(Boolean) as string[])];
   const wk = lastWeek(asOf, today);
 
-  // 최근 1년 거래 한 번에 — 이번 주 요약(그중 두 주)과 예약 브리핑의 '권해볼 것'(손님 이력 + 매장 데이터)이 같이 쓴다.
+  // 최근 1년 거래 한 번에 — 이번 주 요약(그중 두 주)과 예약 브리핑의 '추천 시술'(손님 이력 + 매장 데이터)이 같이 쓴다.
   const [yearTx, details, lastTx] = await Promise.all([
     fetchAllRows<WeekTx>((from, to) =>
       supabase.from('transactions').select('customer_id,date,kind,service,amount_won,covered_won')
@@ -163,7 +163,7 @@ export default async function Page() {
 
   const det = new Map(details.map((d) => [d.id, d]));
   const lastSvc = lastServices(lastTx, (id) => byId.get(id)?.last_visit);
-  // 권해볼 것 — 예약일 기준으로, 이번에 예약한 시술의 갈래는 빼고 하나만(lib/recommend).
+  // 추천 시술 — 예약일 기준으로, 이번에 예약한 시술의 갈래는 빼고 하나만(lib/recommend).
   const recVisits = visitsByCustomer(yearTx);
   const pairs = pairStats(recVisits, today);
   const toBrief = async (b: Booking): Promise<Brief> => {
