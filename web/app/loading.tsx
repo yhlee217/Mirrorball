@@ -1,3 +1,4 @@
+import { SkeletonSeen } from '@/components/screen-timer';
 import Link from 'next/link';
 import { Block, Line } from '@/components/skeleton';
 
@@ -8,6 +9,7 @@ import { Block, Line } from '@/components/skeleton';
 export default function Loading() {
   return (
     <main className="wrap" aria-busy="true">
+      <SkeletonSeen />
       <div className="body">
         <div className="top">
           <Line w={58} h={17} />

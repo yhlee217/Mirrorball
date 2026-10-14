@@ -28,6 +28,7 @@ import { txKind } from '@/lib/tx';
 import { addDays, agoWords, dayLabel, daysBetween, spanWords } from '@/lib/week';
 import { awayDays } from '@/lib/offdays';
 import AlertsList from './alerts-list';
+import { ScreenReady } from '@/components/screen-timer';
 
 type Cust = {
   id: string;
@@ -213,6 +214,7 @@ export default async function AlertsPage() {
       <div className="body">
         <AlertsList items={items} quiet={quiet} quietDays={CONTACT_QUIET_DAYS} effect={effect} />
       </div>
+      <ScreenReady />
     </main>
   );
 }

@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import TabBar from './tab-bar';
 import RefreshOnFocus from './refresh-on-focus';
+import { NavStart } from '@/components/screen-timer';
 
 export const metadata: Metadata = {
   title: '살롱 컨시어지',
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <TabBar />
         <RefreshOnFocus />
+        <NavStart />
       </body>
     </html>
   );

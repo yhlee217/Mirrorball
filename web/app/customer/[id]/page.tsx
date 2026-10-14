@@ -18,6 +18,7 @@ import {
   HistoryCard,
   OtherItemsCard,
 } from './cards';
+import { ScreenReady } from '@/components/screen-timer';
 
 const BADGE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', hello: '첫 방문', back: '첫 방문' };
 
@@ -93,6 +94,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           <ChurnToggle id={cust.id} churnedAt={cust.churned_at} />
         </div>
       </div>
+      <ScreenReady />
     </main>
   );
 }

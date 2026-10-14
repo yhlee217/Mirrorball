@@ -10,6 +10,7 @@ import { phoneTail } from '@/lib/contact';
 import { lastSynced } from '@/lib/sync';
 import { kstNow } from '@/lib/kst';
 import CustomersList from './customers-list';
+import { ScreenReady } from '@/components/screen-timer';
 
 type Cust = {
   id: string;
@@ -105,6 +106,7 @@ export default async function CustomersPage() {
         {/* 검색·조건(?filter= 포함)은 목록이 주소에서 직접 읽는다(lib/list-state) */}
         <CustomersList rows={rows} settings={settings} asOf={asOf} today={kstNow().date} />
       </div>
+      <ScreenReady />
     </main>
   );
 }

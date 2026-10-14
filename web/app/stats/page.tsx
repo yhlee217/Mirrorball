@@ -28,6 +28,7 @@ import {
   TotalsCard,
   type GenderStat,
 } from './cards';
+import { ScreenReady } from '@/components/screen-timer';
 
 export default async function StatsPage() {
   const { supabase, tenantId } = await requireTenant();
@@ -299,6 +300,7 @@ export default async function StatsPage() {
           <TotalsCard customers={totalCustomers} revenue={totalRevenue} tx={tx.length} />
         </details>
       </div>
+      <ScreenReady />
     </main>
   );
 }

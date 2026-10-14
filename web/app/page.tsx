@@ -15,6 +15,7 @@ import { hasOffDays, workedDays } from '@/lib/offdays';
 import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
 import HomeView, { type Brief } from './home-view';
 import OnboardButton from './onboard-button';
+import { ScreenReady } from '@/components/screen-timer';
 
 type Cust = {
   id: string;
@@ -198,16 +199,19 @@ export default async function Page() {
   ]);
 
   return (
-    <HomeView
-      designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
-      synced={synced}
-      today={today}
-      signals={signals}
-      week={week}
-      careCount={careCount}
-      careQuiet={careQuiet}
-      briefs={briefs}
-      later={laterRows}
-    />
+    <>
+      <HomeView
+        designer={t?.designer_name ?? t?.salon_name ?? '디자이너'}
+        synced={synced}
+        today={today}
+        signals={signals}
+        week={week}
+        careCount={careCount}
+        careQuiet={careQuiet}
+        briefs={briefs}
+        later={laterRows}
+      />
+      <ScreenReady />
+    </>
   );
 }

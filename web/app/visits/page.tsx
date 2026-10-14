@@ -10,6 +10,7 @@ import { lastSynced } from '@/lib/sync';
 import { SyncChip } from '@/components/sync-chip';
 import { txKind } from '@/lib/tx';
 import VisitsList from './visits-list';
+import { ScreenReady } from '@/components/screen-timer';
 
 // 방문 관리 — '다녀가신 분'을 챙기는 화면('챙길 고객' 탭이 '아직 안 오신 분'을 맡는 것과 짝).
 // 리뷰 요청은 종용하는 느낌이라 이 화면에서 빼고 노출(콘텐츠 코치) 탭에만 둔다.
@@ -103,6 +104,7 @@ export default async function VisitsPage() {
         </div>
         <VisitsList items={items} today={today} yesterday={yesterday} />
       </div>
+      <ScreenReady />
     </main>
   );
 }

@@ -26,6 +26,10 @@
     BACKUP_REQUIRED_SINCE 전에는 0023 미적용·백업 기록 없음을 경고만 한다(맥에 새 코드가 깔리고 첫
     일요일이 지나기 전) — 그 뒤로는 실패다. 안 그러면 '설치를 안 했다'를 영원히 모른다.
 
+화면 속도 · 매장별 사용(0024 ops_speed · ops_usage, 개선 계획 v7) — 출력만 하고 실패로 만들지 않는다
+    · 화면별 보통 · 느린 때(지난 7일, 폰에서 잰 '누른 순간 → 내용이 뜬 순간')
+    · 매장별 화면 연 수 · 연락한 손님 수 · 마지막 사용 — 다음 개선을 정하는 숫자(맥 점검 없이)
+
 사용:
     SUPABASE_URL=... SUPABASE_ANON_KEY=... python3 scripts/sync_health_check.py
     STALE_DAYS=8    지연 판정 기준(기본 8)
@@ -91,6 +95,52 @@ def evaluate_ops(rows: list[dict], now: dt.datetime, backup_days: float, error_l
     return bad, warn
 
 
+def fmt_speed(rows: list[dict]) -> list[str]:
+    """화면별 속도(0024 ops_speed, 개선 계획 v7) — 기다린 화면의 보통(중간값) · 느린 때(10번 중 가장 느린 1번).
+    받아 둔 화면을 바로 보여준 것은 횟수만 — 섞으면 서버가 느린 것이 가려진다."""
+    out = []
+    for r in rows:
+        p50, p90 = r.get("p50_ms"), r.get("p90_ms")
+        instant = int(r.get("instant") or 0)
+        waited = int(r.get("opened") or 0) - instant
+        speed = (f"보통 {p50 / 1000:.1f}초 · 느린 때 {p90 / 1000:.1f}초 · {waited}번"
+                 if p50 is not None and p90 is not None else "기다린 적 없음")
+        out.append(f"  {str(r.get('screen') or '?'):20s} {speed}" + (f" (바로 {instant}번)" if instant else ""))
+    return out
+
+
+def fmt_usage(rows: list[dict], now: dt.datetime) -> list[str]:
+    """매장별 사용(0024 ops_usage) — 화면 연 수 · 연락한 손님 수(지난 7일) · 마지막으로 앱을 쓴 때. 숫자만."""
+    out = []
+    for r in rows:
+        last = r.get("last_seen")
+        if last:
+            days = (now - dt.datetime.fromisoformat(str(last).replace("Z", "+00:00"))).total_seconds() / 86400
+            seen = "오늘" if days < 1 else f"{int(days)}일 전"
+        else:
+            seen = "기록 없음"
+        out.append(f"  {str(r.get('slug') or '?'):12s} 화면 {int(r.get('screens_7d') or 0)}번 · "
+                   f"연락 {int(r.get('contacts_7d') or 0)}명 · 마지막 사용 {seen}")
+    return out
+
+
+def report_speed_usage(url: str, key: str) -> None:
+    """화면 속도 · 매장별 사용(0024) — 알려 주기만 하고 실패로 만들지 않는다. 다음 개선(v7 P1 · P2)을 정하는 숫자."""
+    try:
+        speed = fetch(url, key, "ops_speed")
+        usage = fetch(url, key, "ops_usage")
+    except urllib.error.HTTPError as exc:
+        print(f"\n! 화면 속도 · 사용 수 조회 실패 HTTP {exc.code} — 0024_speed_usage.sql 을 적용했는지 확인하세요")
+        return
+    except Exception as exc:  # noqa: BLE001
+        print(f"\n! 화면 속도 · 사용 수 조회 실패: {exc}")
+        return
+    print("\n화면 속도 — 지난 7일 (누른 순간 → 내용이 뜬 순간, 받아 둔 화면은 '바로')")
+    print("\n".join(fmt_speed(speed)) if speed else "  아직 기록 없음")
+    print("\n매장별 사용 — 지난 7일")
+    print("\n".join(fmt_usage(usage, dt.datetime.now(dt.timezone.utc))) if usage else "  아직 기록 없음")
+
+
 def fetch(url: str, key: str, fn: str = "sync_health") -> list[dict]:
     req = urllib.request.Request(
         url.rstrip("/") + f"/rest/v1/rpc/{fn}",
@@ -153,6 +203,7 @@ def main() -> int:
 
     late = evaluate(rows, stale_days)
     ops_bad = check_ops(url, key)
+    report_speed_usage(url, key)
     if not late and not ops_bad:
         print("\n정상 — 모두 기준 안입니다.")
         return 0

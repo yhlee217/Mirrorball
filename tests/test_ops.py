@@ -67,3 +67,59 @@ out(D.paths.map(cleanPath));
     if got is None:
         pytest.skip("node/npx 또는 web/node_modules 가 없다 — TS 실행 생략")
     assert got == ["/customer/:id", "/customers", "/p/hayewoni", "/customer/:id/edit", "/", "/"]
+
+
+# ── 화면 속도 · 매장별 사용(0024, 개선 계획 v7 P0) ─────────────────────────────
+
+def test_clean_timing_keeps_only_path_and_numbers():
+    """폰이 보낸 속도 기록 — 경로의 손님 id 는 지우고, 밀리초가 이상하면 버리고, 다른 칸은 남기지 않는다."""
+    got = run_ts(["lib/ops.ts"], """
+const { cleanTiming } = require('./ops.js');
+out(D.bodies.map(cleanTiming));
+""", {"bodies": [
+        {"path": "/customer/3f2b1c9a-1234-4cde-8f00-0123456789ab", "ms": 1234.6, "cached": False, "first": False,
+         "name": "김서연", "phone": "01012345678"},                       # 엉뚱한 칸은 버린다
+        {"path": "/alerts?n=100", "ms": 40, "cached": True},
+        {"path": "/", "ms": 2100, "first": True},
+        {"path": "/stats", "ms": -5},                                    # 음수
+        {"path": "/stats", "ms": 61000},                                 # 1분 넘음(폰이 잠겼다 깸)
+        {"path": "/stats", "ms": "900"},                                 # 숫자가 아님
+        None,
+    ]})
+    if got is None:
+        pytest.skip("node/npx 또는 web/node_modules 가 없다 — TS 실행 생략")
+    assert got == [
+        {"path": "/customer/:id", "ms": 1235, "cached": False, "first": False},
+        {"path": "/alerts", "ms": 40, "cached": True, "first": False},
+        {"path": "/", "ms": 2100, "cached": False, "first": True},
+        None, None, None, None,
+    ]
+
+
+def test_speed_and_usage_lines_are_numbers_only():
+    speed = shc.fmt_speed([
+        {"screen": "/stats", "opened": 12, "p50_ms": 3210, "p90_ms": 5480, "instant": 2},
+        {"screen": "/ (앱 열기)", "opened": 5, "p50_ms": 1800, "p90_ms": 2600, "instant": 0},
+        {"screen": "/alerts", "opened": 3, "p50_ms": None, "p90_ms": None, "instant": 3},   # 모두 받아 둔 화면
+    ])
+    assert speed[0].split() == ["/stats", "보통", "3.2초", "·", "느린", "때", "5.5초", "·", "10번", "(바로", "2번)"]
+    assert "보통 1.8초 · 느린 때 2.6초 · 5번" in speed[1] and "바로" not in speed[1]
+    assert "기다린 적 없음" in speed[2] and "(바로 3번)" in speed[2]
+    usage = shc.fmt_usage([
+        {"slug": "hayewoni", "screens_7d": 120, "contacts_7d": 14, "last_seen": (NOW - dt.timedelta(hours=3)).isoformat()},
+        {"slug": "juhwan", "screens_7d": 8, "contacts_7d": 0, "last_seen": ago(5)},
+        {"slug": "daunbu", "screens_7d": 0, "contacts_7d": 0, "last_seen": None},
+    ], NOW)
+    assert usage[0].split() == ["hayewoni", "화면", "120번", "·", "연락", "14명", "·", "마지막", "사용", "오늘"]
+    assert usage[1].endswith("마지막 사용 5일 전") and usage[2].endswith("마지막 사용 기록 없음")
+
+
+def test_speed_names_line_up_with_0024():
+    """감시자가 부르는 함수 · 앱이 남기는 kind 가 0024 마이그레이션과 같은 이름이고, 앱은 '오류 · 속도'만 남길 수 있다."""
+    sql = (ROOT / "supabase" / "migrations" / "0024_speed_usage.sql").read_text(encoding="utf-8")
+    assert "function public.ops_speed()" in sql and "function public.ops_usage()" in sql
+    assert re.search(r"kind in \('backup', 'error', 'timing'\)", sql)
+    assert re.search(r"for insert to authenticated\s+with check \(kind in \('error', 'timing'\)", sql)
+    assert "kind: 'timing'" in (ROOT / "web" / "app" / "api" / "client-timing" / "route.ts").read_text(encoding="utf-8")
+    script = (ROOT / "scripts" / "sync_health_check.py").read_text(encoding="utf-8")
+    assert '"ops_speed"' in script and '"ops_usage"' in script

@@ -11,6 +11,7 @@ import ChurnedList from './churned-list';
 import LogoutButton from '../logout-button';
 import { Help } from '@/components/help';
 import { BackButton } from '@/components/back-button';
+import { ScreenReady } from '@/components/screen-timer';
 
 export default async function SettingsPage() {
   const { supabase, user, tenantId } = await requireTenant();
@@ -127,6 +128,7 @@ export default async function SettingsPage() {
           <LogoutButton />
         </div>
       </div>
+      <ScreenReady />
     </main>
   );
 }

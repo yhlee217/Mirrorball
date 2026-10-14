@@ -1,9 +1,11 @@
+import { SkeletonSeen } from '@/components/screen-timer';
 import { Block, RowSk } from '@/components/skeleton';
 
 /** 고객 목록 뼈대 — 제목 '고객', 찾기 줄 · 조건 칩 · 목록 줄 자리(components/skeleton). */
 export default function Loading() {
   return (
     <main className="wrap" aria-busy="true">
+      <SkeletonSeen />
       <div className="bar">
         <div className="ttl">고객</div>
       </div>

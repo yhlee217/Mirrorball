@@ -1,9 +1,11 @@
+import { SkeletonSeen } from '@/components/screen-timer';
 import { Block, Line } from '@/components/skeleton';
 
 /** 챙길 고객 뼈대 — 제목은 처음부터 '챙길 고객', 한 줄에 한 분 + [문자][전화] 자리(components/skeleton). */
 export default function Loading() {
   return (
     <main className="wrap" aria-busy="true">
+      <SkeletonSeen />
       <div className="bar">
         <div className="ttl">챙길 고객</div>
       </div>

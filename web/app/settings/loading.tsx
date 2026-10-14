@@ -1,3 +1,4 @@
+import { SkeletonSeen } from '@/components/screen-timer';
 import { BackButton } from '@/components/back-button';
 import { Block, Line } from '@/components/skeleton';
 
@@ -5,6 +6,7 @@ import { Block, Line } from '@/components/skeleton';
 export default function Loading() {
   return (
     <main className="wrap" aria-busy="true">
+      <SkeletonSeen />
       <div className="bar">
         <BackButton />
         <div className="ttl" style={{ marginLeft: 10 }}>설정</div>
