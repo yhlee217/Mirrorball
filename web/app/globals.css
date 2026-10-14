@@ -174,6 +174,13 @@ body{background:var(--bg);color:var(--ink);
 .tip{margin-top:7px;font-size:12.5px;line-height:1.5;color:var(--accent-d);background:var(--soft);border-radius:9px;padding:7px 9px}
 .sk{background:linear-gradient(90deg,var(--soft) 25%,#E6DFD4 37%,var(--soft) 63%);background-size:400% 100%;animation:shimmer 1.4s ease infinite;border-radius:13px}
 @keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+/* 화면 전환 뼈대(components/skeleton.tsx · 각 화면 loading.tsx) — 가는 화면과 같은 모양. 글 줄은 둥근 막대,
+   회색은 0.15초 뒤에 나타난다(.skw) — 금방 열리면 회색이 번쩍이지 않고 제목만 먼저 바뀐다 */
+.skl{display:block;border-radius:6px;max-width:100%}
+.skl + .skl{margin-top:7px}
+.skw{animation:skin .2s ease .15s both}
+@keyframes skin{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion: reduce){.sk{animation:none}}
 
 /* 3-7b. ? 설명 — 계산 방법·근거처럼 매번 읽을 필요 없는 글을 접어 둔다(components/help.tsx).
    기본은 카드 오른쪽 위 구석의 작은 ?, 펼치면 그 자리에 설명. inline 이면 글 바로 옆. */
