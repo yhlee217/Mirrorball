@@ -31,12 +31,13 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     cust, name, phone, vip, avg,
     history, charges, others,
     chargedTotal, balance, pocketIds,
-    familyList, nextBk, topSvc,
+    familyList, nextBk, passedBk, topSvc,
     overdue, due, first, vac, today,
     sinceLast, next, top, recs,
   } = await loadCarte(params.id);
-  // 상태 뱃지 — 이탈로 표시한 분, 다음 예약이 잡힌 분에겐 띄우지 않는다(이미 정해졌거나 오시기로 했다)
-  const badge = cust.churned_at || nextBk ? null : overdue ? 'overdue' : due ? 'due' : first;
+  // 상태 뱃지 — 이탈로 표시한 분, 다음 예약이 잡힌 분, 수집 뒤 예약 시각이 지난 분(다녀가셨을 분)에겐
+  // 띄우지 않는다(이미 정해졌거나 오시기로 했거나 오셨다)
+  const badge = cust.churned_at || nextBk || passedBk ? null : overdue ? 'overdue' : due ? 'due' : first;
 
   return (
     <main className="wrap">

@@ -8,7 +8,7 @@ import { SyncChip } from '@/components/sync-chip';
 import { BackButton } from '@/components/back-button';
 import { fetchAllRows, isRealCustomer, isChurned, onCareList, onFirstList, prepaidAway, servicesOn } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
-import { bookedCustomerIds, isActiveBooking } from '@/lib/bookings';
+import { bookingSets, isActiveBooking, recentBookingRows } from '@/lib/bookings';
 import { recentlyContactedIds } from '@/lib/contact';
 import { addDays, shortDate } from '@/lib/week';
 import { activeTrend, datesByCustomer, newcomerCohorts, serviceTable, toVisits, weekHeat } from '@/lib/trends';
@@ -35,7 +35,7 @@ export default async function StatsPage() {
   const kToday = kstNow().date;
   const [y0, m0] = kToday.split('-').map(Number);
   const monthLast = new Date(Date.UTC(y0, m0, 0)).toISOString().slice(0, 10);
-  const [{ data: tenant }, customers, txs, booked, contacted, synced, { data: bkLeftRows }, contactRows] = await Promise.all([
+  const [{ data: tenant }, customers, txs, bkRows, contacted, synced, { data: bkLeftRows }, contactRows] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<{ id: string; ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
                    age_band: string | null; gender_src: string | null; gender_manual: string | null; revisit_cycle_days: number | null;
@@ -48,7 +48,7 @@ export default async function StatsPage() {
     fetchAllRows<{ customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number;
                    kind: string | null; covered_won: number | null }>((from, to) =>
       supabase.from('transactions').select('customer_id,date,time,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
-    bookedCustomerIds(supabase, tenantId),
+    recentBookingRows(supabase, tenantId), // 예약했거나 수집 뒤 다녀가셨을 분 — 챙길 고객과 같은 판정
     recentlyContactedIds(supabase, tenantId),
     lastSynced(supabase),
     // 이번 달 남은 기간에 잡힌 예약 — 마감 예상 옆에 참고로만(예상 금액에는 섞지 않는다)
@@ -74,6 +74,7 @@ export default async function StatsPage() {
   // 방문 = 시술을 받은 (손님, 날짜). 충전·제품만 산 날은 방문이 아니다(홈·방문 관리와 같은 기준).
   // '변화'를 재는 기준일은 마지막 수집일 — 그 뒤 날짜는 아직 비어 있다(lib/trends.ts).
   const asOf = synced?.date ?? kstNow().date;
+  const held = bookingSets(bkRows, asOf).hold; // 챙길 고객 · 연락 효과의 '예약' — 홈 · 챙길 고객 탭과 같은 판정
   const visits = toVisits(tx);
   const byCust = datesByCustomer(visits);
   const realIds = new Set(cs.map((c) => c.id));
@@ -233,7 +234,7 @@ export default async function StatsPage() {
   // 누르면 챙길 고객 탭이 열린다 — 그 목록과 같은 '할 일' 기준(최근 연락한 분 제외)
   // 첫 방문 손님(안부·다시 오실 때)도 함께 — 챙길 고객 탭·홈과 같은 숫자(lib/customers onFirstList)
   const flagsOf = (c: (typeof cs)[number]) =>
-    ({ settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id), asOf });
+    ({ settings, churned: isChurned(c), booked: held.has(c.id), contacted: contacted.has(c.id), asOf });
   const byIdCs = new Map(cs.map((c) => [c.id, c]));
   const oneSvcs = servicesOn(tx, (id) => (byIdCs.get(id)?.visit_count === 1 ? byIdCs.get(id)?.last_visit : null));
   const careCount =
@@ -290,7 +291,7 @@ export default async function StatsPage() {
           <ServiceCard rows={svcRows} vacation={settings.off_dates.length > 0} />
           {gDecided > 0 ? <GenderCard g={gender} /> : null}
           <ContactEffectCard
-            groups={contactEffectByGroup(realContacts, realVisits, booked)}
+            groups={contactEffectByGroup(realContacts, realVisits, held)}
             hello={helloEffect(realContacts, realVisits)}
             since={contactSince}
           />

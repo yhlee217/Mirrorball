@@ -53,7 +53,10 @@ html,body{margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',sans-serif;font-size:16px;line-height:1.6;
-  -webkit-font-smoothing:antialiased}
+  -webkit-font-smoothing:antialiased;
+  /* 한국어는 어절(띄어쓰기) 단위로 끊는다 — 기본값은 글자 단위라 메모·근황이 '드라/이'처럼 끊겼다(개선 계획 v6 P1).
+     띄어쓰기 없는 긴 말(시술명 '뿌리염색+커트+클리닉' 등)이 한 줄을 넘을 때만 아무 데서나 끊어 넘치지 않게 */
+  word-break:keep-all;overflow-wrap:break-word}
 
 /* ── 2. 화면 뼈대 ─────────────────────────────────────────────────────────── */
 /* 폭 480px 고정 — 세 분 다 폰으로만 쓴다. 데스크톱에서도 폰 폭 그대로 가운데에 둔다. */
@@ -102,6 +105,7 @@ body{background:var(--bg);color:var(--ink);
 .ctag.due{background:#F2EAD8;color:var(--gold-ink)}
 .ctag.booked{background:#E4EDE2;color:var(--sage-ink)}
 .ctag.hello,.ctag.back{background:#E7EFE5;color:var(--sage-ink)}   /* 첫 방문 — 홈 예약의 '첫 방문' 꼬리표와 같은 색 */
+.ctag.held{background:var(--soft);color:var(--muted)}   /* 지난 예약 — 수집 뒤 예약 시각이 지났고 방문은 아직 안 잡힘. 할 일이 아니라 옅게 */
 /* 선불 잔액 꼬리표 — 상태가 아니라 곁정보라 테두리만(챙길 고객 · 고객 목록 이름 옆) */
 .li .nm .ppd{margin-left:6px;vertical-align:middle}
 .ppd{font-size:12px;font-weight:700;color:var(--accent-d);border:1px solid var(--line);border-radius:20px;padding:0 7px;white-space:nowrap}

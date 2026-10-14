@@ -15,7 +15,7 @@ import {
   HELLO_DAYS,
 } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
-import { bookedCustomerIds } from '@/lib/bookings';
+import { bookingSets, recentBookingRows } from '@/lib/bookings';
 import { CONTACT_QUIET_DAYS, phoneDigits, recentlyContactedIds } from '@/lib/contact';
 import { friendlyService } from '@/lib/service-name';
 import { careFor, soonestCare } from '@/lib/care-cycle';
@@ -51,7 +51,7 @@ export default async function AlertsPage() {
   const { supabase, tenantId } = await requireTenant();
   const today = kstNow().date;
 
-  const [{ data: tenant }, customers, firsts, booked, contacted, synced, recentContacts] = await Promise.all([
+  const [{ data: tenant }, customers, firsts, bkRows, contacted, synced, recentContacts] = await Promise.all([
     supabase.from('tenants').select('designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select(COLS).in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
@@ -59,7 +59,7 @@ export default async function AlertsPage() {
     fetchAllRows<Cust>((from, to) =>
       supabase.from('customers').select(COLS).eq('visit_count', 1).gte('last_visit', addDays(today, -365))
         .order('id').range(from, to)),
-    bookedCustomerIds(supabase, tenantId), // 이미 예약한 분께 '예약 도와드릴게요'를 보내지 않게
+    recentBookingRows(supabase, tenantId), // 이미 예약한 분 · 수집 뒤 다녀가셨을 분께 '오랜만이에요'를 보내지 않게
     recentlyContactedIds(supabase, tenantId), // 최근 연락한 분은 할 일에서 잠시 뺀다
     lastSynced(supabase), // 재방문 판정의 기준일(워커가 판정한 날) — 휴가를 빼고 셀 때 쓴다
     // 연락 효과(맨 위 한 줄) — 지난 4주 연락 기록
@@ -78,7 +78,9 @@ export default async function AlertsPage() {
   // DB 에서 due·overdue 만 받아도 되는 건, 휴가 반영은 판정을 늦추기만 하고 앞당기지 않아서다.
   const asOf = synced?.date ?? today;
   const stateOf = (c: Cust) => careState(c, settings, asOf);
-  const flags = (c: Cust) => ({ settings, churned: isChurned(c), booked: booked.has(c.id), contacted: contacted.has(c.id), asOf });
+  // 예약했거나 수집 뒤 예약 시각이 지난 분(다녀가셨을 분) — 다음 수집이 방문을 잡을 때까지 뺀다(lib/bookings)
+  const held = bookingSets(bkRows, asOf).hold;
+  const flags = (c: Cust) => ({ settings, churned: isChurned(c), booked: held.has(c.id), contacted: contacted.has(c.id), asOf });
   const real = ((customers as Cust[]) ?? []).filter((c) => isRealCustomer(c.ext_id));
   const realFirst = ((firsts as Cust[]) ?? []).filter((c) => isRealCustomer(c.ext_id));
 
@@ -111,7 +113,7 @@ export default async function AlertsPage() {
   // 연락해서 잠시 빠진 분 — 목록이 왜 줄었는지 밝힌다
   const quiet =
     real.filter((c) => needsCare(c, flags(c)) && contacted.has(c.id)).length +
-    realFirst.filter((c) => contacted.has(c.id) && !isChurned(c) && !booked.has(c.id) && firstCare(c, svcsOf(c), settings, asOf))
+    realFirst.filter((c) => contacted.has(c.id) && !isChurned(c) && !held.has(c.id) && firstCare(c, svcsOf(c), settings, asOf))
       .length;
 
   // 전원을 그린다 — 화면은 50명씩 펼친다(alerts-list). 머리말 숫자와 목록이 같은 사람을 가리키게.
@@ -150,7 +152,8 @@ export default async function AlertsPage() {
     if (!t.customer_id || !t.date || txKind(t.kind, t.service) !== 'service') continue;
     effVisits.set(t.customer_id, [...(effVisits.get(t.customer_id) ?? []), t.date]);
   }
-  const effect = effIds.length ? contactEffect(recentContacts, effVisits, booked, effSince) : null;
+  // '예약'도 같은 판정 — 연락 뒤 예약하고 다녀가신 분이 수집 전까지 '효과 없음'으로 빠지지 않게
+  const effect = effIds.length ? contactEffect(recentContacts, effVisits, held, effSince) : null;
 
   const items = rows.map(({ c, state }, i) => {
     const name = contacts[i].name;

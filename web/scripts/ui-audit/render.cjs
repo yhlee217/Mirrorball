@@ -121,6 +121,7 @@ out.visits = screen('', `<div class="top"><b>방문</b><span class="sect-n">2주
 const rows = Array.from({ length: 20 }, (_, i) => ({
   id: 'c' + i, name: names[i % 10], visit_count: 1 + i, total_won: 50000 * (i + 1), last_visit: `2026-0${1 + (i % 9)}-1${i % 9}`,
   first_visit: '2024-01-01', state: ['overdue', 'due', null, 'new'][i % 4], cycle: 35, hasBooking: i % 7 === 0, hasPhone: true,
+  held: i % 7 === 0 || i === 4, // 넷째 줄은 수집 뒤 지난 예약(v6 P0) — '지난 예약' 꼬리표도 360px 에서 잰다
   tail: '1234', churned: false, gender: 'F', visits_90d: 1, visits_180d: 2, visits_365d: 4, prepaid_balance: i % 6 === 2 ? 300000 : 0,
 }));
 out.customers = screen(bar('고객 <span class="sect-n">1,136명</span>', { back: false }),

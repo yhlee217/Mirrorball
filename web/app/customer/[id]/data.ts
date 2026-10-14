@@ -3,7 +3,7 @@ import { requireUser, openDek, nameReader, contactReader } from '@/lib/tenant';
 import { phoneDigits } from '@/lib/contact';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
-import { isActiveBooking } from '@/lib/bookings';
+import { BOOKING_LOOKBACK_DAYS, isActiveBooking, isHeldBooking } from '@/lib/bookings';
 import { careState, fetchAllRows, firstCare, isRealCustomer } from '@/lib/customers';
 import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
 import { addDays } from '@/lib/week';
@@ -85,10 +85,10 @@ export async function loadCarte(id: string) {
       .from('bookings')
       .select('date,time,service,note,status')
       .eq('customer_id', cust.id)
-      .gte('date', today)
+      .gte('date', addDays(today, -BOOKING_LOOKBACK_DAYS)) // 수집 뒤 지난 예약도 본다 — 다녀가셨을 분
       .order('date', { ascending: true })
       .order('time', { ascending: true, nullsFirst: false })
-      .limit(5),
+      .limit(20),
     ranked ? realCount().gt('total_won', cust.total_won) : null,
     ranked ? realCount() : null,
     lastSynced(supabase), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다
@@ -169,7 +169,8 @@ export async function loadCarte(id: string) {
   // 매장 메모를 따로 모아 보여주던 카드는 없앴다 — 아래 '시술 이력'이 같은 메모를 방문마다
   // 이미 달고 있어 화면에 두 번 나왔다. 메모는 어느 시술 때 적힌 것인지가 중요하므로
   // 이력 쪽에 붙은 것을 남기고, 전체를 훑는 용도는 상단 'AI 정리'가 대신한다.
-  const nextBk = ((bk as Bk[]) ?? []).find((b) => isActiveBooking(b)) ?? null; // 지난 시간·취소·노쇼 제외
+  const bkRows = (bk as Bk[]) ?? [];
+  const nextBk = bkRows.find((b) => isActiveBooking(b)) ?? null; // 지난 시간·취소·노쇼 제외
   const vip = isVip(cust, settings);
   const avg = cust.visit_count ? Math.round(cust.total_won / cust.visit_count) : 0;
 
@@ -182,6 +183,9 @@ export async function loadCarte(id: string) {
 
   // 재방문 상태는 휴가를 반영한 것 — 챙길 고객·홈 신호와 같은 기준(lib/customers careState).
   const asOf = synced?.date ?? today;
+  // 수집 뒤 예약 시각이 지난 예약 — 다녀가셨는지는 다음 수집에 잡힌다. 그때까지 뱃지를 띄우지 않고
+  // '다음' 칸에 '지난 예약'으로 둔다. 챙길 고객 · 홈 숫자와 같은 판정(lib/bookings isHeldBooking).
+  const passedBk = nextBk ? null : [...bkRows].reverse().find((b) => isHeldBooking(b, asOf)) ?? null;
   const state = careState(cust, settings, asOf);
   const overdue = state === 'overdue';
   const due = state === 'due';
@@ -200,20 +204,22 @@ export async function loadCarte(id: string) {
     cycleDays: cust.revisit_cycle_days,
     lastServices: history.filter((h) => h.date === cust.last_visit).map((h) => h.service),
     bookedDate: nextBk?.date ?? null,
+    passedDate: passedBk?.date ?? null,
     off: settings,
   });
   const top = above?.count != null && total?.count ? rankPercent(above.count, total.count) : null;
 
-  // 추천 시술 — 오늘 기준(손님 앞에서 보는 화면). 다음 예약에 이미 잡힌 시술의 갈래는 뺀다.
+  // 추천 시술 — 오늘 기준(손님 앞에서 보는 화면). 다음 예약에 잡힌 시술, 수집 뒤 지난 예약에서 받으셨을
+  // 시술의 갈래는 뺀다(이력에 아직 없어 '때가 됐다'고 나올 수 있다).
   const mine = visitsByCustomer(all.map((h) => ({ customer_id: cust.id, date: h.date, service: h.service, kind: h.kind })));
   const recs = recommend(mine.get(cust.id) ?? [], pairStats(visitsByCustomer(storeTx), today), today, settings,
-    catsOf(nextBk?.service));
+    [...catsOf(nextBk?.service), ...catsOf(passedBk?.service)]);
 
   return {
     cust, name, phone, settings, vip, avg,
     history, charges, others,
     chargedTotal, balance, pocketIds,
-    familyList, nextBk, topSvc,
+    familyList, nextBk, passedBk, topSvc,
     overdue, due, first, vac, today,
     sinceLast, next, top, recs,
   };

@@ -22,6 +22,7 @@ type Row = {
   state: string | null; // 휴가를 반영한 재방문 상태(서버에서 careState)
   cycle: number | null; // 평소 방문 주기(일)
   hasBooking: boolean;
+  held: boolean; // 챙길 고객에서 뺄 분 — 앞으로 올 예약 + 수집 뒤 예약 시각이 지난 분(lib/bookings bookingSets)
   hasPhone: boolean;
   tail: string; // 전화번호 뒷자리 4자리(검색용) — 전체 번호는 받지 않는다
   churned: boolean;
@@ -135,10 +136,11 @@ export default function CustomersList({
     // 이탈위험·재방문도래는 홈 신호와 같은 기준으로 — '이탈 판정'(설정: N개월 초과 미방문 등)
     // 고객과 디자이너가 직접 이탈 표시한 고객은 홈 숫자에서 빠지므로 여기서도 빼야
     // '눌렀더니 인원이 다른' 불일치가 안 생긴다.
-    // needsCare 는 이미 예약한 분도 뺀다 — 예약이 잡혔으면 더 챙길 대상이 아니다.
+    // needsCare 는 이미 예약한 분도 뺀다 — 예약이 잡혔으면 더 챙길 대상이 아니다. 수집 뒤 예약 시각이
+    // 지난 분(다녀가셨을 분)도 다음 수집까지는 뺀다 — 홈 숫자와 같아야 한다.
     const care = (r: Row) => needsCare(
       { revisit_state: r.state, last_visit: r.last_visit, visit_count: r.visit_count, revisit_cycle_days: r.cycle },
-      { settings, churned: r.churned, booked: r.hasBooking, asOf },
+      { settings, churned: r.churned, booked: r.held, asOf },
     );
     if (chips.has('overdue')) f = f.filter((r) => r.state === 'overdue' && care(r));
     if (chips.has('due')) f = f.filter((r) => r.state === 'due' && care(r));
@@ -204,8 +206,8 @@ export default function CustomersList({
 
       {/* 늘 보이는 건 자주 쓰는 넷. 나머지 조건 13개 중 9개는 '필터' 안에 접는다 — 폰 화면 절반이 필터였다. */}
       <div className="fchips">
-        <Chip k="overdue" label="이탈위험" />
-        <Chip k="due" label="재방문도래" />
+        <Chip k="overdue" label="이탈 위험" />
+        <Chip k="due" label="재방문 도래" />
         <Chip k="new" label="신규" />
         <Chip k="vip" label="VIP" />
         <button type="button" className={'fchip' + (hiddenOn ? ' on' : '')} aria-expanded={more} onClick={() => setMore((m) => !m)}>
@@ -345,6 +347,8 @@ export default function CustomersList({
 function StateTag({ r }: { r: Row }) {
   if (r.churned) return null;
   if (r.hasBooking) return <span className="ctag booked">예약 있음</span>;
+  // 수집 뒤 예약 시각이 지난 분 — 다녀가셨는지는 다음 수집에 잡힌다. '이탈 위험'을 띄우지 않는다
+  if (r.held) return <span className="ctag held">지난 예약</span>;
   if (r.state === 'overdue') return <span className="ctag overdue">이탈 위험</span>;
   if (r.state === 'due') return <span className="ctag due">재방문 도래</span>;
   return null;

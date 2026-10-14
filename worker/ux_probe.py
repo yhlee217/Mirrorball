@@ -55,6 +55,23 @@ def is_active_booking(b: dict, now: dt.datetime) -> bool:
     return not t or t >= now.strftime("%H:%M")
 
 
+def care_hold(bookings: list[dict], since: str, now: dt.datetime) -> set:
+    """web/lib/bookings.ts bookingSets().hold — 챙길 고객에서 잠시 뺄 분.
+
+    앞으로 올 예약 + 마지막 수집(since, KST 날짜) 뒤 예약 시각이 지난 분(다녀가셨을 분, 취소·노쇼 제외).
+    수집이 주 1회라 그 사이 다녀가신 분의 방문은 다음 수집에야 잡힌다(개선 계획 v6 P0).
+    """
+    out = set()
+    for b in bookings:
+        cid = b.get("customer_id")
+        if not cid:
+            continue
+        passed = bool(b.get("date")) and not is_cancelled(b.get("status")) and b["date"] >= since
+        if is_active_booking(b, now) or passed:
+            out.add(cid)
+    return out
+
+
 def _day(v) -> dt.date | None:
     try:
         return dt.date.fromisoformat(v) if isinstance(v, str) and len(v) == 10 else None
@@ -206,15 +223,17 @@ def last_n_months(today: dt.date, n: int) -> list[str]:
 
 def measure(customers: list[dict], txs: list[dict], bookings: list[dict],
             has_phone: dict, settings: dict, now: dt.datetime,
-            contacted: frozenset | set = frozenset()) -> dict:
+            contacted: frozenset | set = frozenset(), since: str | None = None) -> dict:
+    """since = 마지막 수집일(KST 날짜). 모르면 오늘 — 그때는 '수집 뒤 지난 예약'을 못 가린다."""
     today = now.date()
     real = [c for c in customers if is_real(c.get("ext_id"))]
     active = {b["customer_id"] for b in bookings if b.get("customer_id") and is_active_booking(b, now)}
-    # 화면의 챙길 고객 = 예약 확인 전 후보에서 이미 예약한 분을 뺀 것(2026-10-12 P0 1번)
+    # 화면의 챙길 고객 = 예약 확인 전 후보에서 이미 예약한 분(+ 수집 뒤 예약 시각이 지난 분)을 뺀 것
+    held = care_hold(bookings, since or today.isoformat(), now)
     cand = [c for c in real if needs_care(c, settings, today, booked=False)]
-    state = [c for c in real if needs_care(c, settings, today, booked=c["id"] in active)]   # 홈 타일
+    state = [c for c in real if needs_care(c, settings, today, booked=c["id"] in held)]   # 홈 타일
     care = [c for c in real
-            if on_care_list(c, settings, today, c["id"] in active, c["id"] in contacted)]  # 챙길 고객 탭
+            if on_care_list(c, settings, today, c["id"] in held, c["id"] in contacted)]  # 챙길 고객 탭
     # 첫 방문 손님(안부·다시 오실 때)도 챙길 고객 탭에 오른다(개선 계획 v4 P1) — 화면과 같은 숫자로 센다
     ones = {c["id"]: c for c in real if (c.get("visit_count") or 0) == 1}
     one_svcs = services_on(txs, lambda cid: ones[cid].get("last_visit") if cid in ones else None)
@@ -222,16 +241,16 @@ def measure(customers: list[dict], txs: list[dict], bookings: list[dict],
     first_quiet = 0
     for c in ones.values():
         svcs = one_svcs.get(c["id"], [])
-        k = on_first_list(c, svcs, settings, today, c["id"] in active, c["id"] in contacted)
+        k = on_first_list(c, svcs, settings, today, c["id"] in held, c["id"] in contacted)
         if k:
             first[k] += 1
             care.append(c)
-        elif (c["id"] in contacted and not c.get("churned_at") and c["id"] not in active
+        elif (c["id"] in contacted and not c.get("churned_at") and c["id"] not in held
               and first_care(c, svcs, settings, today)):
             first_quiet += 1
 
-    since = (today - dt.timedelta(days=365)).isoformat()
-    recent = [t for t in txs if (t.get("date") or "") >= since]
+    year_ago = (today - dt.timedelta(days=365)).isoformat()
+    recent = [t for t in txs if (t.get("date") or "") >= year_ago]
 
     status = Counter()
     for b in bookings:
@@ -349,6 +368,16 @@ def _salon_tenants() -> list:
         return supa._get("/tenants", {"select": cols, "order": "slug"})
 
 
+def last_sync_day(tid: str) -> str | None:
+    """web/lib/sync.ts lastSynced — 마지막 성공 수집의 KST 날짜(수집 뒤 지난 예약을 가리는 기준)."""
+    rows = supa._get("/sync_jobs", {"tenant_id": f"eq.{tid}", "status": "eq.ok", "select": "finished_at",
+                                    "order": "finished_at.desc", "limit": "1"})
+    iso = rows[0].get("finished_at") if rows else None
+    if not iso:
+        return None
+    return dt.datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(KST).date().isoformat()
+
+
 def main() -> int:
     now = dt.datetime.now(KST)
     tenants = _salon_tenants()
@@ -383,7 +412,8 @@ def main() -> int:
             except Exception:  # noqa: BLE001 — 한 행이 깨져도 측정은 계속
                 bad += 1
 
-        m = measure(customers, txs, bookings, has_phone, lapse_settings(t.get("settings")), now, contacted)
+        m = measure(customers, txs, bookings, has_phone, lapse_settings(t.get("settings")), now, contacted,
+                    since=last_sync_day(tid))
         ms.append(m)
         print("\n".join(report(t.get("slug") or tid[:8], t.get("salon_name") or "", m)))
         if bad:

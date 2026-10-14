@@ -109,8 +109,8 @@ export default function HomeView({
           <div className="strip-l fill">
             <Link href="/alerts" className="pill main">챙길 고객 <b>{careCount.toLocaleString()}</b></Link>
             <div className="pill-2">
-              <Link href="/customers?filter=overdue" className="pill">이탈위험 <b>{signals.overdue.toLocaleString()}</b></Link>
-              <Link href="/customers?filter=due" className="pill">재방문도래 <b>{signals.due.toLocaleString()}</b></Link>
+              <Link href="/customers?filter=overdue" className="pill">이탈 위험 <b>{signals.overdue.toLocaleString()}</b></Link>
+              <Link href="/customers?filter=due" className="pill">재방문 도래 <b>{signals.due.toLocaleString()}</b></Link>
             </div>
           </div>
         </div>

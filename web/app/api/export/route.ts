@@ -18,7 +18,7 @@ type Row = {
   revisit_cycle_days: number | null;
 };
 
-const STATE: Record<string, string> = { overdue: '이탈위험', due: '재방문도래', new: '신규' };
+const STATE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', new: '신규' };
 const q = (v: unknown) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
 
 // 고객 데이터 CSV 내보내기(본인 테넌트). 이름/전화 복호화 포함.

@@ -15,10 +15,13 @@ export function kstDatePlus(days: number): string {
   return new Date(Date.now() + KST_OFFSET + days * 86400000).toISOString().slice(0, 10);
 }
 
-/** 아직 지나지 않은 예약인가 — 오늘이면 시간까지 비교(10:00 예약은 11:00 이 지나면 제외). */
-export function isUpcoming(date: string | null | undefined, time: string | null | undefined): boolean {
+/** 아직 지나지 않은 예약인가 — 오늘이면 시간까지 비교(10:00 예약은 11:00 이 지나면 제외). now 는 테스트용. */
+export function isUpcoming(
+  date: string | null | undefined,
+  time: string | null | undefined,
+  now: { date: string; time: string } = kstNow(),
+): boolean {
   if (!date) return false;
-  const now = kstNow();
   if (date > now.date) return true;
   if (date < now.date) return false;
   return !time || time >= now.time;

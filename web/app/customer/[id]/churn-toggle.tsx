@@ -9,7 +9,7 @@ export default function ChurnToggle({ id, churnedAt }: { id: string; churnedAt: 
   const [busy, setBusy] = useState(false);
 
   const apply = async (next: boolean) => {
-    if (next && !window.confirm('이 고객을 이탈로 표시할까요?\n\n챙길 고객·이탈위험에서 빠집니다. 이력은 그대로 남고 언제든 되돌릴 수 있어요.')) return;
+    if (next && !window.confirm('이 고객을 이탈로 표시할까요?\n\n챙길 고객·이탈 위험에서 빠집니다. 이력은 그대로 남고 언제든 되돌릴 수 있어요.')) return;
     setBusy(true);
     try {
       const r = await fetch('/api/customer-churn', {

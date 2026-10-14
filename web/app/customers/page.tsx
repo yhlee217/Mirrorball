@@ -5,7 +5,7 @@ import { openDek, requireTenant } from '@/lib/tenant';
 import { decryptPII } from '@/lib/crypto';
 import { careState, fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
-import { bookedCustomerIds } from '@/lib/bookings';
+import { bookingSets, recentBookingRows } from '@/lib/bookings';
 import { phoneTail } from '@/lib/contact';
 import { lastSynced } from '@/lib/sync';
 import { kstNow } from '@/lib/kst';
@@ -33,7 +33,7 @@ type Cust = {
 export default async function CustomersPage() {
   const { supabase, tenantId } = await requireTenant();
 
-  const [{ data: tenant }, customers, bookingSet, synced] = await Promise.all([
+  const [{ data: tenant }, customers, bkRows, synced] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
       supabase
@@ -41,8 +41,8 @@ export default async function CustomersPage() {
         .select('id,ext_id,pii_enc,visit_count,revisit_state,revisit_cycle_days,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d,gender,gender_manual,prepaid_balance')
         .order('id')
         .range(from, to)),
-    // 앞으로 올 예약만 — 지난 예약·취소·노쇼는 빠진다. 홈·챙길 고객과 같은 판정이다.
-    bookedCustomerIds(supabase, tenantId),
+    // 예약 판정 재료 — '예약 있음'은 앞으로 올 예약만, 이탈위험·재방문도래는 수집 뒤 지난 예약도 뺀다(lib/bookings)
+    recentBookingRows(supabase, tenantId),
     // 손님별 시술 갈래는 '시술' 필터를 고를 때만 받는다(api/customer-services) — 거래 전체를 매번 받지 않게
     lastSynced(supabase), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다(lib/customers careState)
   ]);
@@ -50,6 +50,7 @@ export default async function CustomersPage() {
   const tRow = tenant as { dek_wrapped: string | null; settings: unknown } | null;
   const settings = mergeSettings(tRow?.settings);
   const asOf = synced?.date ?? kstNow().date;
+  const { upcoming, hold } = bookingSets(bkRows, asOf);
   const dek = await openDek(tRow?.dek_wrapped);
 
   const list = ((customers as Cust[]) ?? []).filter((c) => isRealCustomer(c.ext_id));
@@ -81,7 +82,8 @@ export default async function CustomersPage() {
     first_visit: c.first_visit,
     state: careState(c, settings, asOf), // 휴가를 반영한 재방문 상태 — 홈·챙길 고객과 같은 기준
     cycle: c.revisit_cycle_days,
-    hasBooking: bookingSet.has(c.id),
+    hasBooking: upcoming.has(c.id),
+    held: hold.has(c.id), // 예약했거나 수집 뒤 예약 시각이 지난 분 — 홈 숫자 · 챙길 고객과 같은 판정
     hasPhone: decoded[i].hasPhone,
     tail: decoded[i].tail,
     churned: !!c.churned_at, // 디자이너가 직접 이탈로 표시한 고객

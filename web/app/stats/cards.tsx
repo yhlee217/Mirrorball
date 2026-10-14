@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { man, manRange, price } from '@/lib/format';
 import { BANDS, DOW_MON, type Cohort, type SvcRow, type weekHeat } from '@/lib/trends';
@@ -117,17 +118,30 @@ export function SummaryCard({
         {prepaid.n > 0 ? <Num label="선불 잔액" v={`약 ${man(prepaid.sum)}`} sub={`${prepaid.n.toLocaleString()}명`} /> : null}
       </div>
       {/* 할 일 — 통계를 보고 '그래서 뭘 하지'로 바로 건너가게. 숫자는 홈·챙길 고객과 같은 기준 */}
-      {careCount > 0 || unknownGender > 0 || prepaidGone > 0 ? (
-        <div className="strip-l">
-          {careCount > 0 ? <Link href="/alerts" className="pill main">챙길 고객 <b>{careCount.toLocaleString()}</b></Link> : null}
-          {prepaidGone > 0 ? (
-            <Link href="/customers?filter=prepaid" className="pill">선불 3개월+ <b>{prepaidGone.toLocaleString()}</b></Link>
-          ) : null}
-          {unknownGender > 0 ? (
-            <Link href="/customers?filter=nogender" className="pill">성별 미상 <b>{unknownGender.toLocaleString()}</b></Link>
-          ) : null}
-        </div>
-      ) : null}
+      <TodoPills pills={[
+        careCount > 0 ? <Link key="care" href="/alerts" className="pill main">챙길 고객 <b>{careCount.toLocaleString()}</b></Link> : null,
+        prepaidGone > 0 ? (
+          <Link key="pp" href="/customers?filter=prepaid" className="pill">선불 3개월+ <b>{prepaidGone.toLocaleString()}</b></Link>
+        ) : null,
+        unknownGender > 0 ? (
+          <Link key="ng" href="/customers?filter=nogender" className="pill">성별 미상 <b>{unknownGender.toLocaleString()}</b></Link>
+        ) : null,
+      ]} />
+    </div>
+  );
+}
+
+/**
+ * 할 일 알약 — 홈 '지난주' 카드와 같은 모양(globals.css .strip-l.fill). 한 줄을 고르게 채우고, 한 줄에 안
+ * 들어가면 첫 알약이 윗줄 · 나머지 둘이 아랫줄에 반씩 — 셋째만 혼자 떨어져 작은 버튼처럼 보이지 않게.
+ * 둘뿐이면 반씩(묶지 않는다 — 묶으면 둘째가 2/3 를 차지한다).
+ */
+function TodoPills({ pills }: { pills: ReactNode[] }) {
+  const on = pills.filter(Boolean);
+  if (!on.length) return null;
+  return (
+    <div className="strip-l fill">
+      {on.length === 3 ? <>{on[0]}<div className="pill-2">{on.slice(1)}</div></> : on}
     </div>
   );
 }
