@@ -23,6 +23,7 @@ type Row = {
   cycle: number | null; // 평소 방문 주기(일)
   hasBooking: boolean;
   held: boolean; // 챙길 고객에서 뺄 분 — 앞으로 올 예약 + 수집 뒤 예약 시각이 지난 분(lib/bookings bookingSets)
+  seen: boolean; // 수집 뒤 다녀가신 분(예약 기준) — visit_count · last_visit 에 이미 센 상태(lib/visits seenSinceSync)
   hasPhone: boolean;
   tail: string; // 전화번호 뒷자리 4자리(검색용) — 전체 번호는 받지 않는다
   churned: boolean;
@@ -347,8 +348,8 @@ export default function CustomersList({
 function StateTag({ r }: { r: Row }) {
   if (r.churned) return null;
   if (r.hasBooking) return <span className="ctag booked">예약 있음</span>;
-  // 수집 뒤 예약 시각이 지난 분 — 다녀가셨는지는 다음 수집에 잡힌다. '이탈 위험'을 띄우지 않는다
-  if (r.held) return <span className="ctag held">지난 예약</span>;
+  // 수집 뒤 다녀가신 분 — 줄에 이미 'N회 · 어제'로 셌다. 수집 전 상태(이탈 위험 등)는 지금의 사실이 아니다
+  if (r.seen || r.held) return null;
   if (r.state === 'overdue') return <span className="ctag overdue">이탈 위험</span>;
   if (r.state === 'due') return <span className="ctag due">재방문 도래</span>;
   return null;

@@ -32,13 +32,14 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     cust, name, phone, vip, avg,
     history, charges, others,
     chargedTotal, balance, pocketIds,
-    familyList, nextBk, passedBk, topSvc,
+    familyList, nextBk, topSvc,
     overdue, due, first, vac, today,
+    visitCount, lastVisit, seenLast,
     sinceLast, next, top, recs,
   } = await loadCarte(params.id);
-  // 상태 뱃지 — 이탈로 표시한 분, 다음 예약이 잡힌 분, 수집 뒤 예약 시각이 지난 분(다녀가셨을 분)에겐
-  // 띄우지 않는다(이미 정해졌거나 오시기로 했거나 오셨다)
-  const badge = cust.churned_at || nextBk || passedBk ? null : overdue ? 'overdue' : due ? 'due' : first;
+  // 상태 뱃지 — 이탈로 표시한 분, 다음 예약이 잡힌 분, 수집 뒤 다녀가신 분(예약 기준)에겐 띄우지 않는다
+  // (이미 정해졌거나 오시기로 했거나 방금 오셨다)
+  const badge = cust.churned_at || nextBk || seenLast ? null : overdue ? 'overdue' : due ? 'due' : first;
 
   return (
     <main className="wrap">
@@ -54,7 +55,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
               {badge ? <span className={'ctag ' + badge}>{BADGE[badge]}</span> : null}
             </h2>
             <div className="s">
-              {cust.visit_count}회{cust.total_won ? ' · 누적 ' + man(cust.total_won) : ''}
+              {visitCount}회{cust.total_won ? ' · 누적 ' + man(cust.total_won) : ''}
             </div>
           </div>
           {/* 챙길 고객 대상(뱃지)일 때만 '연락함'으로 남긴다 — 예약 확인 전화까지 세면 연락 효과가 부푼다 */}
@@ -63,7 +64,8 @@ export default async function CustomerPage({ params }: { params: { id: string } 
 
         {/* 첫 화면에: 누구 · 지금 상태(뱃지) · 한 줄 띠 · 메모 · 추천 시술 · 다음 예약(UX 계획 v3) */}
         <FactStrip
-          lastVisit={cust.last_visit}
+          lastVisit={lastVisit}
+          seenLast={seenLast}
           sinceLast={sinceLast}
           next={next}
           prepaid={chargedTotal > 0}

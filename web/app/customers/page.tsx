@@ -6,6 +6,7 @@ import { decryptPII } from '@/lib/crypto';
 import { careState, fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookingSets, recentBookingRows } from '@/lib/bookings';
+import { laterDay, seenSinceSync } from '@/lib/visits';
 import { phoneTail } from '@/lib/contact';
 import { lastSynced } from '@/lib/sync';
 import { kstNow } from '@/lib/kst';
@@ -52,6 +53,8 @@ export default async function CustomersPage() {
   const settings = mergeSettings(tRow?.settings);
   const asOf = synced?.date ?? kstNow().date;
   const { upcoming, hold } = bookingSets(bkRows, asOf);
+  // 지금 기준으로 이미 다녀가신 분(수집 뒤 예약 시간이 지남) — 방문 횟수 · 마지막 방문에 바로 센다(lib/visits)
+  const seen = seenSinceSync(bkRows, synced);
   const dek = await openDek(tRow?.dek_wrapped);
 
   const list = ((customers as Cust[]) ?? []).filter((c) => isRealCustomer(c.ext_id));
@@ -77,14 +80,15 @@ export default async function CustomersPage() {
   const rows = list.map((c, i) => ({
     id: c.id,
     name: decoded[i].name,
-    visit_count: c.visit_count,
+    visit_count: c.visit_count + (seen.get(c.id)?.count ?? 0),
     total_won: c.total_won || 0,
-    last_visit: c.last_visit,
+    last_visit: laterDay(c.last_visit, seen.get(c.id)?.last),
     first_visit: c.first_visit,
     state: careState(c, settings, asOf), // 휴가를 반영한 재방문 상태 — 홈·챙길 고객과 같은 기준
     cycle: c.revisit_cycle_days,
     hasBooking: upcoming.has(c.id),
     held: hold.has(c.id), // 예약했거나 수집 뒤 예약 시각이 지난 분 — 홈 숫자 · 챙길 고객과 같은 판정
+    seen: seen.has(c.id), // 수집 뒤 다녀가신 분(예약 기준) — 상태 뱃지를 띄우지 않는다
     hasPhone: decoded[i].hasPhone,
     tail: decoded[i].tail,
     churned: !!c.churned_at, // 디자이너가 직접 이탈로 표시한 고객

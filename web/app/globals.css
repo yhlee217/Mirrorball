@@ -94,19 +94,17 @@ body{background:var(--bg);color:var(--ink);
 .card > div:first-child > .bf-day{border-top:none}
 
 /* 3-2. 이름 옆 뱃지 — 모양은 같고 색만 다르다 */
-.tag-new,.tag-vip,.tag-off,.tag-pend{display:inline-block;font-size:12px;font-weight:800;
+.tag-new,.tag-vip,.tag-off{display:inline-block;font-size:12px;font-weight:800;
   border-radius:20px;padding:1px 7px;margin-left:6px;vertical-align:middle}
 .tag-new{color:var(--sage-ink);background:#E7EFE5}
 .tag-vip{color:var(--gold-ink);background:#F2EAD8}
 .tag-off{color:var(--muted);background:var(--soft)}
-.tag-pend{color:var(--muted);background:var(--soft)}   /* 방문 탭 '예약 기준' — 수집 전이라 확정 아님(옅게) */
 /* 상태 뱃지 — 지금 이 손님에게 할 일(이탈 위험 · 재방문 도래 · 첫 방문 · 예약 있음). 챙길 고객 · 고객 목록 · 카르테 머리말 */
 .ctag{font-size:12px;font-weight:800;border-radius:20px;padding:1px 7px;white-space:nowrap}
 .ctag.overdue{background:#F3E6E2;color:var(--rose-ink)}
 .ctag.due{background:#F2EAD8;color:var(--gold-ink)}
 .ctag.booked{background:#E4EDE2;color:var(--sage-ink)}
 .ctag.hello,.ctag.back{background:#E7EFE5;color:var(--sage-ink)}   /* 첫 방문 — 홈 예약의 '첫 방문' 꼬리표와 같은 색 */
-.ctag.held{background:var(--soft);color:var(--muted)}   /* 지난 예약 — 수집 뒤 예약 시각이 지났고 방문은 아직 안 잡힘. 할 일이 아니라 옅게 */
 /* 선불 잔액 꼬리표 — 상태가 아니라 곁정보라 테두리만(챙길 고객 · 고객 목록 이름 옆) */
 .li .nm .ppd{margin-left:6px;vertical-align:middle}
 .ppd{font-size:12px;font-weight:700;color:var(--accent-d);border:1px solid var(--line);border-radius:20px;padding:0 7px;white-space:nowrap}

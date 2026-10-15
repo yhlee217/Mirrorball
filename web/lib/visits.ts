@@ -42,3 +42,35 @@ export function visitsSinceSync<B extends { date: string | null; time: string | 
     return after && !isUpcoming(b.date, b.time, now);
   });
 }
+
+/**
+ * 손님별 수집 뒤 다녀가신 날(예약 기준) — 몇 번 · 마지막 날. 고객 목록 · 상세보기의 'N회' · '마지막 방문'을
+ * 수집 기준이 아니라 지금 기준으로 맞춘다("지금 이미 다녀가신 분은 세야지", 2026-10-15 폰 확인).
+ * 같은 날 두 예약은 한 번. 노쇼였다면 다음 수집이 바로잡는다.
+ */
+export function seenSinceSync<B extends { customer_id: string | null; date: string | null; time: string | null; status: string | null }>(
+  rows: B[],
+  sync: { date: string; time: string } | null,
+  now: { date: string; time: string } = kstNow(),
+): Map<string, { count: number; last: string }> {
+  const out = new Map<string, { count: number; last: string }>();
+  if (!sync) return out;
+  const days = new Map<string, Set<string>>();
+  for (const b of visitsSinceSync(rows, sync, now)) {
+    if (b.customer_id && b.date) days.set(b.customer_id, (days.get(b.customer_id) ?? new Set()).add(b.date));
+  }
+  for (const [id, ds] of days) {
+    const sorted = [...ds].sort();
+    out.set(id, { count: sorted.length, last: sorted[sorted.length - 1] });
+  }
+  return out;
+}
+
+/** 마지막 방문 — 수집된 날과 수집 뒤 다녀가신 날 중 늦은 쪽(KST 날짜). */
+export function laterDay(a: string | null | undefined, b: string | null | undefined): string | null {
+  const x = a ? a.slice(0, 10) : null;
+  const y = b ? b.slice(0, 10) : null;
+  if (!x) return y;
+  if (!y) return x;
+  return x > y ? x : y;
+}

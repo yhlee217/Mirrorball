@@ -99,6 +99,11 @@ export default async function VisitsPage() {
       };
     });
   // 수집 전 — 예약에 적힌 시각 · 시술. 처음 오신 분(손님 기록이 아직 없음)은 예약의 이름으로, 상세보기 없이.
+  // 지금 기준으로 이미 다녀가신 분이라 방문 횟수에도 센다 — 수집된 횟수 다음부터 차례로(같은 분이 두 번이면 +1, +2).
+  const pendDays = new Map<string, string[]>();
+  for (const b of pending) {
+    if (b.customer_id && b.date) pendDays.set(b.customer_id, [...new Set([...(pendDays.get(b.customer_id) ?? []), b.date])].sort());
+  }
   const pendingItems = pending
     .filter((b) => !b.customer_id || isRealCustomer(cmap.get(b.customer_id)?.ext_id ?? null))
     .map(async (b): Promise<Item> => {
@@ -110,7 +115,7 @@ export default async function VisitsPage() {
         time: b.time,
         service: friendlyService(b.service) || '',
         amount: 0,
-        nth: (c?.visit_count ?? 0) + 1,
+        nth: c ? c.visit_count + (pendDays.get(c.id) ?? []).indexOf(b.date as string) + 1 : 1,
         pending: true,
         memo: '',
         tip: careFor(b.service)?.tip ?? '',

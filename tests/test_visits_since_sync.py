@@ -61,3 +61,29 @@ def test_visit_number_is_as_of_that_visit():
     assert got["ord"]["a|2026-10-09"] == 7 and got["ord"]["a|2026-10-01"] == 6
     assert got["ord"]["b|2026-10-11"] == 1                               # 첫 방문
     assert [got["ord"][f"c|2026-10-{d}"] for d in ("12", "10", "03")] == [3, 2, 1]
+
+
+def test_seen_since_sync_counts_each_customer_as_of_now():
+    """고객 목록 · 상세보기 — 지금 기준으로 다녀가신 분은 'N회' · 마지막 방문에 바로 센다(같은 날 두 예약은 한 번)."""
+    got = run_ts(["lib/visits.ts"], """
+const { seenSinceSync, laterDay } = require('./visits.js');
+const m = seenSinceSync(D.rows, D.sync, D.now);
+out({
+  seen: Object.fromEntries([...m.entries()]),
+  none: seenSinceSync(D.rows, null, D.now).size,
+  later: [laterDay('2026-07-01', '2026-10-14'), laterDay('2026-10-14T05:00:00Z', null), laterDay(null, '2026-10-13'), laterDay(null, null)],
+});
+""", {"sync": SYNC, "now": NOW, "rows": [
+        {"customer_id": "a", "date": "2026-10-13", "time": "11:00", "status": "예약"},
+        {"customer_id": "a", "date": "2026-10-14", "time": "18:30", "status": "예약"},
+        {"customer_id": "a", "date": "2026-10-14", "time": "19:30", "status": "예약"},    # 같은 날 두 예약 — 한 번
+        {"customer_id": "b", "date": "2026-10-14", "time": "15:00", "status": "노쇼"},    # 노쇼 — 안 셈
+        {"customer_id": "c", "date": "2026-10-15", "time": "15:00", "status": "예약"},    # 아직 안 옴 — 안 셈
+        {"customer_id": "d", "date": "2026-10-12", "time": "11:00", "status": "예약"},    # 수집 전 — 이미 수집됨
+        {"customer_id": None, "date": "2026-10-14", "time": "12:00", "status": "예약"},   # 손님 기록 없음
+    ]})
+    if got is None:
+        pytest.skip("node · web/node_modules 가 없다")
+    assert got["seen"] == {"a": {"count": 2, "last": "2026-10-14"}}
+    assert got["none"] == 0                                          # 수집 기록이 없으면 세지 않는다
+    assert got["later"] == ["2026-10-14", "2026-10-14", "2026-10-13", None]

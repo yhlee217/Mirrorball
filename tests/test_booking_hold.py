@@ -74,19 +74,19 @@ def test_customer_seen_since_sync_leaves_the_list_until_next_sync():
     assert up.measure(c, [], bks, {}, S, NOW)["care"] == 1
 
 
-def test_carte_next_says_passed_booking_instead_of_overdue():
-    """카르테 '다음' 칸 — 예약 > 지난 예약 > 예상. 지난 예약이면 '5주 지남'을 셈하지 않는다."""
+def test_carte_next_counts_from_the_visit_since_sync():
+    """카르테 '다음' 칸 — 수집 뒤 다녀가신 날을 마지막 방문으로 넘기면 그날부터 다음 예상(어제 오신 분께 '5주 지남' 없음)."""
     got = run_ts(["lib/carte-stats.ts"], """
 const { nextVisit } = require('./carte-stats.js');
-const base = { today: '2026-10-14', lastVisit: '2026-07-01', visitCount: 5, cycleDays: 35, lastServices: ['뿌리염색'] };
+const base = { today: '2026-10-14', visitCount: 6, cycleDays: 35, lastServices: ['뿌리염색'] };
 out([
-  nextVisit({ ...base, bookedDate: '2026-10-20', passedDate: '2026-10-13' }),
-  nextVisit({ ...base, bookedDate: null, passedDate: '2026-10-13' }),
-  nextVisit({ ...base, bookedDate: null, passedDate: null }).kind,
+  nextVisit({ ...base, lastVisit: '2026-07-01', bookedDate: null }),          // 수집 기준 — 한참 지남
+  nextVisit({ ...base, lastVisit: '2026-10-13', bookedDate: null }),          // 지금 기준 — 어제 다녀가심
+  nextVisit({ ...base, lastVisit: '2026-10-13', bookedDate: '2026-11-20' }),  // 잡힌 예약이 먼저
 ]);
 """, {})
     if got is None:
         pytest.skip("node · web/node_modules 가 없다")
-    assert got[0] == {"kind": "booked", "date": "2026-10-20"}
-    assert got[1] == {"kind": "passed", "date": "2026-10-13"}
-    assert got[2] == "expected"
+    assert got[0]["kind"] == "expected" and got[0]["overdueDays"] > 0
+    assert got[1] == {"kind": "expected", "date": "2026-11-17", "basis": "평소 5주 주기", "estimated": False, "overdueDays": 0}
+    assert got[2] == {"kind": "booked", "date": "2026-11-20"}

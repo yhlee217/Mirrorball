@@ -15,20 +15,15 @@ export type Item = {
   time: string | null;
   service: string;
   amount: number;
-  nth: number; // 그 방문이 몇 번째였나(lib/visits visitOrdinals) — 수집 전이면 다음 번째
-  pending: boolean; // 마지막 수집 뒤 지난 예약으로 보여 주는 줄(방문 기록은 다음 수집에 들어온다)
+  nth: number; // 그 방문이 몇 번째였나(lib/visits visitOrdinals) — 수집 뒤 다녀가신 분도 센다(수집된 횟수 다음부터)
+  pending: boolean; // 마지막 수집 뒤 지난 예약으로 보여 주는 줄 — 시술 · 금액 · 메모는 다음 수집에 들어온다
   memo: string;
   tip: string;
 };
 
 function Row({ it }: { it: Item }) {
-  const tag = it.pending ? (
-    <span className="tag-pend">예약 기준</span>
-  ) : it.nth <= 1 ? (
-    <span className="tag-new">첫 방문</span>
-  ) : (
-    <span className="nm-n">{it.nth}회째</span>
-  );
+  // 지금 기준으로 이미 다녀가신 분은 수집 전이라도 몇 번째인지 센다 — 출처(예약)는 아래 줄 끝에 옅게
+  const tag = it.nth <= 1 ? <span className="tag-new">첫 방문</span> : <span className="nm-n">{it.nth}회째</span>;
   const body = (
     <>
       <div className="av">{it.name.charAt(0)}</div>
@@ -41,6 +36,7 @@ function Row({ it }: { it: Item }) {
           {it.time ? it.time + ' · ' : ''}
           {it.service || '시술'}
           {it.amount ? ' · ' + man(it.amount) : ''}
+          {it.pending ? ' · 예약 기준' : ''}
         </div>
         {/* 매장이 그날 남긴 메모는 디자이너 본인의 기록이라 그대로 보여준다 */}
         {it.memo ? <div className="memo-note">{it.memo}</div> : null}
@@ -98,8 +94,9 @@ export default function VisitsList({
     <div className="card">
       {items.some((it) => it.pending) ? (
         <Help>
-          마지막 수집({syncLabel ?? '일요일'}) 뒤에 다녀가신 분은 아직 방문 기록이 없어서, 지난 예약으로 보여 드려요(&lsquo;예약
-          기준&rsquo;). 시술 · 금액 · 메모와 예약 없이 오신 분은 다음 수집(일요일) 때 들어오고, 그때 &lsquo;N회째&rsquo;로 바뀌어요.
+          마지막 수집({syncLabel ?? '일요일'}) 뒤에 다녀가신 분은 아직 방문 기록이 없어서, 예약 시간이 지난 분을 방문으로
+          세어 보여 드려요(&lsquo;예약 기준&rsquo; — 취소 · 노쇼는 빼요). 시술 · 금액 · 메모와 예약 없이 오신 분은 다음 수집(일요일) 때
+          들어와요.
         </Help>
       ) : null}
       {groups.map((g) => (

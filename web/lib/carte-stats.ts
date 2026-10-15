@@ -11,7 +11,6 @@ export { agoWords, shortDate };
 
 export type NextVisit =
   | { kind: 'booked'; date: string }
-  | { kind: 'passed'; date: string } // 수집 뒤 예약 시각이 지남 — 다녀가셨는지는 다음 수집에 잡힌다
   | { kind: 'expected'; date: string; basis: string; estimated: boolean; overdueDays: number }
   | null;
 
@@ -23,8 +22,8 @@ function serviceCycle(services: (string | null)[]): { days: number; cat: string 
 
 /**
  * 다음 방문은 언제쯤일까(UX 계획 B2).
- *  1) 잡힌 예약이 있으면 그게 답이다. 마지막 수집 뒤 예약 시각이 지났으면 '지난 예약' — 방문은 다음
- *     수집에 잡히므로 그 전에는 예상일을 셈하지 않는다(어제 오신 분께 '5주 지남'이 뜨지 않게, v6 P0).
+ *  1) 잡힌 예약이 있으면 그게 답이다. 마지막 수집 뒤 다녀가신 분은 부르는 쪽이 그 날을 마지막 방문으로
+ *     넘긴다(lib/visits — 어제 오신 분께 '5주 지남'이 뜨지 않게).
  *  2) 방문 2회 이상: 마지막 방문 + 평소 주기(방문 간격 중앙값 — 워커의 revisit_cycle_days).
  *  3) 1회뿐: 그날 받은 시술의 표준 주기(lib/care-cycle.ts). 실측이 아니라 추정이라 그렇게 밝힌다.
  *     (2026-10-12 실측: 방문 2회 이상은 34~52% — 나머지 절반가량이 이 경우다.)
@@ -38,11 +37,9 @@ export function nextVisit(o: {
   cycleDays: number | null;
   lastServices: (string | null)[];
   bookedDate: string | null;
-  passedDate?: string | null;
   off?: OffDays;
 }): NextVisit {
   if (o.bookedDate) return { kind: 'booked', date: o.bookedDate };
-  if (o.passedDate) return { kind: 'passed', date: o.passedDate };
   if (!o.lastVisit || o.visitCount < 1) return null;
   let days: number;
   let basis: string;

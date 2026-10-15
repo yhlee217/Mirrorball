@@ -50,6 +50,7 @@ export function MemoAiCard({ cust, today }: { cust: Carte['cust']; today: string
  */
 export function FactStrip({
   lastVisit,
+  seenLast = null,
   sinceLast,
   next,
   prepaid,
@@ -59,6 +60,7 @@ export function FactStrip({
   vacation,
 }: {
   lastVisit: string | null;
+  seenLast?: string | null; // 수집 뒤 다녀가신 날(예약 기준) — 마지막 방문이 이 날이면 ? 에 밝힌다
   sinceLast: Carte['sinceLast'];
   next: Carte['next'];
   prepaid: boolean;
@@ -91,9 +93,9 @@ export function FactStrip({
       </div>
       <Help>
         {next && next.kind === 'expected' ? <>다음 방문 = {next.basis}로 본 예상일이에요. </> : null}
-        {next && next.kind === 'passed' ? (
-          <>지난 예약 = 마지막 수집 뒤 예약 시각이 지났어요. 다녀가셨으면 다음 수집 때 방문으로 잡히고, 그때까지는
-            챙길 고객에서 빼 둬요. </>
+        {seenLast && seenLast === lastVisit ? (
+          <>마지막 방문({shortDate(seenLast)})은 예약 기준이에요 — 예약 시간이 지나 방문으로 셌고, 시술 · 금액은 다음
+            수집(일요일) 때 들어와요. </>
         ) : null}
         {vacation > 0 ? <>마지막 방문 뒤 휴가 {vacation}일은 빼고 셌어요. </> : null}
         {prepaid ? <>선불 잔액은 결제수단이 기록되지 않아 충전 뒤 시술을 잔액에서 쓴 것으로 본 추정이에요. </> : null}
@@ -103,11 +105,10 @@ export function FactStrip({
   );
 }
 
-/** 다음 방문 — 잡힌 예약 > 수집 뒤 지난 예약 > 평소 주기 > 시술 기준 추정. 예상일이 지났으면 지난 만큼을 빨갛게. */
+/** 다음 방문 — 잡힌 예약 > 평소 주기 > 시술 기준 추정. 예상일이 지났으면 지난 만큼을 빨갛게. */
 function NextFact({ next }: { next: Carte['next'] }) {
   if (!next) return <div className="fact"><b>-</b><span>다음</span></div>;
   if (next.kind === 'booked') return <div className="fact"><b>{shortDate(next.date)}</b><span>예약</span></div>;
-  if (next.kind === 'passed') return <div className="fact"><b>{shortDate(next.date)}</b><span>지난 예약</span></div>;
   if (next.overdueDays > 0) {
     return (
       <div className="fact">
