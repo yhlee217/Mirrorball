@@ -1,7 +1,7 @@
 'use client';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
-export default function LogoutButton() {
+export default function LogoutButton({ label = '로그아웃' }: { label?: string }) {
   return (
     <button
       className="linkbtn"
@@ -10,7 +10,7 @@ export default function LogoutButton() {
         location.href = '/login';
       }}
     >
-      로그아웃
+      {label}
     </button>
   );
 }

@@ -223,7 +223,7 @@ export default async function AlertsPage() {
         <SyncChip synced={synced} />
       </div>
       <div className="body">
-        <AlertsList items={items} quiet={quiet} quietDays={CONTACT_QUIET_DAYS} effect={effect} />
+        <AlertsList items={items} quiet={quiet} quietDays={CONTACT_QUIET_DAYS} effect={effect} button={settings.contact_button} />
       </div>
       <ScreenReady />
     </main>

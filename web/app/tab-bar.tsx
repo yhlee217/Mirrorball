@@ -28,7 +28,7 @@ export default function TabBar() {
       /* 저장소를 못 쓰면 '‹ 뒤로'는 늘 홈으로 — 앱 밖으로 나가는 것보다 낫다 */
     }
   }, [p]);
-  if (p.startsWith('/login') || p.startsWith('/auth') || p.startsWith('/p/')) return null;
+  if (p.startsWith('/login') || p.startsWith('/auth') || p.startsWith('/p/') || p.startsWith('/start')) return null; // 로그인 전 화면
   return (
     <nav className="tabbar">
       {TABS.map((t) => (

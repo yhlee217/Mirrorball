@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseServer } from '@/lib/supabase/server';
+import { DEMO_PREFIX } from '@/lib/tenant-pick';
 
 // 데모 온보딩: 로그인 사용자에게 데모 테넌트+멤버십+운영 데이터를 생성.
 // service_role 로 RLS 우회(서버 전용). PII 없이 운영 필드만 시드.
@@ -19,14 +20,15 @@ export async function POST() {
     { auth: { persistSession: false } },
   );
 
+  // 이미 소속이 있으면 만들지 않는다 — 여럿이어도(maybeSingle 은 여러 줄이면 비어 와 데모를 또 만들었다)
   const { data: existing } = await admin
     .from('memberships')
     .select('tenant_id')
     .eq('user_id', user.id)
-    .maybeSingle();
-  if (existing) return NextResponse.json({ ok: true, tenant_id: existing.tenant_id });
+    .limit(1);
+  if (existing?.length) return NextResponse.json({ ok: true, tenant_id: existing[0].tenant_id });
 
-  const slug = 'demo-' + user.id.slice(0, 8);
+  const slug = DEMO_PREFIX + user.id.slice(0, 8); // 데모는 실제 매장보다 뒤 — lib/tenant-pick
   const { data: t, error: te } = await admin
     .from('tenants')
     .insert({ slug, salon_name: '데모 살롱' })

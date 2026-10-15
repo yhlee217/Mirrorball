@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { supabaseServer } from './supabase/server';
 import { unwrapDek, decryptPII } from './crypto';
+import { pickTenant, type MembershipRow } from './tenant-pick';
 
 /**
  * 서버 컴포넌트가 매번 반복하던 앞부분 — 로그인 확인 → 소속 테넌트 → 복호화 키.
@@ -24,10 +25,15 @@ export async function requireUser() {
 export async function getTenantId(
   supabase: ReturnType<typeof supabaseServer>,
 ): Promise<string | null> {
-  // 정렬 없이 첫 줄을 고르면 여러 매장에 속한 계정은 요청마다 다른 매장이 될 수 있다 — 가장 먼저 소속된 매장으로 고정
-  const { data } = await supabase.from('memberships').select('tenant_id')
+  // 정렬 없이 첫 줄을 고르면 여러 매장에 속한 계정은 요청마다 다른 매장이 될 수 있다 — 가장 먼저 소속된 매장으로 고정.
+  // 데모 매장은 뒤로(lib/tenant-pick) — 매장 연결 전에 데모를 만들었어도 실제 매장이 열린다(개선 계획 v11 P0).
+  const { data, error } = await supabase.from('memberships').select('tenant_id,tenants(slug)')
+    .order('created_at', { ascending: true }).order('tenant_id').limit(10);
+  if (!error) return pickTenant((data as MembershipRow[] | null) ?? []);
+  // 매장 이름을 함께 못 읽으면 예전처럼 가장 먼저 소속된 매장 — 이 길이 막혀 매장을 잃는 일은 없게
+  const { data: first } = await supabase.from('memberships').select('tenant_id')
     .order('created_at', { ascending: true }).order('tenant_id').limit(1).maybeSingle();
-  return (data as { tenant_id: string } | null)?.tenant_id ?? null;
+  return (first as { tenant_id: string } | null)?.tenant_id ?? null;
 }
 
 /**

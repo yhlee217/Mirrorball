@@ -44,6 +44,7 @@ def test_current_tenant_is_stable():
     fn = src[src.index("export async function getTenantId"):]
     fn = fn[: fn.index("\n}\n")]
     assert ".order('created_at'" in fn and ".limit(1)" in fn
+    assert "pickTenant(" in fn  # 데모 매장은 뒤로(v11 P0, tests/test_onboarding)
 
 
 def test_last_synced_takes_a_tenant():

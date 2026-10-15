@@ -1,6 +1,7 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
+import Link from 'next/link';
 import { openDek, requireTenant } from '@/lib/tenant';
 import { mergeSettings } from '@/lib/settings';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
@@ -128,6 +129,8 @@ export default async function SettingsPage() {
           <a className="btn ghost" href="/api/export" style={{ display: 'block', textAlign: 'center', marginBottom: 10 }}>
             고객 CSV 내보내기
           </a>
+          {/* 시작 안내(v11 P0) — 로그인 없이 열리는 페이지라 새로 오신 디자이너께 이 주소를 그대로 보내면 된다 */}
+          <Link className="btn ghost" href="/start" style={{ marginBottom: 10 }}>사용 안내</Link>
           <LogoutButton />
         </div>
       </div>

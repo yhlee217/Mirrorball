@@ -6,6 +6,7 @@ import { phoneDigits, smsHref } from '@/lib/contact';
 import { draftFor, whenWord } from '@/lib/drafts';
 import { daysBetween } from '@/lib/week';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
+import { mergeSettings } from '@/lib/settings';
 import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
 import { kstNow } from '@/lib/kst';
@@ -33,7 +34,7 @@ export default async function VisitsPage() {
   const since = new Date(Date.now() + KST - 13 * DAY).toISOString().slice(0, 10); // 최근 14일
 
   const [{ data: tenant }, txs, synced, { data: bookings }] = await Promise.all([
-    supabase.from('tenants').select('dek_wrapped,designer_name').eq('id', tenantId).maybeSingle(),
+    supabase.from('tenants').select('dek_wrapped,designer_name,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Tx>((from, to) =>
       supabase
         .from('transactions')
@@ -81,20 +82,22 @@ export default async function VisitsPage() {
   const cmap = new Map(custs.map((c) => [c.id, c]));
   const nth = visitOrdinals(collected, (id) => cmap.get(id)?.visit_count ?? 1);
 
-  const tRow = tenant as { dek_wrapped: string | null; designer_name: string | null } | null;
+  const tRow = tenant as { dek_wrapped: string | null; designer_name: string | null; settings: unknown } | null;
   const dek = await openDek(tRow?.dek_wrapped ?? null);
   const readContact = contactReader(dek);
   const designer = tRow?.designer_name?.trim() || null;
-  // 방문 뒤 문자(v9 P1) — 그날 시술의 홈케어 안내를 담아 문자 앱을 연다. 팁이 있는 시술 · 번호가 있는 분만.
-  // 예약 권유는 없다(lib/drafts 'after'). 챙길 고객 연락이 아니라 연락 기록 · 효과엔 남기지 않는다.
-  const afterSms = (name: string, phone: string | null, raw: string | null, date: string): string | null => {
+  const button = mergeSettings(tRow?.settings).contact_button; // 문자 · 카톡 등(설정, v11 P1)
+  // 방문 뒤 안내(v9 P1) — 그날 시술의 홈케어 안내 문구. 팁이 있는 시술만. 예약 권유는 없다(lib/drafts 'after').
+  // 챙길 고객 연락이 아니라 연락 기록 · 효과엔 남기지 않는다. 문자 앱 링크는 번호가 있을 때만 — 없으면 카톡 등으로.
+  const afterOf = (name: string, phone: string | null, raw: string | null, date: string) => {
     const care = careFor(raw);
-    const digits = phoneDigits(phone);
-    if (!care?.tip || !digits) return null;
-    return smsHref(digits, draftFor({
+    if (!care?.tip) return { after: null, sms: null };
+    const after = draftFor({
       kind: 'after', name, designer, svc: friendlyService(raw) || null, care,
       days: daysBetween(date, today), when: whenWord(date, today),
-    }));
+    });
+    const digits = phoneDigits(phone);
+    return { after, sms: digits ? smsHref(digits, after) : null };
   };
 
   const visitItems = collected
@@ -116,7 +119,7 @@ export default async function VisitsPage() {
         bookingId: null,
         memo: v.memo ?? '', // 그날 매장에서 적어둔 메모
         tip: careFor(rawMain)?.tip ?? '', // 그날 받은 시술의 홈케어 안내
-        sms: afterSms(name, phone, rawMain, v.date),
+        ...afterOf(name, phone, rawMain, v.date),
       };
     });
   // 수집 전 — 예약에 적힌 시각 · 시술. 처음 오신 분(손님 기록이 아직 없음)은 예약의 이름으로, 상세보기 없이.
@@ -143,7 +146,7 @@ export default async function VisitsPage() {
         bookingId: b.id,
         memo: '',
         tip: careFor(b.service)?.tip ?? '',
-        sms: afterSms(name, phone, b.service, b.date as string),
+        ...afterOf(name, phone, b.service, b.date as string),
       };
     });
   const markedItems = marked
@@ -163,6 +166,7 @@ export default async function VisitsPage() {
         bookingId: b.id,
         memo: '',
         tip: '',
+        after: null,
         sms: null,
       };
     });
@@ -181,7 +185,7 @@ export default async function VisitsPage() {
           <span className="sect-n">2주</span>
           <SyncChip synced={synced} />
         </div>
-        <VisitsList items={items} today={today} yesterday={yesterday} syncLabel={synced ? `${synced.label} ${synced.time}` : null} />
+        <VisitsList items={items} today={today} yesterday={yesterday} syncLabel={synced ? `${synced.label} ${synced.time}` : null} button={button} />
       </div>
       <ScreenReady />
     </main>

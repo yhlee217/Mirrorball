@@ -299,6 +299,12 @@ body{background:var(--bg);color:var(--ink);
 /* 줄 위쪽에 고정 — 가운데(50%)로 두면 팁을 펼쳤을 때 펼친 글 위로 내려앉는다 */
 .visit.has-act .tipd>summary{top:18px;right:72px}
 .tipsms{display:inline-block;margin-top:6px;padding:8px 0;font-size:13px;font-weight:800;color:var(--accent);text-decoration:none}
+button.tipsms{border:none;background:none;font-family:inherit;cursor:pointer}   /* 카톡 등으로(공유 창) — 문자 링크와 같은 모양 */
+/* 두 갈래 고르기(설정 '연락 버튼', v11 P1) — 고른 쪽만 채운다. 둘 다 진한 글씨(회색 칩은 '안 고름'으로 읽혀 옅다) */
+.seg{display:flex;gap:8px;margin-top:4px}
+.seg button{flex:1;min-height:42px;border-radius:12px;border:1px solid var(--line);background:var(--paper);color:var(--accent-d);
+  font-size:13.5px;font-weight:800;font-family:inherit;cursor:pointer}
+.seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .visit .vns{position:absolute;right:12px;top:13px}   /* 방문 탭 — 줄 오른쪽 가운데. 상세보기 이력은 줄 안 오른쪽 */
 .vns{flex:none;min-height:36px;padding:0 12px;border-radius:18px;
   border:1px solid var(--line);background:var(--paper);color:var(--rose-ink);font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer}
@@ -540,6 +546,22 @@ body{background:var(--bg);color:var(--ink);
 .entry{max-width:340px;margin:0 auto;padding:80px 24px;text-align:center}
 .entry .brand{font-family:Georgia,serif;font-weight:700;font-size:22px;margin-bottom:14px;color:var(--ink)}
 .muted{color:var(--muted);font-size:14px}
+/* 매장 연결 전 계정(app/no-salon, v11 P0) — 운영자에게 알릴 이메일이 먼저, 데모는 작게 */
+.nos-t{font-size:17px;font-weight:800;margin-bottom:8px}
+.nos-p{line-height:1.6;margin-bottom:14px}
+.nos-e{font-size:15px;font-weight:800;margin-bottom:14px;overflow-wrap:anywhere}
+.nos-b{font-size:15px;padding:13px;border-radius:12px;margin-bottom:12px}
+.nos-x{margin-top:36px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.nos-x .linkbtn{color:var(--muted);font-weight:600;text-decoration:none;padding:8px}
+/* 시작 안내(app/start, v11 P0) — 로그인 전, 운영자가 주소로 보내는 페이지 */
+.start-lead{font-size:14.5px;line-height:1.6;margin:0 2px 12px}
+.start-s{padding:14px 16px;margin-bottom:10px}
+.start-s h2{font-size:15.5px;font-weight:800;margin:0 0 6px}
+.start-s p{font-size:13.5px;margin:0 0 6px}
+.start-s ul{margin:0;padding-left:18px}
+.start-s li{font-size:13.5px;line-height:1.65;margin:3px 0}
+.start-go{font-size:15px;padding:13px;border-radius:12px;margin:16px 0 10px}
+.start-q{font-size:13px;color:var(--muted);text-align:center;margin-bottom:24px}
 .loginform{display:flex;flex-direction:column;gap:10px;margin-top:18px}
 .loginform input{padding:13px 14px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:var(--paper);color:var(--ink)}
 .loginform .err{color:var(--rose);font-size:12px;min-height:16px}

@@ -17,7 +17,7 @@ import { toVisits } from '@/lib/trends';
 import { hasOffDays, workedDays } from '@/lib/offdays';
 import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
 import HomeView, { type Brief } from './home-view';
-import OnboardButton from './onboard-button';
+import NoSalon from './no-salon';
 import { ScreenReady } from '@/components/screen-timer';
 
 type Cust = {
@@ -45,19 +45,9 @@ const SOON_DAYS = 7;
 
 export default async function Page() {
   // 홈만은 소속이 없을 때 리다이렉트가 아니라 온보딩 화면을 보여주므로 requireTenant 를 쓰지 않는다.
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const tenantId = await getTenantId(supabase);
-  if (!tenantId) {
-    return (
-      <main className="wrap">
-        <div className="entry">
-          <div className="brand">살롱 컨시어지</div>
-          <p className="muted">아직 연결된 살롱이 없어요. 데모 데이터로 홈을 확인해보세요.</p>
-          <OnboardButton />
-        </div>
-      </main>
-    );
-  }
+  if (!tenantId) return <NoSalon email={user.email ?? null} />; // 매장 연결 전 — 운영자에게 알릴 이메일(v11 P0)
 
   const today = kstNow().date;
   const [{ data: tenant }, { data: bookings }, customers, synced, bkRows, contactLog] = await Promise.all([

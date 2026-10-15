@@ -6,6 +6,8 @@ import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
 import { MSG } from '@/lib/copy';
 import { smsHref, telHref, type ContactVia } from '@/lib/contact';
+import type { ContactButton } from '@/lib/settings';
+import { shareOrCopy } from '@/lib/share';
 import type { Effect } from '@/lib/effect';
 import { man } from '@/lib/format';
 import { decodeAlerts, encodeAlerts, replaceQuery } from '@/lib/list-state';
@@ -30,11 +32,13 @@ export default function AlertsList({
   quiet,
   quietDays,
   effect,
+  button = 'sms',
 }: {
   items: Item[];
   quiet: number;
   quietDays: number;
   effect: Effect | null; // 지난 4주 연락 → 그 뒤 오심·예약(lib/effect) — 연락 기록이 없으면 null
+  button?: ContactButton; // 줄의 큰 버튼 — 문자 · 카톡 등(설정, v11 P1). 다른 쪽은 펼친 곳에
 }) {
   const router = useRouter();
   const [toast, setToast] = useState('');
@@ -55,26 +59,18 @@ export default function AlertsList({
     setTimeout(() => setToast(''), 1800);
   };
 
-  async function copy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.cssText = 'position:fixed;left:-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand('copy');
-      } catch {
-        /* noop */
-      }
-      document.body.removeChild(ta);
-    }
-    flash('문구 복사됨 · 카톡에 붙여넣기');
+  // 카톡 등으로 보내기(v11 P1) — 폰의 공유 창. 보내기를 마쳐야 '연락함'(수단 share), 창을 닫으면 아무것도 안 남긴다.
+  // 공유 창이 없는 브라우저(일부 PC)는 복사로 대신하고 '연락함'(copy) — 전의 '문구 복사'와 같다.
+  async function send(id: string, text: string) {
+    const r = await shareOrCopy(text);
+    if (r === 'sent') markContacted(id, 'share');
+    else if (r === 'copied') {
+      flash('문구 복사됨 · 카톡에 붙여넣기');
+      markContacted(id, 'copy');
+    } else if (r === 'fail') flash(MSG.copyFail);
   }
 
-  // 문자·전화·복사 중 무엇을 눌러도 '연락함'으로 남긴다 — 따로 '연락함' 버튼을 두면 누르는 걸
+  // 문자·전화·카톡 등(공유)·복사 중 무엇을 해도 '연락함'으로 남긴다 — 따로 '연락함' 버튼을 두면 누르는 걸
   // 잊고, 그러면 같은 분이 다음 주에 또 뜬다. 잘못 눌렀으면 카드에서 되돌린다.
   // 문자·전화는 누르는 순간 다른 앱으로 넘어가므로 keepalive 로 보내 요청이 끊기지 않게 한다.
   function markContacted(id: string, via: ContactVia) {
@@ -203,20 +199,21 @@ export default function AlertsList({
                 </button>
                 {/* 연락이 이 화면의 일이다 — 문자는 문구가 채워진 채로 열린다. 번호가 없으면 복사만. */}
                 <div className="crow-a">
-                  {it.phone ? (
-                    <>
-                      <a className="cbtn main" href={smsHref(it.phone, it.draft)} aria-label="문자 보내기" onClick={() => markContacted(it.id, 'sms')}>
-                        💬<span className="cbtn-t"> 문자</span>
-                      </a>
-                      <a className="cbtn" href={telHref(it.phone)} aria-label="전화" onClick={() => markContacted(it.id, 'call')}>
-                        📞
-                      </a>
-                    </>
+                  {it.phone && button === 'sms' ? (
+                    <a className="cbtn main" href={smsHref(it.phone, it.draft)} aria-label="문자 보내기" onClick={() => markContacted(it.id, 'sms')}>
+                      💬<span className="cbtn-t"> 문자</span>
+                    </a>
                   ) : (
-                    <button type="button" className="cbtn main" onClick={() => { copy(it.draft); markContacted(it.id, 'copy'); }}>
-                      📋 복사
+                    // 카톡 등(설정) · 번호가 없는 분 — 폰의 공유 창(안 되면 복사)
+                    <button type="button" className="cbtn main" aria-label="카톡 등으로 보내기" onClick={() => send(it.id, it.draft)}>
+                      📤<span className="cbtn-t"> 보내기</span>
                     </button>
                   )}
+                  {it.phone ? (
+                    <a className="cbtn" href={telHref(it.phone)} aria-label="전화" onClick={() => markContacted(it.id, 'call')}>
+                      📞
+                    </a>
+                  ) : null}
                 </div>
               </div>
               {isOpen ? (
@@ -224,10 +221,11 @@ export default function AlertsList({
                   <div className="draft">{it.draft}</div>
                   {it.note ? <div className="crow-note">{it.note}</div> : null}
                   <div className="crow-acts">
-                    {it.phone ? (
-                      <button type="button" onClick={() => { copy(it.draft); markContacted(it.id, 'copy'); }}>
-                        문구 복사
-                      </button>
+                    {/* 큰 버튼이 아닌 쪽 — 문자면 카톡 등으로, 카톡 등이면 문자로(번호가 있을 때) */}
+                    {it.phone && button === 'sms' ? (
+                      <button type="button" onClick={() => send(it.id, it.draft)}>카톡 등으로 보내기</button>
+                    ) : it.phone ? (
+                      <a href={smsHref(it.phone, it.draft)} onClick={() => markContacted(it.id, 'sms')}>문자로 보내기</a>
                     ) : null}
                     <Link href={`/customer/${it.id}`}>상세보기</Link>
                     {sent ? (

@@ -2,7 +2,7 @@
 
 다음 기능(내 말투로 등)을 감으로 정하지 않으려고 잰다. 디자이너별:
   · 마지막 접속일 — Supabase 로그인 기록(auth)
-  · 연락 수 — 챙길 고객에서 문자 · 전화 · 복사를 누른 손님 수(지난 1주 / 4주), 수단별
+  · 연락 수 — 챙길 고객에서 문자 · 전화 · 공유(카톡 등) · 복사를 한 손님 수(지난 1주 / 4주), 수단별
   · 이탈 표시 — 지난 4주에 직접 '이탈 처리'한 손님 수
 이메일·이름·전화는 찍지 않는다(매장 slug 와 날짜·건수만).
 
@@ -53,7 +53,7 @@ def report(slug: str, m: dict, now: dt.datetime) -> str:
     last = m["last_seen"]
     seen = "접속 기록 없음" if not last else (
         f"마지막 접속 {last.astimezone(KST):%m.%d} ({(now - last).days}일 전)")
-    via = " · ".join(f"{ {'sms': '문자', 'call': '전화', 'copy': '복사'}.get(k, k)} {v}"
+    via = " · ".join(f"{ {'sms': '문자', 'call': '전화', 'copy': '복사', 'share': '공유'}.get(k, k)} {v}"
                      for k, v in sorted(m["via_28"].items()))
     return (f"[{slug}] 계정 {m['users']}개 · {seen} · 연락 지난 1주 {m['contacted_7']}명 · 4주 {m['contacted_28']}명"
             + (f"({via})" if via else "") + f" · 이탈 처리 4주 {m['churned_28']}명")

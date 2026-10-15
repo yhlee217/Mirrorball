@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MSG } from '@/lib/copy';
 import { Help } from '@/components/help';
-import { isVip, isLapsed, cleanOffDates, type TenantSettings } from '@/lib/settings';
+import { isVip, isLapsed, cleanOffDates, type ContactButton, type TenantSettings } from '@/lib/settings';
 import { dayLabel } from '@/lib/week';
 
 const WEEK = ['월', '화', '수', '목', '금', '토', '일']; // 월=0 — lib/week dowMon 과 같은 번호
@@ -57,6 +57,8 @@ export default function SettingsForm({
   // 휴무 — 통계가 영업한 날끼리 견주게(lib/offdays). 정기 휴무 요일 + 휴가 기간.
   const [offW, setOffW] = useState<number[]>(initSettings.off_weekdays);
   const [offD, setOffD] = useState(initSettings.off_dates);
+  // 챙길 고객 줄의 큰 버튼 — 문자 · 카톡 등(폰의 공유 창), 개선 계획 v11 P1
+  const [cBtn, setCBtn] = useState<ContactButton>(initSettings.contact_button);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [saving, setSaving] = useState(false);
@@ -75,6 +77,7 @@ export default function SettingsForm({
     booking_days_ahead: bDays,
     off_weekdays: offW,
     off_dates: offD,
+    contact_button: cBtn,
   };
   // 휴무는 고르자마자 저장되는 게 아니라 아래 '저장'으로 함께 저장된다 — 잊지 않게 바뀌면 알린다.
   const offDirty =
@@ -149,6 +152,27 @@ export default function SettingsForm({
         <div className="row2">
           <a className="btn ghost" href="/profile">소개 편집</a>
           <button type="button" className="btn ghost" onClick={copyUrl}>공개 링크 복사</button>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: '14px 15px' }}>
+        <div className="ch" style={{ padding: 0, marginBottom: 3 }}>연락 버튼</div>
+        <Help>
+          챙길 고객 줄의 큰 버튼이에요. 손님께 주로 문자를 보내시면 &lsquo;문자&rsquo;, 카카오톡으로 보내시면 &lsquo;카톡 등&rsquo;
+          — 폰의 공유 창이 문구가 채워진 채 열려요. 다른 쪽은 줄을 펼치면 있어요. 보내기를 마치면 &lsquo;연락함&rsquo;으로 남아요.
+        </Help>
+        <div className="seg" role="group" aria-label="연락 버튼">
+          {([['sms', '💬 문자'], ['share', '📤 카톡 등']] as const).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              className={cBtn === v ? 'on' : undefined}
+              aria-pressed={cBtn === v}
+              onClick={() => setCBtn(v)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 

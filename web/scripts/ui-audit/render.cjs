@@ -128,7 +128,7 @@ const visits = names.slice(0, 9).map((n, i) => ({
 // 견본은 그대로 열 줄(전후 비교가 되게) — 수집된 방문 아홉 + 수집 전 하나
 visits.unshift({ id: 'p0', name: names[9], date: '2026-10-11', time: '16:00', service: '뿌리염색', amount: 0, nth: 11, pending: true,
   noshow: false, bookingId: 'b0', memo: '', tip: '염색 당일은 두피 자극을 피하고, 이틀 정도는 강한 스타일링을 쉬는 게 좋아요.',
-  sms: 'sms:01012345678?&body=' }); // 예약 줄에도 팁 표식 + [노쇼](v9 P1)
+  after: '서하린님, 어제 뿌리염색 해드린 하예원이에요 😊', sms: 'sms:01012345678?&body=' }); // 예약 줄에도 팁 표식 + [노쇼](v9 P1)
 out.visits = screen('', `<div class="top"><b>방문</b><span class="sect-n">2주</span>${chip}</div>`
   + r(load('app/visits/visits-list.js').default, { items: visits, today: TODAY, yesterday: '2026-10-11', syncLabel: '10월 11일 14:05' }));
 

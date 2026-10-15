@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseServer } from '@/lib/supabase/server';
+import { getTenantId } from '@/lib/tenant';
 import { mergeSettings } from '@/lib/settings';
 
 // 판정 기준(settings) + 매장/디자이너 이름 저장.
@@ -16,10 +17,11 @@ export async function POST(request: Request) {
   } = await auth.auth.getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  // 본인 소속 테넌트 확인은 RLS 로(자기 멤버십만 조회됨) → tid 는 반드시 본인 것.
-  const { data: mem } = await auth.from('memberships').select('tenant_id').limit(1).maybeSingle();
-  if (!mem) return NextResponse.json({ error: 'no tenant' }, { status: 400 });
-  const tid = (mem as { tenant_id: string }).tenant_id;
+  // 본인 소속 테넌트 확인은 RLS 로(자기 멤버십만 조회됨) → tid 는 반드시 본인 것. 고르는 규칙은 화면과 같다
+  // (lib/tenant getTenantId) — 전에는 정렬 없이 첫 소속이라, 데모와 실제 매장에 함께 속한 계정은 화면과 다른 매장에
+  // 저장될 수 있었다(개선 계획 v11 P0).
+  const tid = await getTenantId(auth);
+  if (!tid) return NextResponse.json({ error: 'no tenant' }, { status: 400 });
 
   const body = await request.json();
   // 지금 저장된 설정 위에 덮는다 — 보내지 않은 키는 그대로 둔다. 휴무가 생기기 전의 설정 화면이

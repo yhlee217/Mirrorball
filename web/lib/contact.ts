@@ -12,7 +12,7 @@ import type { supabaseServer } from './supabase/server';
  * 이름은 암호화해 두는 게 이 앱의 원칙(pii_enc)이라, 수단(문자·전화·복사)과 시각만 남긴다.
  */
 export const CONTACT_QUIET_DAYS = 14;
-export const CONTACT_VIAS = ['sms', 'call', 'copy'] as const;
+export const CONTACT_VIAS = ['sms', 'call', 'copy', 'share'] as const; // share = 폰의 공유 창(카톡 등, v11 P1)
 export type ContactVia = (typeof CONTACT_VIAS)[number];
 
 export function contactSince(now = Date.now()): string {

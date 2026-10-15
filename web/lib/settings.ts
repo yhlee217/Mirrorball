@@ -15,7 +15,11 @@ export type TenantSettings = {
   // 휴무 — 통계가 '영업한 날'끼리 견주는 데 쓴다(lib/offdays.ts).
   off_weekdays: number[]; // 정기 휴무 요일, 월=0 … 일=6
   off_dates: { from: string; to: string }[]; // 휴가·임시 휴무 기간(YYYY-MM-DD, 양 끝 포함)
+  // 챙길 고객 줄의 큰 버튼(개선 계획 v11 P1) — 문자(문자 앱) · 카톡 등(폰의 공유 창). 디자이너가 손님께 주로 쓰는 쪽
+  contact_button: ContactButton;
 };
+
+export type ContactButton = 'sms' | 'share';
 
 export const DEFAULT_SETTINGS: TenantSettings = {
   vip_won: 1000000,
@@ -30,6 +34,7 @@ export const DEFAULT_SETTINGS: TenantSettings = {
   booking_days_ahead: 31,
   off_weekdays: [],
   off_dates: [],
+  contact_button: 'sms',
 };
 
 type NumKey = { [K in keyof TenantSettings]: TenantSettings[K] extends number ? K : never }[keyof TenantSettings];
@@ -84,6 +89,7 @@ export function mergeSettings(raw: unknown): TenantSettings {
     }
     out.off_weekdays = cleanWeekdays(r.off_weekdays);
     out.off_dates = cleanOffDates(r.off_dates);
+    out.contact_button = r.contact_button === 'share' ? 'share' : 'sms';
   }
   return out;
 }

@@ -4,6 +4,8 @@ import { dayLabel } from '@/lib/week';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
 import NoShowButton from '@/components/noshow-button';
+import ShareButton from '@/components/share-button';
+import type { ContactButton } from '@/lib/settings';
 
 // 방문 관리 — 리뷰 요청 '복사 버튼'은 강요처럼 보여서 뺐다. 홈케어 팁도 손님께 전할 말투라
 // 모든 줄에 펼쳐두니 목록이 지저분했다 → 기본은 접고 누를 때만 편다(네이티브 details, JS 없음).
@@ -22,10 +24,11 @@ export type Item = {
   bookingId: string | null; // 예약 줄(수집 전)의 예약 — 노쇼 표시 · 되돌리기
   memo: string;
   tip: string;
-  sms: string | null; // 방문 뒤 문자 — 그날 시술의 홈케어 안내를 담은 문자 앱 링크(팁 · 번호가 있을 때, lib/drafts 'after')
+  after: string | null; // 방문 뒤 안내 문구 — 그날 시술의 홈케어 팁을 담은(팁이 있을 때, lib/drafts 'after')
+  sms: string | null; // 그 문구로 여는 문자 앱 링크(번호가 있을 때)
 };
 
-function Row({ it }: { it: Item }) {
+function Row({ it, button }: { it: Item; button: ContactButton }) {
   // 지금 기준으로 이미 다녀가신 분은 수집 전이라도 몇 번째인지 센다 — 출처(예약)는 아래 줄 끝에 옅게.
   // 노쇼로 표시한 줄은 세지 않고 이름에 줄을 긋는다.
   const tag = it.noshow ? (
@@ -74,8 +77,13 @@ function Row({ it }: { it: Item }) {
         <details className="tipd">
           <summary aria-label="홈케어 팁 펼치기" title="홈케어 팁" />
           <div className="tip">{it.tip}</div>
-          {/* 방문 뒤 문자 — 이 안내를 담아 문자 앱을 연다(보내기 전에 고칠 수 있다). 예약 권유 없음 */}
-          {it.sms ? <a className="tipsms" href={it.sms}>💬 이 안내로 문자</a> : null}
+          {/* 방문 뒤 안내 — 이 문구로 문자 앱이나 공유 창(카톡 등)을 연다(보내기 전에 고칠 수 있다). 예약 권유 없음.
+              설정의 연락 버튼을 따르고, 번호가 없으면 카톡 등으로 */}
+          {it.after && button === 'sms' && it.sms ? (
+            <a className="tipsms" href={it.sms}>💬 이 안내로 문자</a>
+          ) : it.after ? (
+            <ShareButton className="tipsms" text={it.after}>📤 이 안내 보내기</ShareButton>
+          ) : null}
         </details>
       ) : null}
     </div>
@@ -87,11 +95,13 @@ export default function VisitsList({
   today,
   yesterday,
   syncLabel = null,
+  button = 'sms',
 }: {
   items: Item[];
   today: string;
   yesterday: string;
   syncLabel?: string | null; // '10월 12일 14:05' — 그 뒤 방문은 예약으로 보여 준다
+  button?: ContactButton; // 방문 뒤 안내를 문자로 · 카톡 등으로(설정, v11 P1)
 }) {
   if (!items.length)
     return (
@@ -121,7 +131,7 @@ export default function VisitsList({
         <div key={g.key}>
           <div className="bf-day">{g.key} · {g.rows.filter((r) => !r.noshow).length}명</div>
           {g.rows.map((it, i) => (
-            <Row key={(it.id || it.name) + it.date + (it.time ?? '') + i} it={it} />
+            <Row key={(it.id || it.name) + it.date + (it.time ?? '') + i} it={it} button={button} />
           ))}
         </div>
       ))}
