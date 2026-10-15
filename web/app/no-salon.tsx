@@ -15,7 +15,7 @@ export default function NoSalon({ email }: { email: string | null }) {
         <p className="muted nos-p">운영자에게 이 이메일을 알려 주세요. 연결되면 &lsquo;다시 확인&rsquo;을 누르면 돼요.</p>
         {email ? <div className="nos-e">{email}</div> : null}
         <a className="btn nos-b" href="/">다시 확인</a>
-        <LogoutButton label="다른 이메일로 로그인" />
+        <div className="logout-row"><LogoutButton label="다른 이메일로 로그인" /></div>
         <div className="nos-x">
           <Link href="/start" className="linkbtn">사용 안내</Link>
           <OnboardButton />

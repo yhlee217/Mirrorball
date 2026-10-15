@@ -3,15 +3,17 @@ import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { NAV_KEY } from '@/components/back-button';
+import { TabIcon, type TabIconName } from '@/components/tab-icons';
 
-const TABS = [
-  { href: '/', label: '홈', icon: '🏠', match: (p: string) => p === '/' },
-  { href: '/customers', label: '고객', icon: '👥', match: (p: string) => p.startsWith('/customer') },
+// 아이콘은 선으로 그린 흑백(components/tab-icons) — 색 이모지는 폰마다 모양 · 색이 달라 탭바만 알록달록했다
+const TABS: { href: string; label: string; icon: TabIconName; match: (p: string) => boolean }[] = [
+  { href: '/', label: '홈', icon: 'home', match: (p: string) => p === '/' },
+  { href: '/customers', label: '고객', icon: 'customers', match: (p: string) => p.startsWith('/customer') },
   // '알림'은 실시간 푸시를 기대하게 하는데 실제로는 주 1회 갱신되는 목록이다. 🔔 도 같은 오해를 키웠다.
   // 홈 칩·화면 제목이 이미 '챙길 고객'이라 탭만 어긋나 있었다 → 같은 말로 맞춘다.
-  // ⏳ 는 '아직 안 오신 분'을 뜻해 방문(✅ 다녀가신 분)과 짝이 된다.
-  { href: '/alerts', label: '챙길 고객', icon: '⏳', match: (p: string) => p.startsWith('/alerts') },
-  { href: '/visits', label: '방문', icon: '✅', match: (p: string) => p.startsWith('/visits') },
+  // 모래시계는 '아직 안 오신 분'을 뜻해 방문(동그라미 체크 — 다녀가신 분)과 짝이 된다.
+  { href: '/alerts', label: '챙길 고객', icon: 'care', match: (p: string) => p.startsWith('/alerts') },
+  { href: '/visits', label: '방문', icon: 'visits', match: (p: string) => p.startsWith('/visits') },
   // '소개'는 설정 안으로 옮겼다 — 공개 페이지는 한 번 만들고 거의 안 고친다(UX 계획 v2 2-3).
 ];
 
@@ -33,7 +35,7 @@ export default function TabBar() {
     <nav className="tabbar">
       {TABS.map((t) => (
         <Link key={t.href} href={t.href} className={'tab' + (t.match(p) ? ' on' : '')}>
-          <div className="i">{t.icon}</div>
+          <div className="i"><TabIcon name={t.icon} /></div>
           <div className="tl">{t.label}</div>
         </Link>
       ))}

@@ -32,6 +32,14 @@ const load = (f) => require(path.join(JS, f));
 
 const { DEFAULT_SETTINGS } = load('lib/settings.js');
 const { SyncChip } = load('components/sync-chip.js');
+const { TabIcon } = load('components/tab-icons.js');
+// 하단 탭 — 앱(app/tab-bar)과 같은 흑백 선 아이콘
+const tabbar =
+  '<nav class="tabbar">' +
+  [['home', '홈'], ['customers', '고객'], ['care', '챙길 고객'], ['visits', '방문']]
+    .map(([i, t], n) => `<a class="tab${n ? '' : ' on'}"><div class="i">${r(TabIcon, { name: i })}</div><div class="tl">${t}</div></a>`)
+    .join('') +
+  '</nav>';
 
 const TODAY = '2026-10-12'; // 월요일
 const SYNC = { label: '10월 11일', daysAgo: 1, date: '2026-10-11' }; // 일요일 수집
@@ -39,12 +47,7 @@ const chip = r(SyncChip, { synced: SYNC });
 const names = ['김서연', '박지훈', '이하은', '최민수', '정유진', '한지민', '오세훈', '윤아름', '장도윤', '서하린'];
 
 const css = fs.readFileSync(path.join(WEB, 'app/globals.css'), 'utf8');
-const tabbar =
-  '<nav class="tabbar">' +
-  [['🏠', '홈'], ['👥', '고객'], ['⏳', '챙길 고객'], ['✅', '방문']]
-    .map(([i, t], n) => `<a class="tab${n ? '' : ' on'}"><div class="i">${i}</div><div class="tl">${t}</div></a>`)
-    .join('') +
-  '</nav>';
+
 const doc = (main) =>
   `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">` +
   `<style>${css}</style></head><body>${main}${tabbar}</body></html>`;

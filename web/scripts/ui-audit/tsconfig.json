@@ -23,6 +23,7 @@
     "../../app/customer/[id]/churn-toggle.tsx",
     "../../app/stats/cards.tsx",
     "../../app/settings/settings-form.tsx",
-    "../../components/sync-chip.tsx"
+    "../../components/sync-chip.tsx",
+    "../../components/tab-icons.tsx"
   ]
 }
