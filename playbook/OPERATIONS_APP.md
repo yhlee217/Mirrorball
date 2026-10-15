@@ -106,6 +106,8 @@ cd ~/Dev/Mirrorball && .venv/bin/python worker/usage_probe.py
 
 ## 7. 남은 운영자 확인(계획서에서 이어짐)
 
+- **Next 15 미리보기(v14 P1)** — Cloudflare → Workers & Pages → `mirrorball-app` → 배포(Deployments)에서 브랜치 `claude/charming-planck-hmgazi-next15` 의 미리보기를 열어 폰으로 한 바퀴(로그인 · 홈 · 챙길 고객 · 방문 · 상세보기 · 통계 · 설정). 운영 데이터라 연락 · 노쇼 버튼은 누르지 않는다. 화면이 비거나 오류면 미리보기(Preview) 환경 변수가 운영과 같은지 확인
+- **`0026` SQL**(v14 P0) — CSP 어긋남 기록. 실행 전엔 기록만 조용히 건너뛴다
 - HandSOS 고객 화면에 **생일** 칸이 있나 — 칸 이름만(v13 P3)
 - HandSOS 에서 **엑셀 내보내기**(예약 · 매출)가 되나 — 열 이름만(v8 P3)
 - 디자이너님들께 — 손님께 연락할 때 주로 **문자 / 카톡**(v11)

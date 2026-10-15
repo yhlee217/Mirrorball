@@ -53,3 +53,11 @@ P0 → P1(미리보기 → 운영자 확인 → 합치기) → P2. 단계마다 
 
 ## 5. 운영자가 할 일
 P1 미리보기 주소가 나오면 폰에서 한 바퀴(로그인 · 홈 · 챙길 고객 · 방문 · 상세보기 · 통계 · 설정). Cloudflare Pages → 설정에서 '미리보기 배포'가 켜져 있는지(기본값은 켜짐). 그 밖은 `playbook/OPERATIONS_APP.md` §7.
+
+## 6. 진행 기록 (2026-10-15 — 정해야 할 것 모두 추천대로, 미리보기 브랜치 허락)
+
+| 단계 | 한 것 | 확인 |
+|---|---|---|
+| **P0 보안 헤더** | `web/lib/security-headers.mjs` — 틀 넣기 금지(CSP `frame-ancestors 'none'` · `X-Frame-Options: DENY`) · `nosniff` · `Referrer-Policy: same-origin` · `Permissions-Policy`(카메라 · 마이크 · 위치 · 결제 · USB) · HSTS, CSP 전체는 보고만(self · Supabase 출처, `report-uri`). `next.config` 가 모든 경로에 붙이고, **미들웨어도 직접 붙인다** — Cloudflare(next-on-pages)에선 미들웨어를 거치는 응답에 next.config 헤더가 안 붙는다(로컬 workerd 로 재 보니 로그인 화면에만 붙고 홈 · 설정 · API 엔 없었다 → 같은 날 고침). 어긋남은 `api/csp-report` + `components/csp-watch` → 운영 기록 kind 'csp'(규칙 · 출처 · 경로만, `lib/ops cleanCsp`), `0026_csp_reports.sql`(종류 · 정책 · `ops_csp()`), 매일 감시 · 운영 숫자에 지난 7일 어긋남 | `test_security_headers` · 임시 Postgres 0001~0026(디자이너는 자기 매장 csp 만 · '화면 오류' 수엔 안 섞임) · 로컬 workerd(`wrangler pages dev`): `/` · `/ops` · `/settings` · `/start` · `/login` · `/api/csp-report` 모두 헤더 7개, CSP 어긋남 0(로그인 '코드 받기'까지) |
+| **P1 Next 15** | 미리보기 브랜치 `claude/charming-planck-hmgazi-next15`(커밋 하나): next 15.5.28 · React 19.2.9 · supabase-js 2.117.3 · @supabase/ssr 0.5.2. 쿠키 · 주소 값을 기다려 읽기(`supabaseServer()` async — 부르는 19곳, 운영자 쿠키, params 두 곳). 남은 npm audit 은 Next 안에 든 빌드 도구 postcss 뿐(우리 CSS 만 처리 — 바깥 입력이 안 닿음, Next 16 에서 풀림). next-on-pages 공식 지원은 15.5.2 까지라 빌드 · 로컬 workerd 실행으로 확인 | tsc · 695 passed · UI 측정 · Pages 빌드 · 로컬 workerd(헤더 7개 · CSP 0 · React 19 로그인 입력 · 단계 전환 · 콘솔 오류 0). **운영자 미리보기 확인 → 합치기** |
+| P2 주간 점검 | P1 을 합친 뒤 | — |
