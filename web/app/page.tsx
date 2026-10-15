@@ -6,7 +6,7 @@ import { careState, fetchAllRows, firstCare, isRealCustomer, isChurned, needsCar
 import { mergeSettings } from '@/lib/settings';
 import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
 import { bookingSets, isCancelled, recentBookingRows } from '@/lib/bookings';
-import { laterDay, seenSinceSync } from '@/lib/visits';
+import { isAppNoShow, laterDay, seenSinceSync } from '@/lib/visits';
 import { phoneDigits, recentlyContactedIds } from '@/lib/contact';
 import { lastSynced } from '@/lib/sync';
 import { addDays, lastWeek, spanLabel, weekNums, type WeekTx } from '@/lib/week';
@@ -119,6 +119,9 @@ export default async function Page() {
   const upcoming = bk.filter((b) => (b.date || '') <= bkCutoff && isUpcoming(b.date, b.time));
   const soon = upcoming.filter((b) => b.date <= soonEnd).slice(0, 40);
   const later = upcoming.filter((b) => b.date > soonEnd).slice(0, 30);
+  // 오늘 시간이 지난 예약 — 지우지 않고 오늘 카드 맨 아래 '지난 예약 N명'에 접어 둔다(개선 계획 v9 P0).
+  // 오후에 '오늘 1명'만 남던 것 — 다녀가셨을 분은 '예약 기준', 안 오셨으면 그 자리에서 [노쇼].
+  const pastToday = bk.filter((b) => b.date === today && !isUpcoming(b.date, b.time)).slice(0, 40);
 
   // 브리핑 재료는 예약 손님 몇 명 것만 따로 읽는다 — 메모 정리(memo_ai)는 길어서 전체 고객과 함께
   // 받지 않는다. 미식별 워크인 집계('손님')에 묶인 예약은 남의 메모가 섞이므로 붙이지 않는다.
@@ -203,9 +206,13 @@ export default async function Page() {
       rec: rec ? { label: rec.label, short: rec.short } : null,
     };
   };
-  const [briefs, laterRows] = await Promise.all([
+  const [briefs, laterRows, pastRows] = await Promise.all([
     Promise.all(soon.map(toBrief)),
     Promise.all(later.map(async (b) => ({ ...b, name: await nameFrom(b.pii_enc), off: isCancelled(b.status) }))),
+    Promise.all(pastToday.map(async (b) => ({
+      id: b.id, time: b.time, service: b.service, customer_id: b.customer_id, status: b.status,
+      name: await nameFrom(b.pii_enc), off: isCancelled(b.status), appNoShow: isAppNoShow(b.status),
+    }))),
   ]);
 
   return (
@@ -220,6 +227,7 @@ export default async function Page() {
         careQuiet={careQuiet}
         briefs={briefs}
         later={laterRows}
+        past={pastRows}
       />
       <ScreenReady />
     </>

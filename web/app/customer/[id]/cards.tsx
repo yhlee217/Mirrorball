@@ -261,7 +261,7 @@ function PendingRow({ b }: { b: Carte['recentBks'][number] }) {
         <div className="nm" style={{ fontWeight: 600 }}>{b.noshow ? <s style={{ color: 'var(--muted)' }}>{svc}</s> : svc}</div>
         <div className="sub">
           {dayLabel(b.date)}
-          {b.time ? ' ' + b.time : ''} · {b.noshow ? '노쇼로 표시함' : '예약 기준'}
+          {b.time ? ' ' + b.time : ''} · {b.noshow ? '노쇼로\u00a0표시함' : '예약\u00a0기준'}
         </div>
       </div>
       <NoShowButton id={b.id} undo={b.noshow} />

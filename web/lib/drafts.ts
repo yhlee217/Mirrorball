@@ -8,8 +8,10 @@ import type { Care } from './care-cycle';
  *   hello(안부)      — 예약 권유 없이 안부 + 오래 두고 쓸 관리 팁 한 줄(결정 2). 처음 온 분이 '나를 기억한다'고
  *                      느끼는 첫 접점이라, 누가 보냈는지(디자이너 이름)를 먼저 밝힌다.
  *   back(다시 오실 때) — 처음 받은 시술의 표준 주기가 지났을 때. 번호를 저장 안 했을 수 있어 역시 이름부터.
+ *   after(방문 뒤)   — 방문 탭에서, 다녀가신 분께 그날 시술의 홈케어 안내(care.tip). 방금 오신 분이라 예약 권유는
+ *                      넣지 않는다(개선 계획 v9 P1 — 안부와 같은 원칙). 챙길 고객 연락이 아니라 연락 효과엔 안 센다.
  */
-export type DraftKind = 'overdue' | 'due' | 'hello' | 'back';
+export type DraftKind = 'overdue' | 'due' | 'hello' | 'back' | 'after';
 
 export type DraftInput = {
   kind: DraftKind;
@@ -18,7 +20,7 @@ export type DraftInput = {
   svc: string | null; // 손님께 쓸 시술 이름(friendlyService — '남자컷(원장)' → '커트')
   care: Care | null; // 그 시술의 표준 주기·표현·팁(lib/care-cycle)
   days: number | null; // 마지막(첫) 방문 뒤 지난 날 — 달력 그대로, 오늘 기준
-  when?: string; // hello: '오늘' · '어제' · '이번 주' · '지난주' · '지난번'(whenWord)
+  when?: string; // hello · after: '오늘' · '어제' · '이번 주' · '지난주' · '지난번'(whenWord)
   loyal?: boolean; // overdue: 단골 말투
   cycleDays?: number | null; // due: 평소 주기(일)
 };
@@ -53,6 +55,14 @@ export function draftFor(d: DraftInput): string {
       }
       const what = svc ? `${svc} 받으신` : '다녀가신';
       return `${name}님, ${when} ${what} 뒤로 지내보시니 괜찮으세요? 😊${keep} 불편한 점 있으면 편하게 말씀 주세요!`;
+    }
+    case 'after': {
+      const when = d.when ?? '오늘';
+      const tip = care?.tip ? ` ${care.tip}` : '';
+      const hi = d.designer
+        ? `${name}님, ${when} ${svc ? `${svc} 해드린` : '뵀던'} ${d.designer}${copula(d.designer)} 😊`
+        : `${name}님, ${when} ${svc ? `${svc} 받으시느라` : '들러주셔서'} 고생 많으셨어요 😊`;
+      return `${hi}${tip} 불편한 점 있으면 편하게 말씀 주세요!`;
     }
     case 'back': {
       const hi = d.designer ? `${name}님, ${d.designer}${copula(d.designer)}! ` : `${name}님, `;

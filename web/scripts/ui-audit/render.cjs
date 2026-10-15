@@ -82,6 +82,10 @@ out.home = doc(
       { id: 'l1', date: '2026-10-21', time: '14:00', service: '펌', customer_id: 'c5', status: '예약', name: names[5], off: false },
       { id: 'l2', date: '2026-10-28', time: '10:30', service: '남자컷', customer_id: null, status: '예약', name: names[6], off: false },
     ],
+    // 오늘 시간이 지난 예약(v9 P0) — 오늘 카드 맨 아래에 접혀 있다
+    past: [
+      { id: 'p1', time: '10:00', service: '여자컷', customer_id: 'c9', status: '예약', name: names[7], off: false, appNoShow: false },
+    ],
   }),
 );
 
@@ -117,7 +121,8 @@ const visits = names.slice(0, 9).map((n, i) => ({
 // 열째 분은 수집(일 14:05) 뒤 같은 날 16시 예약 — '예약 기준'(어제 손님이 방문에 없던 문제, 2026-10-15).
 // 견본은 그대로 열 줄(전후 비교가 되게) — 수집된 방문 아홉 + 수집 전 하나
 visits.unshift({ id: 'p0', name: names[9], date: '2026-10-11', time: '16:00', service: '뿌리염색', amount: 0, nth: 11, pending: true,
-  noshow: false, bookingId: 'b0', memo: '', tip: '' });
+  noshow: false, bookingId: 'b0', memo: '', tip: '염색 당일은 두피 자극을 피하고, 이틀 정도는 강한 스타일링을 쉬는 게 좋아요.',
+  sms: 'sms:01012345678?&body=' }); // 예약 줄에도 팁 표식 + [노쇼](v9 P1)
 out.visits = screen('', `<div class="top"><b>방문</b><span class="sect-n">2주</span>${chip}</div>`
   + r(load('app/visits/visits-list.js').default, { items: visits, today: TODAY, yesterday: '2026-10-11', syncLabel: '10월 11일 14:05' }));
 

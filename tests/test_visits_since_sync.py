@@ -141,3 +141,42 @@ out(Object.fromEntries([...seenSinceSync(D.rows, D.sync, D.now).entries()]));
     if got is None:
         pytest.skip("node · web/node_modules 가 없다")
     assert got == {"a": {"count": 2, "last": "2026-10-14", "service": "뿌리염색"}}
+
+
+def test_contact_effect_counts_visits_since_sync_as_came():
+    """연락 효과(v9 P2) — 연락 뒤 예약 시간이 지나 다녀가신 분(예약 기준)도 '오심'. 날짜는 늘 날짜순."""
+    got = run_ts(["lib/visits.ts", "lib/effect.ts"], """
+const { withSeenVisits } = require('./visits.js');
+const { contactEffect, helloEffect } = require('./effect.js');
+const visits = new Map([['a', ['2026-09-01']], ['b', ['2026-08-01']], ['c', ['2026-10-01']]]);
+const merged = withSeenVisits(visits, D.rows, D.sync, D.now);
+out({
+  merged: Object.fromEntries([...merged.entries()]),
+  untouched: Object.fromEntries([...visits.entries()]),            // 원래 모음은 그대로
+  noSync: Object.fromEntries([...withSeenVisits(visits, D.rows, null, D.now).entries()]),
+  before: contactEffect(D.contacts, visits, new Set(['a']), '2026-10-01'),
+  after: contactEffect(D.contacts, merged, new Set(['a']), '2026-10-01'),
+  helloBefore: helloEffect(D.contacts, visits),
+  helloAfter: helloEffect(D.contacts, merged),
+});
+""", {"sync": SYNC, "now": NOW, "rows": [
+        {"customer_id": "a", "date": "2026-10-14", "time": "18:30", "status": "예약"},
+        {"customer_id": "a", "date": "2026-10-14", "time": "19:00", "status": "예약"},   # 같은 날 — 한 번
+        {"customer_id": "b", "date": "2026-10-13", "time": "12:00", "status": "노쇼"},   # 노쇼 — 안 셈
+        {"customer_id": "c", "date": "2026-10-14", "time": "11:00", "status": "예약"},   # 순서가 뒤섞여 와도
+        {"customer_id": "c", "date": "2026-10-13", "time": "11:00", "status": "예약"},   # 날짜순으로 넣는다
+    ], "contacts": [
+        {"customer_id": "a", "sent_at": "2026-10-13T01:00:00Z"},
+        {"customer_id": "b", "sent_at": "2026-10-13T01:00:00Z"},
+    ]})
+    if got is None:
+        pytest.skip("node · web/node_modules 가 없다")
+    assert got["merged"] == {"a": ["2026-09-01", "2026-10-14"], "b": ["2026-08-01"],
+                             "c": ["2026-10-01", "2026-10-13", "2026-10-14"]}
+    assert got["untouched"] == {"a": ["2026-09-01"], "b": ["2026-08-01"], "c": ["2026-10-01"]}
+    assert got["noSync"] == got["untouched"]
+    assert got["before"] == {"contacted": 2, "came": 0, "booked": 1}    # 수집 기준 — a 는 '예약'으로만
+    assert got["after"] == {"contacted": 2, "came": 1, "booked": 0}     # 지금 기준 — a 는 '오심'
+    # 첫 방문 안부 효과(통계)는 첫째 · 둘째 방문을 앞에서 읽는다 — c(10.01 첫 방문)는 수집 뒤 다시 오셨다
+    assert got["helloBefore"]["unsent"] == {"n": 1, "back": 0}
+    assert got["helloAfter"]["unsent"] == {"n": 1, "back": 1}

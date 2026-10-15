@@ -5,6 +5,7 @@ import { dayLabel, type WeekNums } from '@/lib/week';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
 import { SyncChip } from '@/components/sync-chip';
+import NoShowButton from '@/components/noshow-button';
 
 type Signals = { overdue: number; due: number };
 type Synced = { label: string; daysAgo: number; date: string } | null;
@@ -29,6 +30,8 @@ export type Brief = {
   phone: string | null; // 예약 손님 번호(숫자만) — 펼친 곳의 📞(늦으시거나 시간을 바꿀 때)
 };
 type Later = { id: string; date: string; time: string | null; service: string | null; customer_id: string | null; status: string | null; name: string; off: boolean };
+/** 오늘 시간이 지난 예약 — 오늘 카드 맨 아래에 접어 둔다(v9 P0). appNoShow = 앱에서 노쇼로 표시(되돌리기 가능) */
+type Past = { id: string; time: string | null; service: string | null; customer_id: string | null; status: string | null; name: string; off: boolean; appNoShow: boolean };
 
 const offWord = (status: string | null) => (status?.includes('노쇼') ? '노쇼' : '취소');
 const TAG = { '첫 방문': '첫 방문', '두 번째 방문': '두 번째' } as const;
@@ -47,6 +50,7 @@ export default function HomeView({
   careQuiet,
   briefs,
   later,
+  past = [],
 }: {
   designer: string;
   synced: Synced;
@@ -58,6 +62,7 @@ export default function HomeView({
   careQuiet: number; // 최근 연락해서 잠시 빠진 수
   briefs: Brief[]; // 앞으로 7일 예약(날짜·시각 순)
   later: Later[]; // 그 뒤 예약 — 접어 둔다
+  past?: Past[]; // 오늘 시간이 지난 예약 — 오늘 카드 맨 아래에 접어 둔다
 }) {
   const todays = briefs.filter((b) => b.date === today);
   const rest = briefs.filter((b) => b.date !== today);
@@ -81,10 +86,15 @@ export default function HomeView({
         </div>
 
         <div className="sect-h">
-          오늘 <span className="sect-n">{dayLabel(today)} · {count(todays)}명</span>
+          오늘 <span className="sect-n">{dayLabel(today)} · {count(todays) + count(past)}명</span>
         </div>
         <div className="card bf">
-          {todays.length ? todays.map((b) => <BookRow key={b.id} b={b} today={today} />) : <Empty title="오늘 예약 없음" />}
+          {todays.length ? (
+            todays.map((b) => <BookRow key={b.id} b={b} today={today} />)
+          ) : (
+            <Empty title={past.length ? '남은 예약 없음' : '오늘 예약 없음'} />
+          )}
+          {past.length ? <PastToday rows={past} /> : null}
         </div>
 
         {/* 통계 입구는 '지난주' 제목 오른쪽 — 숫자를 보다가 더 보고 싶을 때 닿는 자리. 할 일 알약 끝에 붙여 두면
@@ -237,5 +247,36 @@ function LaterRow({ b }: { b: Later }) {
     </Link>
   ) : (
     <div className={cls}>{inner}</div>
+  );
+}
+
+/**
+ * 오늘 시간이 지난 예약 — 오늘 카드 맨 아래에 접어 둔다(개선 계획 v9 P0). 위는 늘 다음 손님. 펼치면 다녀가셨을 분은
+ * '예약 기준'(방문 탭과 같은 뜻), 안 오셨으면 그 자리에서 [노쇼] · 잘못 눌렀으면 [되돌리기]. HandSOS 의 취소 · 노쇼는 표시만.
+ */
+function PastToday({ rows }: { rows: Past[] }) {
+  return (
+    <details className="past-d">
+      <summary>지난 예약 {rows.filter((r) => !r.off).length}명</summary>
+      {rows.map((b) => {
+        const struck = b.off;
+        const label = b.appNoShow ? '노쇼로 표시함' : b.off ? offWord(b.status) : '예약 기준';
+        return (
+          <div className="li past-r" key={b.id}>
+            <div className="bk">
+              <span className="bk-t">{b.time ?? ''}</span>
+              <div className="bk-m">
+                <div className="bk-n">
+                  <b style={struck ? { textDecoration: 'line-through' } : undefined}>{b.name}</b>
+                  <span className="bk-s">{b.service ?? ''}</span>
+                </div>
+                <div className="bk-f">{label}</div>
+              </div>
+            </div>
+            {!b.off || b.appNoShow ? <NoShowButton id={b.id} undo={b.appNoShow} /> : null}
+          </div>
+        );
+      })}
+    </details>
   );
 }

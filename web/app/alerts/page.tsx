@@ -16,6 +16,7 @@ import {
 } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookingSets, recentBookingRows } from '@/lib/bookings';
+import { withSeenVisits } from '@/lib/visits';
 import { CONTACT_QUIET_DAYS, phoneDigits, recentlyContactedIds } from '@/lib/contact';
 import { friendlyService } from '@/lib/service-name';
 import { careFor, soonestCare } from '@/lib/care-cycle';
@@ -155,7 +156,8 @@ export default async function AlertsPage() {
     effVisits.set(t.customer_id, [...(effVisits.get(t.customer_id) ?? []), t.date]);
   }
   // '예약'도 같은 판정 — 연락 뒤 예약하고 다녀가신 분이 수집 전까지 '효과 없음'으로 빠지지 않게
-  const effect = effIds.length ? contactEffect(recentContacts, effVisits, held, effSince) : null;
+  // '오심'도 지금 기준 — 연락 뒤 예약 시간이 지나 다녀가신 분(예약 기준)도 센다(v9 P2, lib/visits withSeenVisits)
+  const effect = effIds.length ? contactEffect(recentContacts, withSeenVisits(effVisits, bkRows, synced), held, effSince) : null;
 
   const items = rows.map(({ c, state }, i) => {
     const name = contacts[i].name;

@@ -9,6 +9,7 @@ import { BackButton } from '@/components/back-button';
 import { fetchAllRows, isRealCustomer, isChurned, onCareList, onFirstList, prepaidAway, servicesOn } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { bookingSets, isActiveBooking, recentBookingRows } from '@/lib/bookings';
+import { withSeenVisits } from '@/lib/visits';
 import { recentlyContactedIds } from '@/lib/contact';
 import { addDays, shortDate } from '@/lib/week';
 import { activeTrend, datesByCustomer, newcomerCohorts, serviceTable, toVisits, weekHeat } from '@/lib/trends';
@@ -247,7 +248,9 @@ export default async function StatsPage() {
   // 연락 효과 — 실고객만(워크인 집계는 연락 대상이 아니다). byCust = 손님별 방문일(오름차순)
   const realContacts = contactRows.filter((r) => r.customer_id && realIds.has(r.customer_id));
   const contactSince = realContacts.map((r) => (r.sent_at ? kstDay(r.sent_at) : '')).filter(Boolean).sort()[0] ?? null;
-  const realVisits = new Map([...byCust].filter(([id]) => realIds.has(id)));
+  // 연락 효과 · 첫 방문 안부의 '오심'도 지금 기준 — 수집 뒤 다녀가신 분(예약 기준)도 센다(v9 P2)
+  const realVisits = withSeenVisits(new Map([...byCust].filter(([id]) => realIds.has(id))),
+    bkRows.filter((b) => !!b.customer_id && realIds.has(b.customer_id)), synced); // 미식별 워크인 예약은 빼고
 
   return (
     <main className="wrap">

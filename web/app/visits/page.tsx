@@ -1,7 +1,10 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import { nameReader, openDek, requireTenant } from '@/lib/tenant';
+import { contactReader, openDek, requireTenant } from '@/lib/tenant';
+import { phoneDigits, smsHref } from '@/lib/contact';
+import { draftFor, whenWord } from '@/lib/drafts';
+import { daysBetween } from '@/lib/week';
 import { fetchAllRows, isRealCustomer } from '@/lib/customers';
 import { friendlyService } from '@/lib/service-name';
 import { careFor } from '@/lib/care-cycle';
@@ -30,7 +33,7 @@ export default async function VisitsPage() {
   const since = new Date(Date.now() + KST - 13 * DAY).toISOString().slice(0, 10); // 최근 14일
 
   const [{ data: tenant }, txs, synced, { data: bookings }] = await Promise.all([
-    supabase.from('tenants').select('dek_wrapped').eq('id', tenantId).maybeSingle(),
+    supabase.from('tenants').select('dek_wrapped,designer_name').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Tx>((from, to) =>
       supabase
         .from('transactions')
@@ -78,18 +81,31 @@ export default async function VisitsPage() {
   const cmap = new Map(custs.map((c) => [c.id, c]));
   const nth = visitOrdinals(collected, (id) => cmap.get(id)?.visit_count ?? 1);
 
-  const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
-  const dek = await openDek(dw);
-  const nameFrom = nameReader(dek);
+  const tRow = tenant as { dek_wrapped: string | null; designer_name: string | null } | null;
+  const dek = await openDek(tRow?.dek_wrapped ?? null);
+  const readContact = contactReader(dek);
+  const designer = tRow?.designer_name?.trim() || null;
+  // 방문 뒤 문자(v9 P1) — 그날 시술의 홈케어 안내를 담아 문자 앱을 연다. 팁이 있는 시술 · 번호가 있는 분만.
+  // 예약 권유는 없다(lib/drafts 'after'). 챙길 고객 연락이 아니라 연락 기록 · 효과엔 남기지 않는다.
+  const afterSms = (name: string, phone: string | null, raw: string | null, date: string): string | null => {
+    const care = careFor(raw);
+    const digits = phoneDigits(phone);
+    if (!care?.tip || !digits) return null;
+    return smsHref(digits, draftFor({
+      kind: 'after', name, designer, svc: friendlyService(raw) || null, care,
+      days: daysBetween(date, today), when: whenWord(date, today),
+    }));
+  };
 
   const visitItems = collected
     .filter((v) => isRealCustomer(cmap.get(v.customer_id)?.ext_id ?? null))
     .map(async (v): Promise<Item> => {
       const c = cmap.get(v.customer_id)!;
       const rawMain = v.services[0] ?? null;
+      const { name, phone } = await readContact(c.pii_enc);
       return {
         id: v.customer_id,
-        name: await nameFrom(c.pii_enc),
+        name,
         date: v.date,
         time: v.time,
         service: [...new Set(v.services.map((s) => friendlyService(s)).filter(Boolean))].join('+'), // 홈 브리핑과 같은 표기
@@ -100,6 +116,7 @@ export default async function VisitsPage() {
         bookingId: null,
         memo: v.memo ?? '', // 그날 매장에서 적어둔 메모
         tip: careFor(rawMain)?.tip ?? '', // 그날 받은 시술의 홈케어 안내
+        sms: afterSms(name, phone, rawMain, v.date),
       };
     });
   // 수집 전 — 예약에 적힌 시각 · 시술. 처음 오신 분(손님 기록이 아직 없음)은 예약의 이름으로, 상세보기 없이.
@@ -112,9 +129,10 @@ export default async function VisitsPage() {
     .filter((b) => !b.customer_id || isRealCustomer(cmap.get(b.customer_id)?.ext_id ?? null))
     .map(async (b): Promise<Item> => {
       const c = b.customer_id ? cmap.get(b.customer_id) : undefined;
+      const { name, phone } = await readContact(c?.pii_enc ?? b.pii_enc);
       return {
         id: c?.id ?? '',
-        name: await nameFrom(c?.pii_enc ?? b.pii_enc),
+        name,
         date: b.date as string,
         time: b.time,
         service: friendlyService(b.service) || '',
@@ -125,6 +143,7 @@ export default async function VisitsPage() {
         bookingId: b.id,
         memo: '',
         tip: careFor(b.service)?.tip ?? '',
+        sms: afterSms(name, phone, b.service, b.date as string),
       };
     });
   const markedItems = marked
@@ -133,7 +152,7 @@ export default async function VisitsPage() {
       const c = b.customer_id ? cmap.get(b.customer_id) : undefined;
       return {
         id: c?.id ?? '',
-        name: await nameFrom(c?.pii_enc ?? b.pii_enc),
+        name: (await readContact(c?.pii_enc ?? b.pii_enc)).name,
         date: b.date as string,
         time: b.time,
         service: friendlyService(b.service) || '',
@@ -144,6 +163,7 @@ export default async function VisitsPage() {
         bookingId: b.id,
         memo: '',
         tip: '',
+        sms: null,
       };
     });
   const items = (await Promise.all([...pendingItems, ...markedItems, ...visitItems]))

@@ -119,3 +119,24 @@ export function laterDay(a: string | null | undefined, b: string | null | undefi
   if (!y) return x;
   return x > y ? x : y;
 }
+
+/**
+ * 방문 날짜 모음(손님별)에 수집 뒤 다녀가신 날(예약 기준)을 더한다 — 연락 효과의 '오심'도 지금 기준으로
+ * (개선 계획 v9 P2). 전에는 연락 뒤 예약하고 다녀가신 분이 일요일 수집 전까지 '예약'으로만 셌다.
+ */
+export function withSeenVisits<B extends { customer_id: string | null; date: string | null; time: string | null; status: string | null }>(
+  visits: Map<string, string[]>,
+  rows: B[],
+  sync: { date: string; time: string } | null,
+  now: { date: string; time: string } = kstNow(),
+): Map<string, string[]> {
+  const out = new Map([...visits].map(([id, ds]) => [id, [...ds]] as [string, string[]]));
+  if (!sync) return out;
+  for (const b of visitsSinceSync(rows, sync, now)) {
+    if (!b.customer_id || !b.date) continue;
+    const ds = out.get(b.customer_id) ?? [];
+    if (!ds.includes(b.date)) ds.push(b.date);
+    out.set(b.customer_id, ds.sort()); // 날짜순 유지 — 첫 방문 안부 효과가 첫째 · 둘째 방문을 앞에서 읽는다
+  }
+  return out;
+}

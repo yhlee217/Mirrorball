@@ -28,6 +28,9 @@ out({
   backNoSvc: T.draftFor({ kind: 'back', name: '박지훈', designer: null, svc: null, care: null, days: 50 }),
   overdue: T.draftFor({ kind: 'overdue', name: '이하은', designer: '하예원', svc: '뿌리염색', care: root, days: 92, loyal: true }),
   due: T.draftFor({ kind: 'due', name: '이하은', designer: null, svc: '펌', care: null, days: 50, cycleDays: 45 }),
+  after: T.draftFor({ kind: 'after', name: '김서연', designer: '하예원', svc: '뿌리염색', care: root, days: 0, when: '오늘' }),
+  afterNoDesigner: T.draftFor({ kind: 'after', name: '김서연', designer: null, svc: '뿌리염색', care: root, days: 1, when: '어제' }),
+  rootTip: root.tip,
 });
 """
 
@@ -68,3 +71,13 @@ def test_existing_drafts_unchanged(ts):
     assert ts["overdue"] == ("이하은님, 오랜만이에요! 벌써 3개월 됐네요. 늘 찾아주셔서 감사해요 🙏 지난 뿌리염색 "
                              "뿌리 올라올 때쯤이라 한번 뵙고 싶어서 연락드려요. 편하신 때 편하게 연락 주세요!")
     assert ts["due"] == "이하은님, 지난 펌 이제 관리해주실 시기예요 (평소 45일 주기). 편하신 시간에 예약 도와드릴게요!"
+
+
+def test_after_visit_has_tip_and_no_booking_push(ts):
+    """방문 뒤 문자(v9 P1) — 그날 시술 + 홈케어 안내, 방금 오신 분이라 예약 권유는 없다."""
+    a = ts["after"]
+    assert a.startswith("김서연님, 오늘 뿌리염색 해드린 하예원이에요 😊 ")
+    assert ts["rootTip"] in a and a.endswith("불편한 점 있으면 편하게 말씀 주세요!")
+    assert ts["afterNoDesigner"].startswith("김서연님, 어제 뿌리염색 받으시느라 고생 많으셨어요 😊 ")
+    for text in (a, ts["afterNoDesigner"]):
+        assert "예약" not in text

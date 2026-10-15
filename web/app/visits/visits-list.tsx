@@ -22,6 +22,7 @@ export type Item = {
   bookingId: string | null; // 예약 줄(수집 전)의 예약 — 노쇼 표시 · 되돌리기
   memo: string;
   tip: string;
+  sms: string | null; // 방문 뒤 문자 — 그날 시술의 홈케어 안내를 담은 문자 앱 링크(팁 · 번호가 있을 때, lib/drafts 'after')
 };
 
 function Row({ it }: { it: Item }) {
@@ -46,17 +47,19 @@ function Row({ it }: { it: Item }) {
           {it.time ? it.time + ' · ' : ''}
           {it.service || '시술'}
           {it.amount ? ' · ' + man(it.amount) : ''}
-          {it.noshow ? ' · 노쇼로 표시함' : it.pending ? ' · 예약 기준' : ''}
+          {it.noshow ? ' · 노쇼로\u00a0표시함' : it.pending ? ' · 예약\u00a0기준' : ''}
         </div>
         {/* 매장이 그날 남긴 메모는 디자이너 본인의 기록이라 그대로 보여준다 */}
         {it.memo ? <div className="memo-note">{it.memo}</div> : null}
       </div>
     </>
   );
-  // 예약 줄(수집 전)은 [노쇼] · [되돌리기] 손잡이가 오른쪽에 — 홈케어 팁 표식은 수집 뒤 줄에만
+  // 예약 줄(수집 전)은 [노쇼] · [되돌리기] 손잡이가 오른쪽에. 홈케어 팁 표식(▾)은 그 왼쪽 — 팁이 가장 쓸모 있는
+  // 때가 방문 직후(수집 전)라 예약 줄에도 둔다. 노쇼로 표시한 줄엔 팁이 없다.
   const act = it.pending && it.bookingId;
+  const tip = it.tip && !it.noshow;
   return (
-    <div className={'visit' + (act ? ' has-act' : it.tip ? ' has-tip' : '') + (it.noshow ? ' noshow' : '')}>
+    <div className={'visit' + (act ? ' has-act' : '') + (tip ? ' has-tip' : '') + (it.noshow ? ' noshow' : '')}>
       {it.id ? (
         <Link href={`/customer/${it.id}`} className="li li-link" style={{ alignItems: 'flex-start' }}>
           {body}
@@ -67,10 +70,12 @@ function Row({ it }: { it: Item }) {
         </div>
       )}
       {act ? <NoShowButton id={it.bookingId as string} undo={it.noshow} /> : null}
-      {!act && it.tip ? (
+      {tip ? (
         <details className="tipd">
           <summary aria-label="홈케어 팁 펼치기" title="홈케어 팁" />
           <div className="tip">{it.tip}</div>
+          {/* 방문 뒤 문자 — 이 안내를 담아 문자 앱을 연다(보내기 전에 고칠 수 있다). 예약 권유 없음 */}
+          {it.sms ? <a className="tipsms" href={it.sms}>💬 이 안내로 문자</a> : null}
         </details>
       ) : null}
     </div>
