@@ -11,7 +11,7 @@ import { cleanPath } from '@/lib/ops';
  * 지난 24시간 건수를 본다(0023 ops_health). 기록이 안 돼도 화면엔 영향이 없게 늘 조용히 끝난다.
  */
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

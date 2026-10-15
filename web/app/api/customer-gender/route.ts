@@ -7,7 +7,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 // gender(추정)가 아니라 gender_manual 에 쓴다. 워커는 이 칸을 건드리지 않으므로
 // 주간 재계산에 덮이지 않는다. null 을 보내면 지정을 지우고 다시 추정값을 따른다.
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

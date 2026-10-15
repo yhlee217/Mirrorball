@@ -6,7 +6,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 // 이탈 고객 표시/해제 — RLS(tenant_rw)로 본인 테넌트 고객만 수정 가능.
 // 되돌릴 수 있어야 하므로 삭제가 아니라 churned_at 토글이다.
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

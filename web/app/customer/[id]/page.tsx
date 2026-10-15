@@ -27,7 +27,8 @@ const BADGE: Record<string, string> = { overdue: '이탈 위험', due: '재방�
  * 무엇을 어떻게 계산하는지는 ./data, 각 카드의 표시는 ./cards 에 있다.
  * 위에서 아래로 읽으면 이 화면의 순서가 그대로 보인다.
  */
-export default async function CustomerPage({ params }: { params: { id: string } }) {
+export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params; // Next 15 — 주소 값도 기다려 읽는다(개선 계획 v14 P1)
   const {
     cust, name, phone, vip, avg,
     history, charges, others,
@@ -37,7 +38,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     visitCount, lastVisit, seenLast, recentBks,
     sinceLast, next, top, recs,
     badge, draft, button,
-  } = await loadCarte(params.id);
+  } = await loadCarte(id);
 
   return (
     <main className="wrap">

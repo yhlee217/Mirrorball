@@ -12,7 +12,7 @@ import { svcCat } from '@/lib/coach';
  * RLS 로 본인 테넌트 거래만 보인다. 수집이 주 1회라 잠깐 캐시해도 된다.
  */
 export async function GET() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

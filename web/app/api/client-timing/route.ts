@@ -12,7 +12,7 @@ import { cleanTiming } from '@/lib/ops';
  * 화면엔 영향이 없다 — 폰은 답을 기다리지 않는다(sendBeacon).
  */
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

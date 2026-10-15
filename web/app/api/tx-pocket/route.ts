@@ -8,7 +8,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 // RLS(tenant_rw)로 본인 테넌트 거래만 수정된다. 수집 업서트는 이 컬럼을 보내지 않으므로
 // (merge-duplicates) 여기서 넣은 값이 주간 수집에 덮이지 않는다.
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

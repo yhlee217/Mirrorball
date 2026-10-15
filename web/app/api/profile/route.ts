@@ -6,7 +6,7 @@ import { getTenantId } from '@/lib/tenant';
 
 // 소개 저장 — 인증 사용자의 테넌트 profiles 업데이트(RLS: profile_owner).
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

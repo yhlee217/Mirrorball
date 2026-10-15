@@ -8,7 +8,8 @@ type Spec = { name: string; desc: string };
 type Faq = { q: string; a: string };
 
 // 공개 소개 페이지 — 손님용. published 프로필만, 고객 PII 없음.
-export default async function PublicProfile({ params }: { params: { slug: string } }) {
+export default async function PublicProfile({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params; // Next 15 — 주소 값도 기다려 읽는다(개선 계획 v14 P1)
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false },
   });
@@ -16,7 +17,7 @@ export default async function PublicProfile({ params }: { params: { slug: string
   const { data: tenant } = await admin
     .from('tenants')
     .select('id,salon_name,designer_name')
-    .eq('slug', params.slug)
+    .eq('slug', slug)
     .maybeSingle();
   if (!tenant) notFound();
   const t = tenant as { id: string; salon_name: string | null; designer_name: string | null };

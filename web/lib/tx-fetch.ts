@@ -1,8 +1,8 @@
 import type { PostgrestError } from '@supabase/supabase-js';
-import type { supabaseServer } from './supabase/server';
+import type { ServerClient } from './supabase/server';
 import { fetchAllRows } from './customers';
 
-type Sb = ReturnType<typeof supabaseServer>;
+type Sb = ServerClient;
 
 /**
  * 손님 몇 명의 거래 — 50명씩 나눠 한꺼번에, 묶음마다 끝까지 받는다(fetchAllRows — 1000행 상한에 잘리지 않게).

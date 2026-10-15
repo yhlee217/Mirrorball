@@ -8,7 +8,7 @@ import { CONTACT_VIAS, contactSince, type ContactVia } from '@/lib/contact';
 // RLS(tenant_rw)로 본인 테넌트 고객만. 테넌트는 요청 값이 아니라 고객 행에서 가져온다.
 // 문구 본문은 저장하지 않는다(이름이 들어간다 — lib/contact.ts 참고).
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

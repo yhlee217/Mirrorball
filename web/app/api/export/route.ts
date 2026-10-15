@@ -24,7 +24,7 @@ const q = (v: unknown) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
 
 // 고객 데이터 CSV 내보내기(본인 테넌트). 이름/전화 복호화 포함.
 export async function GET() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

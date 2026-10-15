@@ -1,4 +1,4 @@
-import type { supabaseServer } from './supabase/server';
+import type { ServerClient } from './supabase/server';
 import { kstStamp } from './kst';
 
 /**
@@ -10,7 +10,7 @@ import { kstStamp } from './kst';
  * 매장별로 — 매장 조건 없이 읽으면 여러 매장에 속한 계정은 다른 매장의 수집 시각을 받는다(개선 계획 v8 P0).
  */
 export async function lastSynced(
-  supabase: ReturnType<typeof supabaseServer>,
+  supabase: ServerClient,
   tenantId: string,
 ): Promise<{ label: string; daysAgo: number; date: string; time: string } | null> {
   const { data } = await supabase

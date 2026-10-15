@@ -1,5 +1,5 @@
 import { fetchAllRows } from './customers';
-import type { supabaseServer } from './supabase/server';
+import type { ServerClient } from './supabase/server';
 
 /**
  * '연락함' — 챙길 고객 카드에서 문자·전화·문구 복사를 하면 남는 기록(care_items, kind='contact').
@@ -21,7 +21,7 @@ export function contactSince(now = Date.now()): string {
 
 /** 최근 CONTACT_QUIET_DAYS 안에 연락한 고객 id. */
 export async function recentlyContactedIds(
-  supabase: ReturnType<typeof supabaseServer>,
+  supabase: ServerClient,
   tenantId: string,
 ): Promise<Set<string>> {
   const rows = await fetchAllRows<{ customer_id: string | null }>((from, to) =>
@@ -38,7 +38,7 @@ export type ContactLog = { customer_id: string | null; sent_at: string | null };
  * (숨김이 지난 7일 안에 끝남, lib/fresh)을 함께 센다 — 따로 받지 않게.
  */
 export async function recentContactRows(
-  supabase: ReturnType<typeof supabaseServer>,
+  supabase: ServerClient,
   tenantId: string,
   days: number,
 ): Promise<ContactLog[]> {
