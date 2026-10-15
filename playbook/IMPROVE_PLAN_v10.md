@@ -63,7 +63,7 @@ P0 → P1 → (금요일) P2 → (다음 주 숫자) P3. 단계마다 tsc · 테
 
 ## 5. 운영자가 할 일
 
-① 맥에서 `git pull` + 사용 현황 한 번 — **10.19 일요일 수집 전**(첫 백업이 걸려 있다). 매장별 '계정 수 · 마지막 접속 · 연락 수'가 나온다(이름 · 이메일 없음) — 주환 · 다운부가 들어와 본 적이 있는지 이걸로 안다. 결과 몇 줄을 그대로 붙여 주시면 된다.
+① 맥에서 `git pull` + 사용 현황 한 번 — **10.18 일요일 수집 전**(첫 백업이 걸려 있다). 매장별 '계정 수 · 마지막 접속 · 연락 수'가 나온다(이름 · 이메일 없음) — 주환 · 다운부가 들어와 본 적이 있는지 이걸로 안다. 결과 몇 줄을 그대로 붙여 주시면 된다.
 
 ```bash
 cd ~/Dev/Mirrorball && git pull origin claude/charming-planck-hmgazi && .venv/bin/python worker/usage_probe.py
@@ -82,4 +82,4 @@ cd ~/Dev/Mirrorball && git pull origin claude/charming-planck-hmgazi && .venv/bi
 | P2 | 금요일 '고치기 전' 숫자 뒤(v7 P1) | — |
 | P3 | 다음 주 디자이너 숫자 뒤 | — |
 
-**운영자가 할 일** — ① Supabase SQL Editor 에서 `supabase/migrations/0025_usage_designer.sql` 실행(실행 전엔 감시가 예전 출력 그대로) ② 운영자님 폰(PC 로도 보시면 거기서도)에서 앱 주소 끝에 `/settings?op=1` 을 붙여 한 번 열기 — '이 폰은 운영자 폰' 알림이 뜨면 끝 ③ 맥 `git pull` + 사용 현황(§5 ①) — 10.19 수집 전.
+**운영자가 할 일** — ① Supabase SQL Editor 에서 `supabase/migrations/0025_usage_designer.sql` 실행(실행 전엔 감시가 예전 출력 그대로) ② 운영자님 폰(PC 로도 보시면 거기서도)에서 앱 주소 끝에 `/settings?op=1` 을 붙여 한 번 열기 — '이 폰은 운영자 폰' 알림이 뜨면 끝 ③ 맥 `git pull` + 사용 현황(§5 ①) — 10.18 수집 전.
