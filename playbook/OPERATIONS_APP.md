@@ -14,6 +14,7 @@
 | 백업 | 같은 맥, 수집 뒤 | 앱에만 있는 데이터(메모 · 노쇼 표시 · 연락 기록 등)를 암호화해 주 1회 |
 | 매일 감시 | GitHub Actions `sync-health`, 매일 10시 | 수집 지연 · 백업 · 화면 오류는 실패(메일), 화면 속도 · 매장별 사용은 출력만 |
 | 자동 검증 | GitHub Actions `test`, 푸시마다 | 타입 검사 + 테스트. 빨갛게 끝나면 메일 |
+| 취약점 점검 | GitHub Actions `deps-audit`, 매주 월요일 10시 30분 | 운영 의존성에 받아들이지 않은 높음 · 심각이 있으면 메일(`scripts/deps_audit.py`) |
 
 ## 1. 매주 흐름
 
@@ -101,12 +102,12 @@ cd ~/Dev/Mirrorball && .venv/bin/python worker/usage_probe.py
 | 감시 메일 — 백업 없음 · 늦음 | 맥의 코드가 최신인가(§5 코드 받기) | 코드를 받고 다음 일요일을 기다리거나, 수동 수집(백업이 따라 돈다) |
 | 감시 메일 — 화면 오류가 많음 | 운영 숫자 · 디자이너님께 어느 화면인지 | 화면 이름(경로)을 알려 주시면 고친다 — 오류 기록엔 손님 정보가 없다 |
 | 자동 검증(`test`) 메일 — 빨강 | GitHub → Actions → test | 그대로 알려 주시면 고친다(배포된 앱은 그 전 상태로 돈다) |
+| 취약점 점검(`deps-audit`) 메일 — 빨강 | GitHub → Actions → deps-audit 의 '받아들이지 않은' 줄 | 그대로 알려 주시면 의존성을 올린다 |
 | 손님 이름이 '고객'으로만 보임 | 매장 키(`dek_wrapped`) · 맥 `.env.local` 의 KEK | `playbook/KEY_ROTATION.md` |
 | 데이터를 되살려야 함 | 백업 파일 | 미리보기 `.venv/bin/python worker/backup.py --restore 파일` → 확인 뒤 `--apply` |
 
 ## 7. 남은 운영자 확인(계획서에서 이어짐)
 
-- **Next 15 미리보기(v14 P1)** — Cloudflare → Workers & Pages → `mirrorball-app` → 배포(Deployments)에서 브랜치 `claude/charming-planck-hmgazi-next15` 의 미리보기를 열어 폰으로 한 바퀴(로그인 · 홈 · 챙길 고객 · 방문 · 상세보기 · 통계 · 설정). 운영 데이터라 연락 · 노쇼 버튼은 누르지 않는다. 화면이 비거나 오류면 미리보기(Preview) 환경 변수가 운영과 같은지 확인
 - **`0026` SQL**(v14 P0) — CSP 어긋남 기록. 실행 전엔 기록만 조용히 건너뛴다
 - HandSOS 고객 화면에 **생일** 칸이 있나 — 칸 이름만(v13 P3)
 - HandSOS 에서 **엑셀 내보내기**(예약 · 매출)가 되나 — 열 이름만(v8 P3)

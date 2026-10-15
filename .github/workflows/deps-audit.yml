@@ -1,0 +1,27 @@
+name: deps-audit
+
+# 운영 의존성 취약점 주간 점검(개선 계획 v14 P2) — 매주 월요일. 받아들이지 않은 '높음 · 심각'이 있으면 이 실행이
+# 빨갛게 끝나고 GitHub 가 저장소 주인에게 메일을 보낸다. 판정과 '알고 받아들인 것'은 scripts/deps_audit.py.
+# 2026-10-15 에 처음 돌려 보니 Next 14 에 심각 · 높음이 여럿 걸려 있었는데 아무도 몰랐다.
+#
+# ⚠ 스케줄 워크플로는 '기본 브랜치'에서만 돈다(현재 claude/charming-planck-hmgazi). 비밀값은 쓰지 않는다.
+
+"on":
+  schedule:
+    - cron: '30 1 * * 1'     # 매주 월요일 01:30 UTC = 10:30 KST
+  workflow_dispatch: {}
+
+permissions:
+  contents: read             # 읽기만
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 취약점 점검(잠금 파일 기준 — 설치는 하지 않는다)
+        run: python3 scripts/deps_audit.py
