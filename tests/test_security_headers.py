@@ -59,6 +59,16 @@ def test_next_config_puts_headers_on_every_path():
     assert "staleTimes: { dynamic: 180 }" in cfg                               # 전에 있던 설정은 그대로
 
 
+def test_middleware_sets_headers_itself():
+    """Cloudflare(next-on-pages)에선 미들웨어를 거치는 응답에 next.config 헤더가 안 붙는다(로컬 workerd 로 확인 —
+    로그인 화면에만 붙고 홈 · 설정 · API 엔 없었다). 미들웨어가 직접 붙여야 모든 화면에 붙는다."""
+    mw = (WEB / "middleware.ts").read_text(encoding="utf-8")
+    assert "import { securityHeaders } from './lib/security-headers.mjs';" in mw
+    assert "for (const h of SECURITY) response.headers.set(h.key, h.value);" in mw
+    body = mw[mw.index("export async function middleware"):]
+    assert body.index("response.headers.set(h.key, h.value)") < body.index("return response;")   # 마지막 응답에
+
+
 def test_csp_reports_keep_only_rule_origin_and_path():
     got = run_ts(["lib/ops.ts"], """
 const { cleanCsp, blockedOf } = require('./ops.js');
