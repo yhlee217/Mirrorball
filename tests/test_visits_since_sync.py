@@ -8,11 +8,12 @@ TS 쪽은 tsc 로 컴파일해 node 로 돌린다(tests/tsnode.py). 도구가 �
 from __future__ import annotations
 
 import pytest
+from pathlib import Path
 
 from tsnode import run_ts
 
-SYNC = {"date": "2026-10-12", "time": "14:05"}          # 일요일 수집
-NOW = {"date": "2026-10-15", "time": "10:00"}           # 수요일 아침
+SYNC = {"date": "2026-10-12", "time": "14:05"}          # 마지막 수집(그날 14:05)
+NOW = {"date": "2026-10-15", "time": "10:00"}           # 사흘 뒤 아침
 
 BOOKINGS = [
     {"id": "sun-am", "date": "2026-10-12", "time": "11:00", "status": "예약"},     # 수집 전 시각 — 이미 수집됨
@@ -87,3 +88,41 @@ out({
     assert got["seen"] == {"a": {"count": 2, "last": "2026-10-14"}}
     assert got["none"] == 0                                          # 수집 기록이 없으면 세지 않는다
     assert got["later"] == ["2026-10-14", "2026-10-14", "2026-10-13", None]
+
+
+def test_noshow_mark_and_undo_rules():
+    """노쇼 표시 — 시간이 지난 예약만, 원래 상태를 남겨 되돌리기가 그대로 돌려놓는다. 표시한 예약은 방문으로 안 센다."""
+    got = run_ts(["lib/visits.ts"], """
+const { noShowUpdate, noShowsSinceSync, visitsSinceSync, seenSinceSync, isAppNoShow } = require('./visits.js');
+const past = { date: '2026-10-14', time: '18:30', status: '예약' };
+const marked = { ...past, status: noShowUpdate(past, false, D.now).status };
+out({
+  mark: noShowUpdate(past, false, D.now),
+  markNull: noShowUpdate({ ...past, status: null }, false, D.now),
+  future: noShowUpdate({ date: '2026-10-15', time: '15:00', status: '예약' }, false, D.now).ok,   // 아직 시간이 안 됨
+  already: noShowUpdate({ ...past, status: '예약취소' }, false, D.now).ok,                         // 이미 취소
+  undo: noShowUpdate(marked, true, D.now),
+  undoNull: noShowUpdate({ ...past, status: '노쇼·앱|' }, true, D.now),
+  undoHandsos: noShowUpdate({ ...past, status: '노쇼' }, true, D.now).ok,                         // HandSOS 노쇼는 앱이 못 돌린다
+  isApp: [isAppNoShow(marked.status), isAppNoShow('노쇼'), isAppNoShow(null)],
+  counted: visitsSinceSync([{ ...marked, customer_id: 'a' }], D.sync, D.now).length,
+  seen: seenSinceSync([{ ...marked, customer_id: 'a' }], D.sync, D.now).size,
+  listed: noShowsSinceSync([marked, past, { ...marked, date: '2026-10-10' }], D.sync, D.now).length,  // 수집 전 날은 빼고
+});
+""", {"sync": SYNC, "now": NOW})
+    if got is None:
+        pytest.skip("node · web/node_modules 가 없다")
+    assert got["mark"] == {"ok": True, "status": "노쇼·앱|예약"}
+    assert got["markNull"] == {"ok": True, "status": "노쇼·앱|"}
+    assert got["future"] is False and got["already"] is False
+    assert got["undo"] == {"ok": True, "status": "예약"}
+    assert got["undoNull"] == {"ok": True, "status": None}
+    assert got["undoHandsos"] is False
+    assert got["isApp"] == [True, False, False]
+    assert got["counted"] == 0 and got["seen"] == 0          # 표시하면 방문 · 횟수에서 빠진다
+    assert got["listed"] == 1                                 # 방문 탭엔 줄을 그어 남긴다(되돌리기 자리)
+
+
+def test_noshow_route_uses_the_same_rule():
+    route = (Path(__file__).resolve().parent.parent / "web" / "app" / "api" / "booking-noshow" / "route.ts").read_text(encoding="utf-8")
+    assert "noShowUpdate" in route and ".eq('tenant_id', tenantId)" in route and "getUser" in route

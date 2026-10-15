@@ -9,7 +9,7 @@ import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { SyncChip } from '@/components/sync-chip';
 import { txKind } from '@/lib/tx';
-import { visitOrdinals, visitsSinceSync } from '@/lib/visits';
+import { noShowsSinceSync, visitOrdinals, visitsSinceSync } from '@/lib/visits';
 import VisitsList, { type Item } from './visits-list';
 import { ScreenReady } from '@/components/screen-timer';
 
@@ -18,7 +18,7 @@ import { ScreenReady } from '@/components/screen-timer';
 
 type Tx = { customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null; kind: string | null };
 type Cust = { id: string; ext_id: string | null; pii_enc: string | null; visit_count: number };
-type Bk = { customer_id: string | null; date: string | null; time: string | null; service: string | null; status: string | null; pii_enc: string | null };
+type Bk = { id: string; customer_id: string | null; date: string | null; time: string | null; service: string | null; status: string | null; pii_enc: string | null };
 
 const DAY = 86400000;
 const KST = 9 * 3600000;
@@ -41,7 +41,7 @@ export default async function VisitsPage() {
         .range(from, to)),
     lastSynced(supabase),
     // 마지막 수집 뒤 다녀가셨을 분 — 방문 기록은 다음 수집에 들어오니 그 사이는 지난 예약으로 보여 준다(lib/visits)
-    supabase.from('bookings').select('customer_id,date,time,service,status,pii_enc')
+    supabase.from('bookings').select('id,customer_id,date,time,service,status,pii_enc')
       .eq('tenant_id', tenantId).gte('date', since).lte('date', today).limit(500),
   ]);
 
@@ -63,13 +63,15 @@ export default async function VisitsPage() {
   }
   const collected = [...byVisit.values()];
   // 수집 뒤 지난 예약 — 이미 수집된 같은 날 방문과 겹치면 뺀다
+  const bks = (bookings as Bk[] | null) ?? [];
   const pending = synced
-    ? visitsSinceSync((bookings as Bk[] | null) ?? [], synced).filter(
-        (b) => !(b.customer_id && byVisit.has(`${b.customer_id}|${b.date}`)),
-      )
+    ? visitsSinceSync(bks, synced).filter((b) => !(b.customer_id && byVisit.has(`${b.customer_id}|${b.date}`)))
     : [];
+  // 디자이너가 노쇼로 표시한 예약 — 세지 않고 줄을 그어 남긴다(되돌리기 자리, app/visits/noshow-button)
+  const marked = synced ? noShowsSinceSync(bks, synced) : [];
 
-  const ids = [...new Set([...collected.map((v) => v.customer_id), ...pending.map((b) => b.customer_id).filter(Boolean) as string[]])];
+  const ids = [...new Set([...collected.map((v) => v.customer_id),
+    ...[...pending, ...marked].map((b) => b.customer_id).filter(Boolean) as string[]])];
   const custs: Cust[] = ids.length
     ? (((await supabase.from('customers').select('id,ext_id,pii_enc,visit_count').eq('tenant_id', tenantId).in('id', ids)).data as Cust[]) ?? [])
     : [];
@@ -94,6 +96,8 @@ export default async function VisitsPage() {
         amount: v.amount,
         nth: nth.get(`${v.customer_id}|${v.date}`) ?? c.visit_count, // 그 방문이 몇 번째였나(지금 총 횟수가 아니라)
         pending: false,
+        noshow: false,
+        bookingId: null,
         memo: v.memo ?? '', // 그날 매장에서 적어둔 메모
         tip: careFor(rawMain)?.tip ?? '', // 그날 받은 시술의 홈케어 안내
       };
@@ -117,11 +121,32 @@ export default async function VisitsPage() {
         amount: 0,
         nth: c ? c.visit_count + (pendDays.get(c.id) ?? []).indexOf(b.date as string) + 1 : 1,
         pending: true,
+        noshow: false,
+        bookingId: b.id,
         memo: '',
         tip: careFor(b.service)?.tip ?? '',
       };
     });
-  const items = (await Promise.all([...pendingItems, ...visitItems]))
+  const markedItems = marked
+    .filter((b) => !b.customer_id || isRealCustomer(cmap.get(b.customer_id)?.ext_id ?? null))
+    .map(async (b): Promise<Item> => {
+      const c = b.customer_id ? cmap.get(b.customer_id) : undefined;
+      return {
+        id: c?.id ?? '',
+        name: await nameFrom(c?.pii_enc ?? b.pii_enc),
+        date: b.date as string,
+        time: b.time,
+        service: friendlyService(b.service) || '',
+        amount: 0,
+        nth: 0,
+        pending: true,
+        noshow: true,
+        bookingId: b.id,
+        memo: '',
+        tip: '',
+      };
+    });
+  const items = (await Promise.all([...pendingItems, ...markedItems, ...visitItems]))
     .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : (a.time ?? '') < (b.time ?? '') ? 1 : -1))
     .slice(0, 60);
 

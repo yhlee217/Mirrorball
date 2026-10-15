@@ -36,11 +36,52 @@ export function visitsSinceSync<B extends { date: string | null; time: string | 
   sync: { date: string; time: string },
   now: { date: string; time: string } = kstNow(),
 ): B[] {
-  return rows.filter((b) => {
-    if (!b.date || isCancelled(b.status)) return false;
-    const after = b.date > sync.date || (b.date === sync.date && !!b.time && b.time > sync.time);
-    return after && !isUpcoming(b.date, b.time, now);
-  });
+  return rows.filter((b) => !isCancelled(b.status) && passedSinceSync(b, sync, now));
+}
+
+/** 마지막 수집 뒤 · 시각이 지난 예약인가(상태는 보지 않는다). 수집한 날은 수집 시각 뒤 것만. */
+function passedSinceSync(
+  b: { date: string | null; time: string | null },
+  sync: { date: string; time: string },
+  now: { date: string; time: string },
+): boolean {
+  if (!b.date) return false;
+  const after = b.date > sync.date || (b.date === sync.date && !!b.time && b.time > sync.time);
+  return after && !isUpcoming(b.date, b.time, now);
+}
+
+/**
+ * 디자이너가 앱에서 노쇼로 표시한 예약 — 예약 상태를 '노쇼·앱|원래 상태'로 바꾼다. 노쇼 · 취소 판정(isCancelled)이
+ * 모든 화면(방문 · 고객 목록 · 상세보기 · 챙길 고객)에 이미 걸려 있어 한 곳만 바꾸면 된다. 원래 상태를 뒤에 남겨
+ * 되돌리기가 그대로 돌려놓는다. 수집이 주 1회라 주중에 취소 · 노쇼가 나도 앱은 일요일까지 몰랐다(2026-10-15).
+ */
+export const APP_NOSHOW = '노쇼·앱|';
+
+export function isAppNoShow(status: string | null | undefined): boolean {
+  return !!status && status.startsWith(APP_NOSHOW);
+}
+
+/** 노쇼 표시 · 되돌리기 뒤의 예약 상태. 할 수 없으면 ok=false — 이미 취소 · 노쇼, 아직 시간이 안 된 예약, 앱이 표시하지 않은 노쇼. */
+export function noShowUpdate(
+  b: { date: string | null; time: string | null; status: string | null },
+  undo: boolean,
+  now: { date: string; time: string } = kstNow(),
+): { ok: boolean; status: string | null } {
+  if (undo) {
+    if (!isAppNoShow(b.status)) return { ok: false, status: b.status };
+    return { ok: true, status: (b.status as string).slice(APP_NOSHOW.length) || null };
+  }
+  if (!b.date || isCancelled(b.status) || isUpcoming(b.date, b.time, now)) return { ok: false, status: b.status };
+  return { ok: true, status: APP_NOSHOW + (b.status ?? '') };
+}
+
+/** 마지막 수집 뒤 앱에서 노쇼로 표시한 예약 — 방문 탭에 줄을 그어 남긴다(되돌리기 자리). 세지는 않는다. */
+export function noShowsSinceSync<B extends { date: string | null; time: string | null; status: string | null }>(
+  rows: B[],
+  sync: { date: string; time: string },
+  now: { date: string; time: string } = kstNow(),
+): B[] {
+  return rows.filter((b) => isAppNoShow(b.status) && passedSinceSync(b, sync, now));
 }
 
 /**
