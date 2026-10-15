@@ -5,8 +5,10 @@ import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { BOOKING_LOOKBACK_DAYS, isActiveBooking } from '@/lib/bookings';
 import { laterDay, noShowsSinceSync, seenSinceSync, visitsSinceSync } from '@/lib/visits';
-import { careState, fetchAllRows, firstCare, isRealCustomer } from '@/lib/customers';
-import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
+import { careState, firstCare, isRealCustomer } from '@/lib/customers';
+import { catsOf, recommend, visitsByCustomer } from '@/lib/recommend';
+import { storePairs } from '@/lib/store-stats';
+import { careDraft, lastServiceDay } from '@/lib/care-draft';
 import { addDays } from '@/lib/week';
 import { lastSynced } from '@/lib/sync';
 import { awayDays } from '@/lib/offdays';
@@ -73,9 +75,8 @@ export async function loadCarte(id: string) {
   const realCount = () =>
     supabase.from('customers').select('id', { count: 'exact', head: true })
       .eq('tenant_id', cust.tenant_id).filter('ext_id', 'match', '^[0-9]+$');
-  type StoreTx = { customer_id: string | null; date: string | null; service: string | null; kind: string | null };
-  const [{ data: tenant }, { data: tx }, { data: bk }, above, total, synced, storeTx] = await Promise.all([
-    supabase.from('tenants').select('dek_wrapped,settings').eq('id', cust.tenant_id).maybeSingle(),
+  const [{ data: tenant }, { data: tx }, { data: bk }, above, total, synced, pairs] = await Promise.all([
+    supabase.from('tenants').select('dek_wrapped,settings,designer_name').eq('id', cust.tenant_id).maybeSingle(),
     supabase
       .from('transactions')
       .select('id,date,time,service,amount_won,memo,kind,paid_out_of_pocket')
@@ -93,10 +94,9 @@ export async function loadCarte(id: string) {
     ranked ? realCount().gt('total_won', cust.total_won) : null,
     ranked ? realCount() : null,
     lastSynced(supabase, cust.tenant_id), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다(이 손님 매장의 수집)
-    // 다음 시술 추천의 '함께 권할 것' 근거 — 이 매장 최근 1년 시술(lib/recommend pairStats)
-    fetchAllRows<StoreTx>((from, to) =>
-      supabase.from('transactions').select('customer_id,date,service,kind')
-        .eq('tenant_id', cust.tenant_id).gte('date', addDays(today, -365)).order('id').range(from, to)),
+    // 다음 시술 추천의 '함께 권할 것' 근거 — 이 매장 최근 1년 시술(lib/recommend pairStats). 하루에 한 번 세어
+    // 저장해 둔 것을 읽는다(lib/store-stats, v12 P0) — 전에는 상세보기를 열 때마다 매장 1년 거래를 받았다.
+    storePairs(supabase, cust.tenant_id, today),
   ]);
 
   const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
@@ -233,8 +233,24 @@ export async function loadCarte(id: string) {
   // 추천 시술 — 오늘 기준(손님 앞에서 보는 화면). 다음 예약에 잡힌 시술, 수집 뒤 다녀가시며 받으셨을
   // 시술의 갈래는 뺀다(이력에 아직 없어 '때가 됐다'고 나올 수 있다).
   const mine = visitsByCustomer(all.map((h) => ({ customer_id: cust.id, date: h.date, service: h.service, kind: h.kind })));
-  const recs = recommend(mine.get(cust.id) ?? [], pairStats(visitsByCustomer(storeTx), today), today, settings,
+  const recs = recommend(mine.get(cust.id) ?? [], pairs, today, settings,
     [...catsOf(nextBk?.service), ...catsOf(seenBk?.service)]);
+
+  // 상태 뱃지 — 이탈로 표시한 분, 다음 예약이 잡힌 분, 수집 뒤 다녀가신 분(예약 기준)에겐 띄우지 않는다
+  // (이미 정해졌거나 오시기로 했거나 방금 오셨다)
+  const badge = cust.churned_at || nextBk || seenLast ? null : overdue ? 'overdue' : due ? 'due' : first;
+  // 챙길 고객 대상이면 💬 · 📤 가 챙길 고객 탭과 같은 문구로 열린다(lib/care-draft, 개선 계획 v12 P1) — 같은 시술 ·
+  // 같은 기준 방문일. 대상이 아니면 지금처럼 빈 문자(예약 확인 같은 연락).
+  const designer = (tenant as { designer_name: string | null } | null)?.designer_name?.trim() || null;
+  const draft = badge
+    ? careDraft({
+        state: badge, name, designer, lastVisit: cust.last_visit, today,
+        services: badge === 'hello' || badge === 'back'
+          ? history.filter((h) => h.date === cust.last_visit).map((h) => h.service)
+          : lastServiceDay(all).services,
+        visitCount: cust.visit_count, vipVisits: settings.vip_visits, cycleDays: cust.revisit_cycle_days,
+      })
+    : null;
 
   return {
     cust, name, phone, settings, vip, avg,
@@ -244,5 +260,6 @@ export async function loadCarte(id: string) {
     overdue, due, first, vac, today,
     visitCount, lastVisit, seenLast, recentBks,
     sinceLast, next, top, recs,
+    badge, draft, button: settings.contact_button,
   };
 }

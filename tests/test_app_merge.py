@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from browser import launch_chromium
+
 pw = pytest.importorskip("playwright.sync_api")
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,10 +36,7 @@ def _extract_merge() -> str:
 def page():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        try:
-            b = p.chromium.launch()
-        except Exception as exc:                     # 브라우저 미탑재 환경
-            pytest.skip(f"chromium 실행 불가: {exc}")
+        b = launch_chromium(p)  # 기본 크롬이 없으면 깔린 크롬으로(tests/browser.py)
         pg = b.new_page()
         pg.set_content("<!doctype html><html><body></body></html>")
         pg.add_script_tag(content=_extract_merge())

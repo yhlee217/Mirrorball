@@ -27,6 +27,15 @@ function isOp(): boolean {
   }
 }
 
+/** 운영자 폰 쿠키 — 서버 화면(운영자 화면 /ops)이 알 수 있게(v12 P2). 숫자뿐인 화면이라 쿠키 하나로 가린다. */
+export function setOpCookie(on: boolean) {
+  try {
+    document.cookie = on ? 'mb-op=1; path=/; max-age=31536000; samesite=lax' : 'mb-op=; path=/; max-age=0; samesite=lax';
+  } catch {
+    /* 쿠키가 막혀도 사용 수 표시는 그대로 */
+  }
+}
+
 /** 홈 화면 앱으로 열었나 — 브라우저 탭이 아니라(아이폰은 navigator.standalone). 설치 안내를 정할 숫자(v10 P0). */
 function isApp(): boolean {
   try {
@@ -53,6 +62,7 @@ function send(body: { path: string; ms: number; cached: boolean; first: boolean 
 
 export function NavStart() {
   useEffect(() => {
+    if (isOp() && !document.cookie.includes('mb-op=1')) setOpCookie(true); // 쿠키 전에 ?op=1 로 표시한 폰
     const onClick = (e: MouseEvent) => {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;

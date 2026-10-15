@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from browser import launch_chromium
+
 pw = pytest.importorskip("playwright.sync_api")
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -55,13 +57,7 @@ FIXTURE = """<!doctype html><html><body>
 def page():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        try:
-            b = p.chromium.launch()
-        except Exception:
-            exe = Path("/opt/pw-browsers/chromium-1194/chrome-linux/chrome")
-            if not exe.exists():
-                pytest.skip("chromium 실행 불가(브라우저 없음)")
-            b = p.chromium.launch(executable_path=str(exe))
+        b = launch_chromium(p)  # 기본 크롬이 없으면 깔린 크롬으로(tests/browser.py)
         pg = b.new_page()
         yield pg
         b.close()

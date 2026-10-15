@@ -12,7 +12,9 @@ import { bookingSets, isActiveBooking, recentBookingRows } from '@/lib/bookings'
 import { withSeenVisits } from '@/lib/visits';
 import { recentlyContactedIds } from '@/lib/contact';
 import { addDays, shortDate } from '@/lib/week';
-import { activeTrend, datesByCustomer, newcomerCohorts, serviceTable, toVisits, weekHeat } from '@/lib/trends';
+import { activeTrend, datesByCustomer, newcomerCohorts, serviceTable, STATS_DAYS, toVisits, weekHeat, withOlderHistory,
+  type TrendTx } from '@/lib/trends';
+import { txsOfCustomers } from '@/lib/tx-fetch';
 import { hasOffDays, workedDays } from '@/lib/offdays';
 import { monthForecast } from '@/lib/forecast';
 import { backtest, pairStats, visitsByCustomer } from '@/lib/recommend';
@@ -37,7 +39,18 @@ export default async function StatsPage() {
   const kToday = kstNow().date;
   const [y0, m0] = kToday.split('-').map(Number);
   const monthLast = new Date(Date.UTC(y0, m0, 0)).toISOString().slice(0, 10);
-  const [{ data: tenant }, customers, txs, bkRows, contacted, synced, { data: bkLeftRows }, contactRows] = await Promise.all([
+  // 거래는 2년만(lib/trends STATS_DAYS) — 전에는 매장 거래 전부(누적 '거래 N건' 하나 때문, 가장 느린 화면 1.1초 —
+  // 2026-10-15 감시). 누적 건수는 세기만 하고, 그보다 오래된 이력이 답을 바꾸는 연락 효과는 연락한 분만 전체 이력을 받는다
+  // (연락 기록이 오는 대로 곧장 — 다른 받기를 기다리지 않는다). 숫자는 그대로다(tests/test_less_fetch).
+  const txSince = addDays(kToday, -STATS_DAYS);
+  const contactRowsP = fetchAllRows<ContactRow>((from, to) =>
+    supabase.from('care_items').select('customer_id,sent_at').eq('tenant_id', tenantId).eq('kind', 'contact')
+      .order('id').range(from, to));
+  const contactedFullP = contactRowsP.then((rows) => {
+    const ids = [...new Set(rows.map((r) => r.customer_id).filter(Boolean) as string[])];
+    return ids.length ? txsOfCustomers<TrendTx>(supabase, tenantId, ids, 'customer_id,date,service,kind', null, null) : [];
+  });
+  const [{ data: tenant }, customers, txs, bkRows, contacted, synced, { data: bkLeftRows }, contactRows, { count: txTotal }, contactedFull] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<{ id: string; ext_id: string | null; total_won: number; visit_count: number; gender: string | null;
                    age_band: string | null; gender_src: string | null; gender_manual: string | null; revisit_cycle_days: number | null;
@@ -49,17 +62,19 @@ export default async function StatsPage() {
         .eq('tenant_id', tenantId).order('id').range(from, to)),
     fetchAllRows<{ customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number;
                    kind: string | null; covered_won: number | null }>((from, to) =>
-      supabase.from('transactions').select('customer_id,date,time,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
+      supabase.from('transactions').select('customer_id,date,time,service,amount_won,kind,covered_won').eq('tenant_id', tenantId)
+        .gte('date', txSince).order('id').range(from, to)),
     recentBookingRows(supabase, tenantId), // 예약했거나 수집 뒤 다녀가셨을 분 — 챙길 고객과 같은 판정
     recentlyContactedIds(supabase, tenantId),
     lastSynced(supabase, tenantId),
     // 이번 달 남은 기간에 잡힌 예약 — 마감 예상 옆에 참고로만(예상 금액에는 섞지 않는다)
     supabase.from('bookings').select('date,time,status').eq('tenant_id', tenantId)
       .gte('date', kToday).lte('date', monthLast).limit(1000),
-    // 연락 효과(더 보기) — 연락 기록 전부(문자·전화·복사, 시각만 남는다)
-    fetchAllRows<ContactRow>((from, to) =>
-      supabase.from('care_items').select('customer_id,sent_at').eq('tenant_id', tenantId).eq('kind', 'contact')
-        .order('id').range(from, to)),
+    // 연락 효과(더 보기) — 연락 기록 전부(문자·전화·공유·복사, 시각만 남는다)
+    contactRowsP,
+    // 누적 '거래 N건' — 세기만(행은 받지 않는다)
+    supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+    contactedFullP,
   ]);
   // '손님' 등 미식별 워크인은 관리 대상이 아니다 — 홈·챙길 고객·고객목록과 같은 기준으로 뺀다.
   // 통계만 포함하고 있어서 고객수·재방문율·객단가가 부풀고, 성별은 전부 '미상'으로 쌓였다.
@@ -249,7 +264,15 @@ export default async function StatsPage() {
   const realContacts = contactRows.filter((r) => r.customer_id && realIds.has(r.customer_id));
   const contactSince = realContacts.map((r) => (r.sent_at ? kstDay(r.sent_at) : '')).filter(Boolean).sort()[0] ?? null;
   // 연락 효과 · 첫 방문 안부의 '오심'도 지금 기준 — 수집 뒤 다녀가신 분(예약 기준)도 센다(v9 P2)
-  const realVisits = withSeenVisits(new Map([...byCust].filter(([id]) => realIds.has(id))),
+  // 2년보다 오래된 이력 — 손님 표의 첫 방문 · 연락한 분의 전체 이력으로 메운다(lib/trends withOlderHistory, v12 P0)
+  const contactedVisits = datesByCustomer(toVisits(contactedFull));
+  const realVisits = withSeenVisits(
+    withOlderHistory(
+      new Map([...byCust].filter(([id]) => realIds.has(id))),
+      cs,
+      new Map([...contactedVisits].filter(([id]) => realIds.has(id))),
+      txSince,
+    ),
     bkRows.filter((b) => !!b.customer_id && realIds.has(b.customer_id)), synced); // 미식별 워크인 예약은 빼고
 
   return (
@@ -300,7 +323,7 @@ export default async function StatsPage() {
             since={contactSince}
           />
           <RecommendHitCard hits={hits} />
-          <TotalsCard customers={totalCustomers} revenue={totalRevenue} tx={tx.length} />
+          <TotalsCard customers={totalCustomers} revenue={totalRevenue} tx={txTotal ?? tx.length} />
         </details>
       </div>
       <ScreenReady />

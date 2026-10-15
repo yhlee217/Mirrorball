@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from browser import launch_chromium
+
 pytest.importorskip("playwright.sync_api")
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -53,10 +55,7 @@ def base_url():
 def page(base_url):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        try:
-            b = p.chromium.launch()
-        except Exception as exc:
-            pytest.skip(f"chromium 실행 불가: {exc}")
+        b = launch_chromium(p)  # 기본 크롬이 없으면 깔린 크롬으로(tests/browser.py)
         pg = b.new_page()
         pg.goto(base_url)                     # 127.0.0.1 = 보안 컨텍스트 → crypto.subtle 사용 가능
         pg.add_script_tag(content=_appcrypto_js())

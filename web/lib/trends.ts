@@ -238,3 +238,31 @@ export function activeTrend(
     return { date: p, label: i === ends.length - 1 ? `${m}.${d}` : `${m}월`, count };
   });
 }
+
+/**
+ * 통계가 받는 거래 기간(개선 계획 v12 P0) — 가장 멀리 보는 계산(추천 적중률)이 2년(730일). 수집이 한 달까지 밀려도
+ * 그 2년이 다 들어오게 31일을 더 받는다. 전에는 매장 거래 전부를 받았다(해마다 느려진다).
+ */
+export const STATS_DAYS = 730 + 31;
+
+/**
+ * 2년보다 오래된 이력이 답을 바꾸는 계산을 위한 방문 날짜(손님별, 오름차순) — 손님 표의 첫 방문을 앞에 더하고(첫 방문 안부
+ * 효과가 맨 앞 날짜를 '첫 방문'으로 읽는다), 연락한 분은 전체 이력으로 바꾼다(연락 효과가 연락 전 방문 수로 첫 방문 손님 ·
+ * 단골을 가른다). since = 받은 거래의 첫날 — 첫 방문이 그 뒤면 이미 들어 있다.
+ */
+export function withOlderHistory(
+  byCust: Map<string, string[]>,
+  firsts: { id: string; first_visit: string | null }[],
+  full: Map<string, string[]>,
+  since: string,
+): Map<string, string[]> {
+  const out = new Map(byCust);
+  for (const c of firsts) {
+    const f = c.first_visit?.slice(0, 10);
+    if (!f || f >= since) continue;
+    const ds = out.get(c.id) ?? [];
+    if (!ds.length || ds[0] > f) out.set(c.id, [f, ...ds]);
+  }
+  for (const [id, ds] of full) out.set(id, ds);
+  return out;
+}

@@ -365,6 +365,7 @@ button.tipsms{border:none;background:none;font-family:inherit;cursor:pointer}   
 .cta-b{width:44px;height:44px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;
   font-size:18px;text-decoration:none;-webkit-tap-highlight-color:transparent}
 .cta-b:active{background:var(--line)}
+button.cta-b{border:none;padding:0;font-family:inherit;cursor:pointer}   /* 📤 카톡 등(공유 창) — 📞 · 💬 링크와 같은 동그라미 */
 /* 한 줄 띠 — 마지막 · 다음 · 선불 · 순위. 큰 타일 넷(약 200px)을 한 줄로. 오른쪽 위 ? 자리를 비운다 */
 .facts{display:grid;grid-template-columns:repeat(4,1fr);gap:0 6px;padding:11px 36px 11px 13px}
 .facts .help{grid-column:1/-1}
@@ -556,6 +557,13 @@ button.tipsms{border:none;background:none;font-family:inherit;cursor:pointer}   
 /* 로그아웃 — 가운데, 누르는 영역은 넉넉히(글자만 있는 버튼이라 손가락에 작았다) */
 .logout-row{text-align:center}
 .logout-row .linkbtn{padding:13px 28px;font-size:14px}
+/* 운영자 화면(app/ops, v12 P2) — 매장 · 화면마다 두 줄(이름 / 숫자) */
+.ops-since{font-size:13px;color:var(--ink);margin:0 2px 10px}
+.ops-r{flex-direction:column;align-items:flex-start;gap:3px}
+.ops-r b{font-size:14px;font-weight:800}
+.ops-r span{font-size:13px;color:var(--ink);line-height:1.5}
+.ops-err{font-size:13px;color:var(--muted)}
+.ops-note{font-size:12.5px;color:var(--muted);margin:4px 2px 0;line-height:1.6}
 /* 시작 안내(app/start, v11 P0) — 로그인 전, 운영자가 주소로 보내는 페이지 */
 .start-lead{font-size:14.5px;line-height:1.6;margin:0 2px 12px}
 .start-s{padding:14px 16px;margin-bottom:10px}

@@ -15,7 +15,9 @@ import { gapLine, lastServices, latestRecent, memoLines, visitTag } from '@/lib/
 import { friendlyService } from '@/lib/service-name';
 import { toVisits } from '@/lib/trends';
 import { hasOffDays, workedDays } from '@/lib/offdays';
-import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
+import { catsOf, recommend, visitsByCustomer } from '@/lib/recommend';
+import { storePairs } from '@/lib/store-stats';
+import { txsOfCustomers } from '@/lib/tx-fetch';
 import HomeView, { type Brief } from './home-view';
 import NoSalon from './no-salon';
 import { ScreenReady } from '@/components/screen-timer';
@@ -123,11 +125,22 @@ export default async function Page() {
   const lastDates = [...new Set(ids.map((id) => byId.get(id)?.last_visit).filter(Boolean) as string[])];
   const wk = lastWeek(asOf, today);
 
-  // 최근 1년 거래 한 번에 — 이번 주 요약(그중 두 주)과 예약 브리핑의 '추천 시술'(손님 이력 + 매장 데이터)이 같이 쓴다.
-  const [yearTx, details, lastTx] = await Promise.all([
+  // 매장 1년 거래를 통째로 받던 것을 나눈다(개선 계획 v12 P0) — 지난 두 주(요약) · 예약 손님의 1년 이력(추천 · 브리핑) ·
+  // 첫 방문 손님의 그날 시술(챙길 고객 수) · 매장 추천 근거(하루 한 번 세어 저장, lib/store-stats). 계산마다 읽던 줄만
+  // 받으니 숫자는 그대로다(tests/test_less_fetch). 앱을 처음 열 때 가장 오래 기다리던 곳(느린 때 1.9초, 2026-10-15 감시).
+  const yearFrom = addDays(asOf, -365);
+  const onesIds = real.filter((c) => c.visit_count === 1 && (c.last_visit ?? '').slice(0, 10) >= yearFrom).map((c) => c.id);
+  const [weekTx, bookedTx, onesTx, pairs, details, lastTx] = await Promise.all([
     fetchAllRows<WeekTx>((from, to) =>
       supabase.from('transactions').select('customer_id,date,kind,service,amount_won,covered_won')
-        .eq('tenant_id', tenantId).gte('date', addDays(asOf, -365)).lte('date', asOf).order('id').range(from, to)),
+        .eq('tenant_id', tenantId).gte('date', wk.prev.start).lte('date', wk.cur.end).order('id').range(from, to)),
+    ids.length
+      ? txsOfCustomers<WeekTx>(supabase, tenantId, ids, 'customer_id,date,kind,service,amount_won,covered_won', yearFrom, asOf)
+      : Promise.resolve([] as WeekTx[]),
+    onesIds.length
+      ? txsOfCustomers<LastTx>(supabase, tenantId, onesIds, 'customer_id,date,service,kind', yearFrom, asOf)
+      : Promise.resolve([] as LastTx[]),
+    storePairs(supabase, tenantId, today),
     ids.length
       ? supabase.from('customers').select('id,revisit_cycle_days,prepaid_balance,memo_ai,memo_ai_recent').eq('tenant_id', tenantId).in('id', ids)
           .then((r) => (r.data as Detail[] | null) ?? [])
@@ -142,7 +155,7 @@ export default async function Page() {
   // '챙길 고객 N'(할 일) — 2회 이상 손님(onCareList) + 첫 방문 손님(onFirstList, 안부·다시 오실 때).
   // 첫 방문 손님의 주기는 그날 받은 시술로 정해서 1년 거래가 온 뒤에 센다. 챙길 고객 탭과 같은 숫자다.
   const ones = real.filter((c) => c.visit_count === 1);
-  const oneSvcs = servicesOn(yearTx, (id) => (byId.get(id)?.visit_count === 1 ? byId.get(id)?.last_visit : null));
+  const oneSvcs = servicesOn(onesTx, (id) => (byId.get(id)?.visit_count === 1 ? byId.get(id)?.last_visit : null));
   const firstFlags = (c: Cust) => ({ settings, churned: isChurned(c), booked: held.has(c.id), contacted: contacted.has(c.id), asOf });
   const careCount = real.filter(isTodo).length + ones.filter((c) => onFirstList(c, oneSvcs.get(c.id) ?? [], firstFlags(c))).length;
   // 그중 이번 주 새로 오른 분(lib/fresh, v10 P1) — 챙길 고객 화면 맨 위에 모인 분들과 같은 수
@@ -162,11 +175,11 @@ export default async function Page() {
   // 지난 한 주 — 첫 방문은 실고객만 센다(워크인 집계는 '첫 방문'이 의미가 없다).
   const firsts = real.map((c) => c.first_visit);
   // 휴무를 정했으면 두 주에 영업한 날도 — 이틀 쉰 주를 전주와 그냥 견주면 손님이 준 것처럼 읽힌다.
-  const weekDays = new Set(toVisits(yearTx).map((v) => v.date));
+  const weekDays = new Set(toVisits(weekTx).map((v) => v.date));
   const week = {
     label: spanLabel(wk.cur),
-    cur: weekNums(yearTx, firsts, wk.cur),
-    prev: weekNums(yearTx, firsts, wk.prev),
+    cur: weekNums(weekTx, firsts, wk.cur),
+    prev: weekNums(weekTx, firsts, wk.prev),
     work: hasOffDays(settings)
       ? {
           cur: workedDays(wk.cur.start, wk.cur.end, settings, weekDays),
@@ -178,8 +191,7 @@ export default async function Page() {
   const det = new Map(details.map((d) => [d.id, d]));
   const lastSvc = lastServices(lastTx, (id) => byId.get(id)?.last_visit);
   // 추천 시술 — 예약일 기준으로, 이번에 예약한 시술의 갈래는 빼고 하나만(lib/recommend).
-  const recVisits = visitsByCustomer(yearTx);
-  const pairs = pairStats(recVisits, today);
+  const recVisits = visitsByCustomer(bookedTx); // 예약 손님의 1년 이력 — 매장 근거(pairs)는 저장해 둔 것
   const toBrief = async (b: Booking): Promise<Brief> => {
     const { name, phone } = await readContact(b.pii_enc);
     const off = isCancelled(b.status);

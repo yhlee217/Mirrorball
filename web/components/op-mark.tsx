@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { OP_KEY } from './screen-timer';
+import { OP_KEY, setOpCookie } from './screen-timer';
 
 /**
  * 운영자 폰 표시(개선 계획 v10 P0) — 설정을 `?op=1` 로 열면 이 폰을 운영자 폰으로(매장별 사용 수에서 빠지고 화면 속도엔
@@ -15,6 +15,7 @@ export default function OpMark() {
     try {
       if (q === '1') window.localStorage.setItem(OP_KEY, '1');
       else window.localStorage.removeItem(OP_KEY);
+      setOpCookie(q === '1'); // 서버 화면(/ops)도 알게 — 운영자 폰에서만 열린다(v12 P2)
       setMsg(q === '1' ? '이 폰은 운영자 폰 — 사용 수에서 빠져요' : '운영자 폰 표시를 풀었어요');
     } catch {
       setMsg('이 브라우저는 저장이 막혀 있어 표시하지 못했어요');
