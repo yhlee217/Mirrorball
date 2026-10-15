@@ -8,17 +8,38 @@ import { useEffect } from 'react';
  *  SkeletonSeen 뼈대(각 화면 loading.tsx)가 떴다는 표시 — 안 떴으면 받아 둔 화면을 바로 보여준 것(3분 저장).
  *  ScreenReady  각 화면 끝에 — 뜬 순간 걸린 시간을 보낸다. 앱을 처음 열 때는 열기 시작부터 잰다.
  *
- * 보내는 건 경로 · 밀리초 · 받아 둔 화면이었나 · 처음 열기였나뿐이다(api/client-timing, lib/ops cleanTiming).
- * 재기는 화면을 막지 않는다 — 답을 기다리지 않고(sendBeacon), 실패해도 아무 일도 없다.
+ * 보내는 건 경로 · 밀리초 · 받아 둔 화면이었나 · 처음 열기였나 · 운영자 폰이었나 · 홈 화면 앱으로 열었나뿐이다
+ * (api/client-timing, lib/ops cleanTiming). 재기는 화면을 막지 않는다 — 답을 기다리지 않고(sendBeacon), 실패해도 아무 일도 없다.
  */
 
 let start: number | null = null; // 마지막으로 누른 시각(performance.now)
 let skeleton = false; // 그 뒤 뼈대가 떴나
 let opened = false; // 이 문서(앱 열기)에서 첫 화면을 이미 보냈나
 
+/** 운영자 폰 표시 — 설정을 ?op=1 로 열면 이 폰에 남는다(components/op-mark). 사용 수에서 빼고 속도엔 남긴다(v10 P0). */
+export const OP_KEY = 'mb-op';
+
+function isOp(): boolean {
+  try {
+    return window.localStorage.getItem(OP_KEY) === '1';
+  } catch {
+    return false; // 저장이 막힌 브라우저 — 디자이너로 센다
+  }
+}
+
+/** 홈 화면 앱으로 열었나 — 브라우저 탭이 아니라(아이폰은 navigator.standalone). 설치 안내를 정할 숫자(v10 P0). */
+function isApp(): boolean {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  } catch {
+    return false;
+  }
+}
+
 function send(body: { path: string; ms: number; cached: boolean; first: boolean }) {
   try {
-    const json = JSON.stringify(body);
+    const json = JSON.stringify({ ...body, op: isOp(), app: isApp() });
     const ok = typeof navigator.sendBeacon === 'function'
       && navigator.sendBeacon('/api/client-timing', new Blob([json], { type: 'application/json' }));
     if (!ok) {

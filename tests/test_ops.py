@@ -85,14 +85,19 @@ out(D.bodies.map(cleanTiming));
         {"path": "/stats", "ms": 61000},                                 # 1분 넘음(폰이 잠겼다 깸)
         {"path": "/stats", "ms": "900"},                                 # 숫자가 아님
         None,
+        {"path": "/visits", "ms": 700, "op": True, "app": True},         # v10 P0 — 운영자 폰 · 홈 화면 앱
+        {"path": "/visits", "ms": 700, "op": "1", "app": 1},             # 참/거짓이 아니면 '아님'
     ]})
     if got is None:
         pytest.skip("node/npx 또는 web/node_modules 가 없다 — TS 실행 생략")
+    no = {"op": False, "app": False}  # 두 칸은 늘 남긴다 — 감시(0025)가 이 칸이 있는 기록부터 센다
     assert got == [
-        {"path": "/customer/:id", "ms": 1235, "cached": False, "first": False},
-        {"path": "/alerts", "ms": 40, "cached": True, "first": False},
-        {"path": "/", "ms": 2100, "cached": False, "first": True},
+        {"path": "/customer/:id", "ms": 1235, "cached": False, "first": False, **no},
+        {"path": "/alerts", "ms": 40, "cached": True, "first": False, **no},
+        {"path": "/", "ms": 2100, "cached": False, "first": True, **no},
         None, None, None, None,
+        {"path": "/visits", "ms": 700, "cached": False, "first": False, "op": True, "app": True},
+        {"path": "/visits", "ms": 700, "cached": False, "first": False, **no},
     ]
 
 
@@ -123,3 +128,40 @@ def test_speed_names_line_up_with_0024():
     assert "kind: 'timing'" in (ROOT / "web" / "app" / "api" / "client-timing" / "route.ts").read_text(encoding="utf-8")
     script = (ROOT / "scripts" / "sync_health_check.py").read_text(encoding="utf-8")
     assert '"ops_speed"' in script and '"ops_usage"' in script
+
+
+# ── 사용 수는 디자이너 것만(0025, 개선 계획 v10 P0) ──────────────────────────────
+
+def test_usage_lines_split_operator_phone_and_show_since():
+    """0025 뒤 — 디자이너 화면(그중 앱 비율) · 운영자 폰은 따로 · 맨 위 기록 시작. 0024 모양이면 예전 그대로(위 테스트)."""
+    since = "2026-10-15T06:01:02.123+00:00"
+    usage = shc.fmt_usage([
+        {"slug": "daunbu", "screens_7d": 0, "app_7d": 0, "op_7d": 0, "contacts_7d": 0, "last_seen": None, "since": since},
+        {"slug": "hayewoni", "screens_7d": 12, "app_7d": 10, "op_7d": 35, "contacts_7d": 0,
+         "last_seen": (NOW - dt.timedelta(hours=2)).isoformat(), "since": since},
+        {"slug": "juhwan", "screens_7d": 3, "app_7d": 0, "op_7d": 0, "contacts_7d": 2, "last_seen": ago(2), "since": since},
+    ], NOW)
+    assert usage[0] == "  화면 기록 10.15 15:01부터 · 운영자 폰은 따로 셈"          # KST
+    assert usage[1].split() == ["daunbu", "디자이너", "화면", "0번", "·", "연락", "0명", "·", "마지막", "사용", "기록", "없음"]
+    assert usage[2].endswith("디자이너 화면 12번(앱 83%) · 연락 0명 · 마지막 사용 오늘 · 운영자 폰 35번")
+    assert usage[3].endswith("디자이너 화면 3번(앱 0%) · 연락 2명 · 마지막 사용 2일 전")   # 운영자 폰 0번은 안 찍는다
+    empty = shc.fmt_usage([{"slug": "x", "screens_7d": 0, "app_7d": 0, "op_7d": 0, "contacts_7d": 0,
+                            "last_seen": None, "since": None}], NOW)
+    assert empty[0] == "  화면 기록 — 새 앱의 기록이 아직 없음(운영자 폰은 따로 셈)"
+
+
+def test_usage_names_line_up_with_0025():
+    """감시 함수가 돌려주는 칸 · 앱이 보내는 두 칸 · 운영자 폰 표시가 서로 같은 이름이다."""
+    sql = (ROOT / "supabase" / "migrations" / "0025_usage_designer.sql").read_text(encoding="utf-8")
+    assert "drop function if exists public.ops_usage();" in sql            # 돌려주는 칸이 바뀌어 replace 로는 안 된다
+    for col in ("screens_7d", "app_7d", "op_7d", "contacts_7d", "last_seen", "since"):
+        assert re.search(rf"^\s+{col}\s+(bigint|timestamptz)", sql, re.M), col
+    assert "e.detail ? 'op'" in sql and "detail->>'app'" in sql            # 두 칸이 있는 기록부터
+    assert "grant execute on function public.ops_usage() to anon, authenticated;" in sql
+    script = (ROOT / "scripts" / "sync_health_check.py").read_text(encoding="utf-8")
+    assert '"op_7d"' in script and '"app_7d"' in script and '"since"' in script
+    timer = (ROOT / "web" / "components" / "screen-timer.tsx").read_text(encoding="utf-8")
+    assert "op: isOp(), app: isApp()" in timer and "export const OP_KEY = 'mb-op';" in timer
+    mark = (ROOT / "web" / "components" / "op-mark.tsx").read_text(encoding="utf-8")
+    assert "OP_KEY" in mark and "get('op')" in mark
+    assert "<OpMark />" in (ROOT / "web" / "app" / "settings" / "page.tsx").read_text(encoding="utf-8")

@@ -29,6 +29,7 @@
 화면 속도 · 매장별 사용(0024 ops_speed · ops_usage, 개선 계획 v7) — 출력만 하고 실패로 만들지 않는다
     · 화면별 보통 · 느린 때(지난 7일, 폰에서 잰 '누른 순간 → 내용이 뜬 순간')
     · 매장별 화면 연 수 · 연락한 손님 수 · 마지막 사용 — 다음 개선을 정하는 숫자(맥 점검 없이)
+    · 0025 뒤(개선 계획 v10 P0): 화면 수는 디자이너 것만(운영자 폰은 따로) · 그중 홈 화면 앱으로 연 비율 · 기록 시작
 
 사용:
     SUPABASE_URL=... SUPABASE_ANON_KEY=... python3 scripts/sync_health_check.py
@@ -109,18 +110,43 @@ def fmt_speed(rows: list[dict]) -> list[str]:
     return out
 
 
+KST = dt.timezone(dt.timedelta(hours=9))
+
+
+def _when(ts: object) -> dt.datetime:
+    return dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+
+
 def fmt_usage(rows: list[dict], now: dt.datetime) -> list[str]:
-    """매장별 사용(0024 ops_usage) — 화면 연 수 · 연락한 손님 수(지난 7일) · 마지막으로 앱을 쓴 때. 숫자만."""
+    """매장별 사용(ops_usage) — 화면 연 수 · 연락한 손님 수(지난 7일) · 마지막으로 앱을 쓴 때. 숫자만.
+
+    0025(개선 계획 v10 P0) 뒤엔 화면 수가 디자이너 것만이다 — 운영자 폰은 따로 세고(op_7d), 그중 홈 화면 앱으로
+    연 비율(app_7d)을 붙이고, 맨 위에 기록 시작(since)을 찍는다('0번'이 며칠 기준인지). 칸이 없으면(0024) 예전 그대로.
+    """
     out = []
+    marked = any("op_7d" in r for r in rows)
+    since = next((r["since"] for r in rows if r.get("since")), None)
+    if since:
+        out.append(f"  화면 기록 {_when(since).astimezone(KST):%m.%d %H:%M}부터 · 운영자 폰은 따로 셈")
+    elif marked:
+        out.append("  화면 기록 — 새 앱의 기록이 아직 없음(운영자 폰은 따로 셈)")
     for r in rows:
         last = r.get("last_seen")
         if last:
-            days = (now - dt.datetime.fromisoformat(str(last).replace("Z", "+00:00"))).total_seconds() / 86400
+            days = (now - _when(last)).total_seconds() / 86400
             seen = "오늘" if days < 1 else f"{int(days)}일 전"
         else:
             seen = "기록 없음"
-        out.append(f"  {str(r.get('slug') or '?'):12s} 화면 {int(r.get('screens_7d') or 0)}번 · "
-                   f"연락 {int(r.get('contacts_7d') or 0)}명 · 마지막 사용 {seen}")
+        slug = str(r.get("slug") or "?")
+        screens = int(r.get("screens_7d") or 0)
+        contacts = int(r.get("contacts_7d") or 0)
+        if "op_7d" not in r:  # 0024 — 매장 단위(운영자 폰이 섞인다)
+            out.append(f"  {slug:12s} 화면 {screens}번 · 연락 {contacts}명 · 마지막 사용 {seen}")
+            continue
+        app, op = int(r.get("app_7d") or 0), int(r.get("op_7d") or 0)
+        share = f"(앱 {round(app * 100 / screens)}%)" if screens else ""
+        out.append(f"  {slug:12s} 디자이너 화면 {screens}번{share} · 연락 {contacts}명 · 마지막 사용 {seen}"
+                   + (f" · 운영자 폰 {op}번" if op else ""))
     return out
 
 

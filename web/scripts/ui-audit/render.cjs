@@ -65,6 +65,7 @@ out.home = doc(
     week: { label: '10.4(일)~10.10(토)', cur: { visits: 23, firsts: 4, revenue: 3120000 }, prev: { visits: 21, firsts: 3, revenue: 2900000 }, work: null },
     careCount: 84,
     careQuiet: 5,
+    careNew: 12, // 이번 주 새로 오른 분(v10 P1)
     briefs: [
       { id: 'b1', date: TODAY, time: '11:00', service: '뿌리염색', customer_id: 'c1', status: '예약', name: names[0], off: false, tag: null,
         gap: { text: '6주 만', late: false }, last: '뿌리염색+커트', prefer: ['두피 예민 — 저자극 약제', '뿌리 볼륨 살려 드라이'],
@@ -109,6 +110,11 @@ items.unshift({ id: 'f1', name: names[8], phone: '01012345678', state: 'hello', 
 items.push({ id: 'f2', name: names[9], phone: '01012345678', state: 'back', why: '다시 오실 때 · 5주째 · 뿌리염색',
   note: '첫 방문 9.4(금) · 뿌리염색 보통 5주 · 10주 지나면 목록에서 내려가요',
   draft: `${names[9]}님, 하예원이에요! 5주 전 처음 오셨을 때 뿌리염색 해드렸는데, 뿌리 올라올 때쯤이라 연락드려요. 편하신 시간에 예약 도와드릴게요!` });
+// 이번 주 새로 오른 분(v10 P1) — 서버가 맨 위에 모아 보낸다. 견본은 그대로 8명: 안부 한 분 + 재방문 도래 한 분
+items[0].fresh = true;
+const freshDue = items.splice(items.findIndex((it) => it.state === 'due'), 1)[0];
+freshDue.fresh = true;
+items.splice(1, 0, freshDue);
 out.alerts = screen(bar('챙길 고객 <span class="sect-n">84명</span>', { back: false, sync: true }),
   r(load('app/alerts/alerts-list.js').default, { items, quiet: 3, quietDays: 14, effect: { contacted: 32, came: 11, booked: 4 } }));
 

@@ -105,6 +105,7 @@ body{background:var(--bg);color:var(--ink);
 .ctag.due{background:#F2EAD8;color:var(--gold-ink)}
 .ctag.booked{background:#E4EDE2;color:var(--sage-ink)}
 .ctag.hello,.ctag.back{background:#E7EFE5;color:var(--sage-ink)}   /* 첫 방문 — 홈 예약의 '첫 방문' 꼬리표와 같은 색 */
+.ctag.fresh{background:var(--accent);color:#fff}   /* 이번 주 새로 오른 분(v10 P1) — 홈 '챙길 고객' 알약과 같은 색 */
 /* 선불 잔액 꼬리표 — 상태가 아니라 곁정보라 테두리만(챙길 고객 · 고객 목록 이름 옆) */
 .li .nm .ppd{margin-left:6px;vertical-align:middle}
 .ppd{font-size:12px;font-weight:700;color:var(--accent-d);border:1px solid var(--line);border-radius:20px;padding:0 7px;white-space:nowrap}
@@ -158,6 +159,7 @@ body{background:var(--bg);color:var(--ink);
   -webkit-tap-highlight-color:transparent}
 .pill b{font-weight:800;margin-left:3px}
 .pill.main{background:var(--accent);color:#fff}
+.pill-new{margin-left:7px;padding-left:7px;border-left:1px solid rgba(255,255,255,.45)}   /* '챙길 고객 84 | 새로 12'(v10 P1) */
 
 /* 3-7. 잔글씨·구획 제목·읽는 중 */
 /* 구역 제목 + 옅은 곁말(날짜·인원) — 상자를 겹겹이 두르지 않고 제목과 여백으로 나눈다. 홈 · 고객 목록 · 머리말들 */
@@ -281,6 +283,7 @@ body{background:var(--bg);color:var(--ink);
   cursor:pointer;font-family:inherit;text-decoration:none}
 .crow-acts button:disabled{opacity:.5}
 .crow-q{font-size:12.5px;color:var(--muted);margin:0 2px 8px}
+.crow-qn{color:var(--ink)}   /* '이번 주 새로 N명' — 이 화면의 시작점이라 옅게 두지 않는다 */
 /* 보낼 문구 — 그대로 나갈 말이라 말풍선처럼 */
 .draft{background:var(--paper);border-radius:10px;padding:10px 12px;font-size:13px;color:#3a332c;line-height:1.55}
 

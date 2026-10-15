@@ -12,6 +12,7 @@ import LogoutButton from '../logout-button';
 import { Help } from '@/components/help';
 import { BackButton } from '@/components/back-button';
 import { ScreenReady } from '@/components/screen-timer';
+import OpMark from '@/components/op-mark';
 
 export default async function SettingsPage() {
   const { supabase, user, tenantId } = await requireTenant();
@@ -130,6 +131,7 @@ export default async function SettingsPage() {
           <LogoutButton />
         </div>
       </div>
+      <OpMark />
       <ScreenReady />
     </main>
   );

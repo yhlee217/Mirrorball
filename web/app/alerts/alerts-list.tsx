@@ -12,7 +12,11 @@ import { decodeAlerts, encodeAlerts, replaceQuery } from '@/lib/list-state';
 
 // why = 한 줄 사유('2개월째 · 평소 5주 · 뿌리염색' · '안부 · 6일 전 · 뿌리염색'), note = 펼친 곳의 한 줄(방문일·휴가)
 // prepaid = 선불 잔액(추정) — 디자이너만 보는 꼬리표. 문구엔 넣지 않는다
-type Item = { id: string; name: string; phone: string | null; state: string; why: string; note: string; draft: string; prepaid?: number };
+// fresh = 이번 주 새로 오른 분(lib/fresh, v10 P1) — 서버가 맨 위에 모아 보낸다
+type Item = {
+  id: string; name: string; phone: string | null; state: string; why: string; note: string; draft: string;
+  prepaid?: number; fresh?: boolean;
+};
 
 // 첫 방문 손님은 안부·다시 오실 때 모두 '첫 방문' — 무엇을 할지는 사유 줄 첫마디가 말한다(lib/customers firstCare)
 const STATE: Record<string, string> = { overdue: '이탈 위험', due: '재방문 도래', hello: '첫 방문', back: '첫 방문' };
@@ -142,12 +146,15 @@ export default function AlertsList({
       <Empty title="챙길 고객이 없어요" hint="재방문 시기가 된 분이 생기면 여기에 올라와요." action={<Link href="/visits">최근 방문 보기 ›</Link>} />
     );
 
-  // 맨 위 한 줄 — 연락 효과(보낸 뒤 오셨나)와 잠시 숨긴 수. 설명은 ? 하나에.
+  // 맨 위 한 줄 — 이번 주 새로 오른 수(어디서부터), 연락 효과(보낸 뒤 오셨나), 잠시 숨긴 수. 설명은 ? 하나에.
   const eff = effect && effect.contacted > 0 ? effect : null;
+  const fresh = items.filter((it) => it.fresh).length;
   return (
     <>
-      {eff || quiet > 0 ? (
+      {fresh > 0 || eff || quiet > 0 ? (
         <div className="crow-q">
+          {fresh > 0 ? <span className="crow-qn">이번 주 새로 <b>{fresh}명</b></span> : null}
+          {fresh > 0 && (eff || quiet > 0) ? ' · ' : ''}
           {eff ? (
             eff.contacted >= EFFECT_MIN ? (
               <span>
@@ -161,6 +168,12 @@ export default function AlertsList({
           {eff && quiet > 0 ? ' · ' : ''}
           {quiet > 0 ? <span>{eff ? `${quiet}명 숨김` : `연락한 ${quiet}명 숨김`}</span> : null}
           <Help inline>
+            {fresh > 0 ? (
+              <>
+                &lsquo;새로&rsquo;는 지난주 수집 땐 없었는데 이번에 오른 분이에요 — 재방문 시기가 이번 주에 됐거나, 이번 주에
+                처음 오셨거나, 연락하고 {quietDays}일이 지나 다시 오른 분. 맨 위에 모았어요.{' '}
+              </>
+            ) : null}
             {eff ? (
               <>
                 지난 4주 연락한 분 중 연락한 날 뒤에 다녀가신 분은 &lsquo;오심&rsquo;, 아직 안 오셨지만 예약이 잡힌 분은
@@ -182,6 +195,7 @@ export default function AlertsList({
                 <button type="button" className="crow-m" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : it.id)}>
                   <span className="crow-n">
                     <b>{it.name}</b>
+                    {it.fresh ? <span className="ctag fresh">새로</span> : null}
                     <span className={'ctag ' + it.state}>{STATE[it.state] ?? ''}</span>
                     {it.prepaid ? <span className="ppd">선불 {man(it.prepaid)}</span> : null}
                   </span>

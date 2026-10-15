@@ -7,7 +7,8 @@ import { mergeSettings } from '@/lib/settings';
 import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
 import { bookingSets, isCancelled, recentBookingRows } from '@/lib/bookings';
 import { isAppNoShow, laterDay, seenSinceSync } from '@/lib/visits';
-import { phoneDigits, recentlyContactedIds } from '@/lib/contact';
+import { CONTACT_QUIET_DAYS, phoneDigits, quietIds, recentContactRows } from '@/lib/contact';
+import { lastContactDays, newOnList, NEW_DAYS } from '@/lib/fresh';
 import { lastSynced } from '@/lib/sync';
 import { addDays, lastWeek, spanLabel, weekNums, type WeekTx } from '@/lib/week';
 import { gapLine, lastServices, latestRecent, memoLines, visitTag } from '@/lib/briefing';
@@ -59,7 +60,7 @@ export default async function Page() {
   }
 
   const today = kstNow().date;
-  const [{ data: tenant }, { data: bookings }, customers, synced, bkRows, contacted] = await Promise.all([
+  const [{ data: tenant }, { data: bookings }, customers, synced, bkRows, contactLog] = await Promise.all([
     supabase.from('tenants').select('salon_name,designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     // 오늘부터 — 날짜 조건 없이 오름차순 200건을 받으면 지난 예약이 쌓일 때 앞으로 올 예약이 잘린다
     supabase
@@ -75,8 +76,10 @@ export default async function Page() {
         .eq('tenant_id', tenantId).order('id').range(from, to)),
     lastSynced(supabase, tenantId), // 주 1회라 '이 화면이 언제 기준인지'를 밝혀야 한다
     recentBookingRows(supabase, tenantId), // 이미 예약한 손님 · 수집 뒤 다녀가셨을 손님은 챙길 고객이 아니다
-    recentlyContactedIds(supabase, tenantId), // 최근 연락한 분은 '할 일'에서 잠시 빠진다
+    // 최근 연락한 분은 '할 일'에서 잠시 빠진다 — 숨김이 이번 주에 끝나 다시 오른 분('새로', lib/fresh)까지 한 번에
+    recentContactRows(supabase, tenantId, CONTACT_QUIET_DAYS + NEW_DAYS),
   ]);
+  const contacted = quietIds(contactLog);
 
   const t = tenant as { salon_name: string; designer_name: string | null; dek_wrapped: string | null; settings: unknown } | null;
   const settings = mergeSettings(t?.settings);
@@ -152,6 +155,16 @@ export default async function Page() {
   const oneSvcs = servicesOn(yearTx, (id) => (byId.get(id)?.visit_count === 1 ? byId.get(id)?.last_visit : null));
   const firstFlags = (c: Cust) => ({ settings, churned: isChurned(c), booked: held.has(c.id), contacted: contacted.has(c.id), asOf });
   const careCount = real.filter(isTodo).length + ones.filter((c) => onFirstList(c, oneSvcs.get(c.id) ?? [], firstFlags(c))).length;
+  // 그중 이번 주 새로 오른 분(lib/fresh, v10 P1) — 챙길 고객 화면 맨 위에 모인 분들과 같은 수
+  const lastContact = lastContactDays(contactLog);
+  const freshOpt = (c: Cust, services: string[]) => ({ settings, asOf, today, services, lastContact: lastContact.get(c.id) });
+  const careNew =
+    real.filter((c) => isTodo(c) && newOnList(careState(c, settings, asOf) ?? '', c, freshOpt(c, []))).length +
+    ones.filter((c) => {
+      const svcs = oneSvcs.get(c.id) ?? [];
+      const kind = onFirstList(c, svcs, firstFlags(c));
+      return !!kind && newOnList(kind, c, freshOpt(c, svcs));
+    }).length;
   const careQuiet =
     real.filter((c) => isCareTarget(c) && contacted.has(c.id)).length +
     ones.filter((c) => contacted.has(c.id) && !isChurned(c) && !held.has(c.id) && firstCare(c, oneSvcs.get(c.id) ?? [], settings, asOf)).length;
@@ -224,6 +237,7 @@ export default async function Page() {
         signals={signals}
         week={week}
         careCount={careCount}
+        careNew={careNew}
         careQuiet={careQuiet}
         briefs={briefs}
         later={laterRows}

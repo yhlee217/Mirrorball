@@ -48,6 +48,7 @@ export default function HomeView({
   week,
   careCount,
   careQuiet,
+  careNew = 0,
   briefs,
   later,
   past = [],
@@ -60,6 +61,7 @@ export default function HomeView({
   week: { label: string; cur: WeekNums; prev: WeekNums; work: { cur: number; prev: number } | null };
   careCount: number; // '할 일' 수 — 챙길 고객 탭과 같은 기준(최근 연락한 분 제외)
   careQuiet: number; // 최근 연락해서 잠시 빠진 수
+  careNew?: number; // 그중 이번 주 새로 오른 분(lib/fresh) — 챙길 고객 화면 맨 위
   briefs: Brief[]; // 앞으로 7일 예약(날짜·시각 순)
   later: Later[]; // 그 뒤 예약 — 접어 둔다
   past?: Past[]; // 오늘 시간이 지난 예약 — 오늘 카드 맨 아래에 접어 둔다
@@ -110,6 +112,7 @@ export default function HomeView({
             {week.work ? ` 영업한 날은 지난주 ${week.work.cur}일 · 그 전주 ${week.work.prev}일이에요.` : ''}
             {' '}챙길 고객은 재방문 시기가 됐거나 오래 안 오신 분, 그리고 첫 방문 뒤 안부·다시 오실 때인 분이에요
             {careQuiet ? ` — 최근 연락한 ${careQuiet}명은 2주 동안 빠져 있어요` : ''}.
+            {careNew ? ' 새로는 지난주 수집 땐 없었는데 이번에 오른 분이에요 — 챙길 고객 맨 위에 모여 있어요.' : ''}
           </Help>
           <div className="strip-r">
             <Num label="방문" v={week.cur.visits} prev={week.prev.visits} />
@@ -117,7 +120,10 @@ export default function HomeView({
             <Num label="매출" v={week.cur.revenue} prev={week.prev.revenue} money />
           </div>
           <div className="strip-l fill">
-            <Link href="/alerts" className="pill main">챙길 고객 <b>{careCount.toLocaleString()}</b></Link>
+            <Link href="/alerts" className="pill main">
+              챙길 고객 <b>{careCount.toLocaleString()}</b>
+              {careNew ? <span className="pill-new">새로 <b>{careNew.toLocaleString()}</b></span> : null}
+            </Link>
             <div className="pill-2">
               <Link href="/customers?filter=overdue" className="pill">이탈 위험 <b>{signals.overdue.toLocaleString()}</b></Link>
               <Link href="/customers?filter=due" className="pill">재방문 도래 <b>{signals.due.toLocaleString()}</b></Link>

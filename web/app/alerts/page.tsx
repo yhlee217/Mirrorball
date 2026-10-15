@@ -28,6 +28,7 @@ import { kstNow } from '@/lib/kst';
 import { txKind } from '@/lib/tx';
 import { addDays, agoWords, dayLabel, daysBetween, spanWords } from '@/lib/week';
 import { awayDays } from '@/lib/offdays';
+import { lastContactDays, newOnList } from '@/lib/fresh';
 import AlertsList from './alerts-list';
 import { ScreenReady } from '@/components/screen-timer';
 
@@ -119,11 +120,18 @@ export default async function AlertsPage() {
     realFirst.filter((c) => contacted.has(c.id) && !isChurned(c) && !held.has(c.id) && firstCare(c, svcsOf(c), settings, asOf))
       .length;
 
+  // 이번 주 새로 오른 분(lib/fresh) — 지난주 수집 땐 목록에 없던 분. 84명 앞에서 '어디서부터'를 맨 위에 모은다(v10 P1).
+  // 연락 뒤 숨김이 끝나 다시 오른 분도 — 마지막 연락일은 연락 효과용 4주 기록에서.
+  const lastContact = lastContactDays(recentContacts);
+  const freshOf = (c: Cust, state: string) =>
+    newOnList(state, c, { settings, asOf, today, services: svcsOf(c), lastContact: lastContact.get(c.id) });
+
   // 전원을 그린다 — 화면은 50명씩 펼친다(alerts-list). 머리말 숫자와 목록이 같은 사람을 가리키게.
-  const rows: { c: Cust; state: string }[] = [
+  const rows: { c: Cust; state: string; fresh: boolean }[] = [
     ...todo.map((c) => ({ c, state: stateOf(c) as string })),
     ...firstTodo.map((c) => ({ c, state: firstKind.get(c.id) as string })),
-  ].sort((a, b) =>
+  ].map((r) => ({ ...r, fresh: freshOf(r.c, r.state) })).sort((a, b) =>
+    Number(b.fresh) - Number(a.fresh) || // 새로 오른 분 먼저 — 그 안에서는 아래 순서 그대로
     ORDER[a.state] - ORDER[b.state] ||
     // 같은 상태 안에서는 선불 잔액이 남은 분 먼저 — 이미 받은 돈이라 다시 오시게 하기 가장 쉽다(v5 P3)
     Number((b.c.prepaid_balance ?? 0) > 0) - Number((a.c.prepaid_balance ?? 0) > 0) ||
@@ -159,7 +167,7 @@ export default async function AlertsPage() {
   // '오심'도 지금 기준 — 연락 뒤 예약 시간이 지나 다녀가신 분(예약 기준)도 센다(v9 P2, lib/visits withSeenVisits)
   const effect = effIds.length ? contactEffect(recentContacts, withSeenVisits(effVisits, bkRows, synced), held, effSince) : null;
 
-  const items = rows.map(({ c, state }, i) => {
+  const items = rows.map(({ c, state, fresh }, i) => {
     const name = contacts[i].name;
     const last = c.last_visit ? c.last_visit.slice(0, 10) : null;
     const days = last ? daysBetween(last, today) : null;
@@ -205,7 +213,7 @@ export default async function AlertsPage() {
       });
     }
     // 선불 잔액은 디자이너만 본다 — 추정이라 손님 문자(draft)엔 넣지 않는다
-    return { id: c.id, name, phone: phoneDigits(contacts[i].phone), state, why, note, draft, prepaid: Math.max(0, c.prepaid_balance ?? 0) };
+    return { id: c.id, name, phone: phoneDigits(contacts[i].phone), state, why, note, draft, prepaid: Math.max(0, c.prepaid_balance ?? 0), fresh };
   });
 
   return (

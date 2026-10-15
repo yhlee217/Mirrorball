@@ -14,7 +14,7 @@ export const isRealCustomer = (extId: string | null | undefined): boolean => /^\
 export const isChurned = (c: { churned_at?: string | null }): boolean => !!c.churned_at;
 
 /** 워커가 쓰는 기본 주기 — 방문 간격을 모를 때(worker/scrape.py _derive 의 42). */
-const DEFAULT_CYCLE = 42;
+export const DEFAULT_CYCLE = 42;
 /** 평소 주기의 이 배수를 넘으면 이탈 위험(worker/scrape.py _derive 의 1.6). */
 const OVERDUE_RATIO = 1.6;
 const RANK: Record<string, number> = { due: 1, overdue: 2 };

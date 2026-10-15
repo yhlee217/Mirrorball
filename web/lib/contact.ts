@@ -31,6 +31,31 @@ export async function recentlyContactedIds(
   return new Set(rows.map((r) => r.customer_id).filter(Boolean) as string[]);
 }
 
+export type ContactLog = { customer_id: string | null; sent_at: string | null };
+
+/**
+ * 연락 기록(손님 · 시각) — 지난 days 일. 홈은 이것 하나로 숨김(최근 CONTACT_QUIET_DAYS)과 '이번 주 다시 오른 분'
+ * (숨김이 지난 7일 안에 끝남, lib/fresh)을 함께 센다 — 따로 받지 않게.
+ */
+export async function recentContactRows(
+  supabase: ReturnType<typeof supabaseServer>,
+  tenantId: string,
+  days: number,
+): Promise<ContactLog[]> {
+  return fetchAllRows<ContactLog>((from, to) =>
+    supabase.from('care_items').select('customer_id,sent_at')
+      .eq('tenant_id', tenantId).eq('kind', 'contact').gte('sent_at', new Date(Date.now() - days * 86400000).toISOString())
+      .order('id').range(from, to));
+}
+
+/** 받아 둔 연락 기록 중 최근 CONTACT_QUIET_DAYS 안에 연락한 손님 — recentlyContactedIds 와 같은 셈. */
+export function quietIds(rows: ContactLog[], now = Date.now()): Set<string> {
+  const since = Date.parse(contactSince(now));
+  return new Set(
+    rows.filter((r) => r.customer_id && r.sent_at && Date.parse(r.sent_at) >= since).map((r) => r.customer_id as string),
+  );
+}
+
 /** 전화번호에서 링크에 쓸 숫자만(국제번호 '+'는 남긴다). 번호가 아니면 null. */
 export function phoneDigits(phone: string | null | undefined): string | null {
   const s = (phone ?? '').trim();
