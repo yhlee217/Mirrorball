@@ -5,6 +5,7 @@ import { unwrapDek, decryptPII } from '@/lib/crypto';
 import { careState, fetchAllRows } from '@/lib/customers';
 import { mergeSettings } from '@/lib/settings';
 import { lastSynced } from '@/lib/sync';
+import { getTenantId } from '@/lib/tenant';
 import { kstNow } from '@/lib/kst';
 
 type Row = {
@@ -29,13 +30,12 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return new Response('unauthorized', { status: 401 });
 
-  const { data: mem } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
-  if (!mem) return new Response('no tenant', { status: 400 });
-  const tid = (mem as { tenant_id: string }).tenant_id;
+  const tid = await getTenantId(supabase); // 화면들과 같은 '현재 매장'(lib/tenant)
+  if (!tid) return new Response('no tenant', { status: 400 });
 
   const [{ data: tenant }, synced] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped,settings').eq('id', tid).maybeSingle(),
-    lastSynced(supabase),
+    lastSynced(supabase, tid),
   ]);
   // 상태는 화면과 같은 기준 — 휴가를 반영한 재방문 상태(lib/customers careState)
   const settings = mergeSettings((tenant as { settings: unknown } | null)?.settings);
@@ -54,6 +54,7 @@ export async function GET() {
     supabase
       .from('customers')
       .select('id,pii_enc,visit_count,total_won,last_visit,first_visit,revisit_state,revisit_cycle_days')
+      .eq('tenant_id', tid)
       .order('id')
       .range(from, to),
   );

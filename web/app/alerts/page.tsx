@@ -55,14 +55,14 @@ export default async function AlertsPage() {
   const [{ data: tenant }, customers, firsts, bkRows, contacted, synced, recentContacts] = await Promise.all([
     supabase.from('tenants').select('designer_name,dek_wrapped,settings').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select(COLS).in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
+      supabase.from('customers').select(COLS).eq('tenant_id', tenantId).in('revisit_state', ['overdue', 'due']).order('id').range(from, to)),
     // 첫 방문 손님(방문 1회) — 워커는 '신규'로만 두므로 따로 받는다. 1년 안이면 넉넉하다(lib/customers firstCare)
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select(COLS).eq('visit_count', 1).gte('last_visit', addDays(today, -365))
+      supabase.from('customers').select(COLS).eq('tenant_id', tenantId).eq('visit_count', 1).gte('last_visit', addDays(today, -365))
         .order('id').range(from, to)),
     recentBookingRows(supabase, tenantId), // 이미 예약한 분 · 수집 뒤 다녀가셨을 분께 '오랜만이에요'를 보내지 않게
     recentlyContactedIds(supabase, tenantId), // 최근 연락한 분은 할 일에서 잠시 뺀다
-    lastSynced(supabase), // 재방문 판정의 기준일(워커가 판정한 날) — 휴가를 빼고 셀 때 쓴다
+    lastSynced(supabase, tenantId), // 재방문 판정의 기준일(워커가 판정한 날) — 휴가를 빼고 셀 때 쓴다
     // 연락 효과(맨 위 한 줄) — 지난 4주 연락 기록
     fetchAllRows<ContactRow>((from, to) =>
       supabase.from('care_items').select('customer_id,sent_at').eq('tenant_id', tenantId).eq('kind', 'contact')
@@ -96,6 +96,7 @@ export default async function AlertsPage() {
         return supabase
           .from('transactions')
           .select('customer_id,date,service,kind')
+          .eq('tenant_id', tenantId)
           .in('customer_id', part.map((c) => c.id))
           .gte('date', since)
           .order('date', { ascending: false })
@@ -146,7 +147,7 @@ export default async function AlertsPage() {
   for (let i = 0; i < effIds.length; i += 50) effChunks.push(effIds.slice(i, i + 50));
   const effTx = (
     await Promise.all(effChunks.map((ids) =>
-      supabase.from('transactions').select('customer_id,date,service,kind').in('customer_id', ids).gte('date', effDay).limit(3000)))
+      supabase.from('transactions').select('customer_id,date,service,kind').eq('tenant_id', tenantId).in('customer_id', ids).gte('date', effDay).limit(3000)))
   ).flatMap(({ data }) => (data as Tx[] | null) ?? []);
   const effVisits = new Map<string, string[]>();
   for (const t of effTx) {

@@ -34,7 +34,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
     chargedTotal, balance, pocketIds,
     familyList, nextBk, topSvc,
     overdue, due, first, vac, today,
-    visitCount, lastVisit, seenLast,
+    visitCount, lastVisit, seenLast, recentBks,
     sinceLast, next, top, recs,
   } = await loadCarte(params.id);
   // 상태 뱃지 — 이탈로 표시한 분, 다음 예약이 잡힌 분, 수집 뒤 다녀가신 분(예약 기준)에겐 띄우지 않는다
@@ -77,7 +77,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
         <MemoAiCard cust={cust} today={today} />
         <RecommendCard items={recs} />
         <NextBookingCard bk={nextBk} />
-        <HistoryCard history={history} pocketIds={pocketIds} top={topSvc} />
+        <HistoryCard history={history} pocketIds={pocketIds} top={topSvc} pending={recentBks} />
 
         <CustomerNote id={cust.id} initMemo={cust.memo ?? ''} initTags={cust.prefer_tags ?? []} />
 

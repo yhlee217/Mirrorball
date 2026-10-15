@@ -3,7 +3,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 /**
- * 방문 탭 '예약 기준' 줄의 [노쇼] · 줄 그은 줄의 [되돌리기](api/booking-noshow). 주중에 취소 · 노쇼가 나도
+ * 방문 탭 · 상세보기 이력의 '예약 기준' 줄 [노쇼] · 줄 그은 줄의 [되돌리기](api/booking-noshow). 주중에 취소 · 노쇼가 나도
  * 앱은 일요일 수집까지 몰라 시간이 지나면 방문으로 셌다 — 디자이너가 바로잡는 손잡이. 표시는 확인을 한 번 받는다.
  */
 export default function NoShowButton({ id, undo = false }: { id: string; undo?: boolean }) {

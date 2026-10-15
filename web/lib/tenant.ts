@@ -24,7 +24,9 @@ export async function requireUser() {
 export async function getTenantId(
   supabase: ReturnType<typeof supabaseServer>,
 ): Promise<string | null> {
-  const { data } = await supabase.from('memberships').select('tenant_id').limit(1).maybeSingle();
+  // 정렬 없이 첫 줄을 고르면 여러 매장에 속한 계정은 요청마다 다른 매장이 될 수 있다 — 가장 먼저 소속된 매장으로 고정
+  const { data } = await supabase.from('memberships').select('tenant_id')
+    .order('created_at', { ascending: true }).order('tenant_id').limit(1).maybeSingle();
   return (data as { tenant_id: string } | null)?.tenant_id ?? null;
 }
 

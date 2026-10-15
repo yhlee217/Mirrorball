@@ -7,13 +7,16 @@ import { kstStamp } from './kst';
  * 수집이 30분마다에서 주 1회로 바뀐 뒤로, 화면에 보이는 것은 항상 며칠 전 상태다.
  * 그걸 밝히지 않으면 '예약이 없다'·'아무도 안 왔다'를 지금의 사실로 오해한다.
  * 기록(sync_jobs)이 아직 없으면 null — 호출부에서 표시를 생략한다.
+ * 매장별로 — 매장 조건 없이 읽으면 여러 매장에 속한 계정은 다른 매장의 수집 시각을 받는다(개선 계획 v8 P0).
  */
 export async function lastSynced(
   supabase: ReturnType<typeof supabaseServer>,
+  tenantId: string,
 ): Promise<{ label: string; daysAgo: number; date: string; time: string } | null> {
   const { data } = await supabase
     .from('sync_jobs')
     .select('finished_at')
+    .eq('tenant_id', tenantId)
     .eq('status', 'ok')
     .order('finished_at', { ascending: false })
     .limit(1)

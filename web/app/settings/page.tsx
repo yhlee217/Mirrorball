@@ -31,11 +31,12 @@ export default async function SettingsPage() {
 
   const [{ data: tenant }, { count }, { data: latest }, { data: churned }, statRows] = await Promise.all([
     supabase.from('tenants').select('salon_name,designer_name,slug,settings,dek_wrapped').eq('id', tenantId).maybeSingle(),
-    supabase.from('customers').select('id', { count: 'exact', head: true }),
-    supabase.from('transactions').select('date').order('date', { ascending: false }).limit(1),
+    supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+    supabase.from('transactions').select('date').eq('tenant_id', tenantId).order('date', { ascending: false }).limit(1),
     supabase
       .from('customers')
       .select('id,pii_enc,visit_count,last_visit,churned_at')
+      .eq('tenant_id', tenantId)
       .not('churned_at', 'is', null)
       .order('churned_at', { ascending: false })
       .limit(200),
@@ -43,6 +44,7 @@ export default async function SettingsPage() {
       supabase
         .from('customers')
         .select('ext_id,total_won,visit_count,visits_90d,visits_180d,visits_365d,last_visit,churned_at')
+        .eq('tenant_id', tenantId)
         .order('id')
         .range(from, to)),
   ]);

@@ -40,7 +40,7 @@ export function isHeldBooking(b: { date: string | null; status?: string | null }
   return !isCancelled(b.status) && !!b.date && b.date >= since;
 }
 
-export type BookingRow = { customer_id: string | null; date: string | null; time: string | null; status: string | null };
+export type BookingRow = { customer_id: string | null; date: string | null; time: string | null; status: string | null; service: string | null };
 
 /**
  * 손님별 예약 판정 둘 — 같은 줄에서 뜻이 다른 두 집합을 만든다.
@@ -72,6 +72,6 @@ export async function recentBookingRows(
   tenantId: string,
 ): Promise<BookingRow[]> {
   return fetchAllRows<BookingRow>((from, to) =>
-    supabase.from('bookings').select('customer_id,date,time,status')
+    supabase.from('bookings').select('customer_id,date,time,status,service') // 시술 — 수집 뒤 다녀가신 방문의 '지난번'(홈 브리핑)
       .eq('tenant_id', tenantId).gte('date', kstDatePlus(-BOOKING_LOOKBACK_DAYS)).order('id').range(from, to));
 }

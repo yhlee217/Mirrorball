@@ -4,7 +4,7 @@ import { phoneDigits } from '@/lib/contact';
 import { mergeSettings, isVip } from '@/lib/settings';
 import { kstNow } from '@/lib/kst';
 import { BOOKING_LOOKBACK_DAYS, isActiveBooking } from '@/lib/bookings';
-import { laterDay, visitsSinceSync } from '@/lib/visits';
+import { laterDay, noShowsSinceSync, seenSinceSync, visitsSinceSync } from '@/lib/visits';
 import { careState, fetchAllRows, firstCare, isRealCustomer } from '@/lib/customers';
 import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
 import { addDays } from '@/lib/week';
@@ -47,7 +47,7 @@ type Cust = {
   memo_ai_at: string | null;
 };
 type Tx = { id: string; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null; kind: string | null; paid_out_of_pocket: boolean | null };
-type Bk = { date: string; time: string | null; service: string | null; note: string | null; status: string | null };
+type Bk = { id: string; date: string; time: string | null; service: string | null; note: string | null; status: string | null };
 
 
 export type Carte = Awaited<ReturnType<typeof loadCarte>>;
@@ -84,7 +84,7 @@ export async function loadCarte(id: string) {
       .limit(500), // 잔액 계산이 과거 충전까지 봐야 해서 넉넉히
     supabase
       .from('bookings')
-      .select('date,time,service,note,status')
+      .select('id,date,time,service,note,status')
       .eq('customer_id', cust.id)
       .gte('date', addDays(today, -BOOKING_LOOKBACK_DAYS)) // 수집 뒤 지난 예약도 본다 — 다녀가셨을 분
       .order('date', { ascending: true })
@@ -92,7 +92,7 @@ export async function loadCarte(id: string) {
       .limit(20),
     ranked ? realCount().gt('total_won', cust.total_won) : null,
     ranked ? realCount() : null,
-    lastSynced(supabase), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다
+    lastSynced(supabase, cust.tenant_id), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다(이 손님 매장의 수집)
     // 다음 시술 추천의 '함께 권할 것' 근거 — 이 매장 최근 1년 시술(lib/recommend pairStats)
     fetchAllRows<StoreTx>((from, to) =>
       supabase.from('transactions').select('customer_id,date,service,kind')
@@ -131,12 +131,20 @@ export async function loadCarte(id: string) {
       .neq('id', cust.id)
       .order('last_visit', { ascending: false })
       .limit(12);
+    const famRows = (fam as FamRow[]) ?? [];
+    // 가족의 'N회 · 마지막'도 지금 기준 — 수집 뒤 시간이 지난 예약을 센다(lib/visits, 이 손님과 같은 규칙)
+    const famBk = synced && famRows.length
+      ? (((await supabase.from('bookings').select('customer_id,date,time,status').eq('tenant_id', cust.tenant_id)
+          .in('customer_id', famRows.map((m) => m.id)).gte('date', synced.date)).data as
+          { customer_id: string | null; date: string | null; time: string | null; status: string | null }[] | null) ?? [])
+      : [];
+    const famSeen = seenSinceSync(famBk, synced);
     familyList = await Promise.all(
-      ((fam as FamRow[]) ?? []).map(async (m) => ({
+      famRows.map(async (m) => ({
         id: m.id,
         name: await nameFrom(m.pii_enc),
-        visit_count: m.visit_count,
-        last_visit: m.last_visit,
+        visit_count: m.visit_count + (famSeen.get(m.id)?.count ?? 0),
+        last_visit: laterDay(m.last_visit, famSeen.get(m.id)?.last),
         vip: isVip(m, settings),
       })),
     );
@@ -192,6 +200,11 @@ export async function loadCarte(id: string) {
   const seenBk = seenLast ? [...seenBks].reverse().find((b) => b.date === seenLast) ?? null : null;
   const visitCount = cust.visit_count + seenDays.length;
   const lastVisit = laterDay(cust.last_visit, seenLast);
+  // 시술 이력 맨 위 — 수집 전 방문(예약 기준)과 노쇼로 표시한 예약. [노쇼] · [되돌리기]는 방문 탭과 같은 손잡이.
+  const recentBks = [
+    ...seenBks.map((b) => ({ id: b.id, date: b.date, time: b.time, service: b.service, noshow: false })),
+    ...(synced ? noShowsSinceSync(bkRows, synced) : []).map((b) => ({ id: b.id, date: b.date, time: b.time, service: b.service, noshow: true })),
+  ].sort((a, b) => (`${a.date} ${a.time ?? ''}` < `${b.date} ${b.time ?? ''}` ? 1 : -1));
   const state = careState(cust, settings, asOf);
   const overdue = state === 'overdue';
   const due = state === 'due';
@@ -229,7 +242,7 @@ export async function loadCarte(id: string) {
     chargedTotal, balance, pocketIds,
     familyList, nextBk, topSvc,
     overdue, due, first, vac, today,
-    visitCount, lastVisit, seenLast,
+    visitCount, lastVisit, seenLast, recentBks,
     sinceLast, next, top, recs,
   };
 }

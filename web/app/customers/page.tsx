@@ -41,12 +41,13 @@ export default async function CustomersPage() {
       supabase
         .from('customers')
         .select('id,ext_id,pii_enc,visit_count,revisit_state,revisit_cycle_days,last_visit,first_visit,total_won,churned_at,visits_90d,visits_180d,visits_365d,gender,gender_manual,prepaid_balance')
+        .eq('tenant_id', tenantId)
         .order('id')
         .range(from, to)),
     // 예약 판정 재료 — '예약 있음'은 앞으로 올 예약만, 이탈위험·재방문도래는 수집 뒤 지난 예약도 뺀다(lib/bookings)
     recentBookingRows(supabase, tenantId),
     // 손님별 시술 갈래는 '시술' 필터를 고를 때만 받는다(api/customer-services) — 거래 전체를 매번 받지 않게
-    lastSynced(supabase), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다(lib/customers careState)
+    lastSynced(supabase, tenantId), // 재방문 판정의 기준일 — 휴가를 빼고 셀 때 쓴다(lib/customers careState)
   ]);
 
   const tRow = tenant as { dek_wrapped: string | null; settings: unknown } | null;

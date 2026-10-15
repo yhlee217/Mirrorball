@@ -51,7 +51,7 @@ export default async function StatsPage() {
       supabase.from('transactions').select('customer_id,date,time,service,amount_won,kind,covered_won').eq('tenant_id', tenantId).order('id').range(from, to)),
     recentBookingRows(supabase, tenantId), // 예약했거나 수집 뒤 다녀가셨을 분 — 챙길 고객과 같은 판정
     recentlyContactedIds(supabase, tenantId),
-    lastSynced(supabase),
+    lastSynced(supabase, tenantId),
     // 이번 달 남은 기간에 잡힌 예약 — 마감 예상 옆에 참고로만(예상 금액에는 섞지 않는다)
     supabase.from('bookings').select('date,time,status').eq('tenant_id', tenantId)
       .gte('date', kToday).lte('date', monthLast).limit(1000),

@@ -133,7 +133,8 @@ out.customers = screen(bar('고객 <span class="sect-n">1,136명</span>', { back
 
 // 카르테(app/customer/[id]/page.tsx) — 화면 순서대로
 const C = load('app/customer/[id]/cards.js');
-const hist = Array.from({ length: 8 }, (_, i) => ({
+// 이력은 일곱 + 수집 뒤 다녀가신 방문 하나(예약 기준, v8 P1) — 견본 줄 수는 그대로 여덟
+const hist = Array.from({ length: 7 }, (_, i) => ({
   id: 'h' + i, date: `2026-0${9 - i}-0${1 + i}`, time: '14:00', service: i % 2 ? '여자컷(원장)' : '뿌리염색', amount_won: 60000,
   memo: i === 0 ? '뿌리 볼륨 원하심' : null, kind: 'service', paid_out_of_pocket: false,
 }));
@@ -148,7 +149,8 @@ out.carte = screen('<div class="bar"><button type="button" class="back">‹ 뒤�
     { kind: 'cross', label: '클리닉', reason: '뿌리염색 손님 38%가 클리닉도 받아요 · 주로 두피 클리닉', short: '' },
   ] })
   + r(C.NextBookingCard, { bk: null })
-  + r(C.HistoryCard, { history: hist, pocketIds: hist.slice(0, 7).map((h) => h.id), top: [['뿌리염색', 7], ['여자컷', 5], ['클리닉', 2]] })
+  + r(C.HistoryCard, { history: hist, pocketIds: hist.slice(0, 7).map((h) => h.id), top: [['뿌리염색', 7], ['여자컷', 5], ['클리닉', 2]],
+    pending: [{ id: 'bk1', date: '2026-10-12', time: '10:00', service: '뿌리염색', noshow: false }] }) // 수집 뒤 다녀가신 방문(예약 기준) — v8 P1
   + r(load('app/customer/[id]/customer-note.js').default, { id: 'x', initMemo: '', initTags: ['두피예민', '볼륨'] })
   + r(C.FamilyCard, { list: [{ id: 'f1', name: names[1], vip: false, visit_count: 6, last_visit: '2026-09-20' }], today: TODAY })
   + r(C.PrepaidCard, { charges: [{ id: 'p1', date: '2026-03-01', amount_won: 1000000 }], chargedTotal: 1000000, balance: 520000 })

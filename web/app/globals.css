@@ -284,7 +284,8 @@ body{background:var(--bg);color:var(--ink);
 .visit.has-tip .li{padding-right:40px}          /* 긴 이름이 표식 밑으로 들어가지 않게 */
 /* 예약 줄(수집 전)의 [노쇼] · [되돌리기] — 줄 오른쪽 가운데, 글이 밑으로 들어가지 않게 자리를 비운다 */
 .visit.has-act .li{padding-right:92px}
-.vns{position:absolute;right:12px;top:50%;transform:translateY(-50%);min-height:36px;padding:0 12px;border-radius:18px;
+.visit .vns{position:absolute;right:12px;top:50%;transform:translateY(-50%)}   /* 방문 탭 — 줄 오른쪽 가운데. 상세보기 이력은 줄 안 오른쪽 */
+.vns{flex:none;min-height:36px;padding:0 12px;border-radius:18px;
   border:1px solid var(--line);background:var(--paper);color:var(--rose-ink);font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer}
 .vns.undo{color:var(--accent)}
 .vns:disabled{opacity:.6}

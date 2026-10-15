@@ -6,7 +6,7 @@ import { getTenantId } from '@/lib/tenant';
 import { noShowUpdate } from '@/lib/visits';
 
 /**
- * 노쇼 표시 · 되돌리기 — 방문 탭 '예약 기준' 줄의 버튼(app/visits/noshow-button). 예약 상태만 바꾼다(lib/visits
+ * 노쇼 표시 · 되돌리기 — 방문 탭 '예약 기준' 줄 · 상세보기 이력 맨 위 줄의 버튼(components/noshow-button). 예약 상태만 바꾼다(lib/visits
  * noShowUpdate — '노쇼·앱|원래 상태'). 자기 매장 예약만(RLS + 매장 조건), 시간이 지난 예약만 표시할 수 있다.
  * 다음 수집(일요일)이 지나면 그 주의 방문은 HandSOS 거래 기록으로 정해진다.
  */

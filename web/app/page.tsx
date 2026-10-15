@@ -6,10 +6,12 @@ import { careState, fetchAllRows, firstCare, isRealCustomer, isChurned, needsCar
 import { mergeSettings } from '@/lib/settings';
 import { kstDatePlus, kstNow, isUpcoming } from '@/lib/kst';
 import { bookingSets, isCancelled, recentBookingRows } from '@/lib/bookings';
+import { laterDay, seenSinceSync } from '@/lib/visits';
 import { phoneDigits, recentlyContactedIds } from '@/lib/contact';
 import { lastSynced } from '@/lib/sync';
 import { addDays, lastWeek, spanLabel, weekNums, type WeekTx } from '@/lib/week';
 import { gapLine, lastServices, latestRecent, memoLines, visitTag } from '@/lib/briefing';
+import { friendlyService } from '@/lib/service-name';
 import { toVisits } from '@/lib/trends';
 import { hasOffDays, workedDays } from '@/lib/offdays';
 import { catsOf, pairStats, recommend, visitsByCustomer } from '@/lib/recommend';
@@ -69,8 +71,9 @@ export default async function Page() {
       .order('time', { ascending: true, nullsFirst: false })
       .limit(200),
     fetchAllRows<Cust>((from, to) =>
-      supabase.from('customers').select('id,ext_id,revisit_state,revisit_cycle_days,tier,visit_count,total_won,pii_enc,first_visit,last_visit,churned_at,visits_90d,visits_180d,visits_365d').order('id').range(from, to)),
-    lastSynced(supabase), // 주 1회라 '이 화면이 언제 기준인지'를 밝혀야 한다
+      supabase.from('customers').select('id,ext_id,revisit_state,revisit_cycle_days,tier,visit_count,total_won,pii_enc,first_visit,last_visit,churned_at,visits_90d,visits_180d,visits_365d')
+        .eq('tenant_id', tenantId).order('id').range(from, to)),
+    lastSynced(supabase, tenantId), // 주 1회라 '이 화면이 언제 기준인지'를 밝혀야 한다
     recentBookingRows(supabase, tenantId), // 이미 예약한 손님 · 수집 뒤 다녀가셨을 손님은 챙길 고객이 아니다
     recentlyContactedIds(supabase, tenantId), // 최근 연락한 분은 '할 일'에서 잠시 빠진다
   ]);
@@ -91,6 +94,8 @@ export default async function Page() {
   const asOf = synced?.date ?? today;
   // 예약했거나 수집 뒤 예약 시각이 지난 분(다녀가셨을 분)은 챙길 고객에서 뺀다(lib/bookings bookingSets).
   const held = bookingSets(bkRows, asOf).hold;
+  // 지금 기준으로 이미 다녀가신 방문(수집 뒤 예약 시간이 지남) — 예약 브리핑의 'N주 만' · 첫 방문 꼬리표 · 지난번(lib/visits)
+  const seen = seenSinceSync(bkRows, synced);
   const isCareTarget = (c: Cust) => needsCare(c, { settings, churned: isChurned(c), booked: held.has(c.id), asOf });
   // '챙길 고객 N명'(할 일)은 최근 연락한 분도 뺀다 — 눌러서 열리는 챙길 고객 탭과 같은 숫자여야 한다.
   // 타일(이탈위험·재방문도래)은 손님 상태라 연락 여부와 무관하게 위 기준으로 센다.
@@ -128,12 +133,12 @@ export default async function Page() {
       supabase.from('transactions').select('customer_id,date,kind,service,amount_won,covered_won')
         .eq('tenant_id', tenantId).gte('date', addDays(asOf, -365)).lte('date', asOf).order('id').range(from, to)),
     ids.length
-      ? supabase.from('customers').select('id,revisit_cycle_days,prepaid_balance,memo_ai,memo_ai_recent').in('id', ids)
+      ? supabase.from('customers').select('id,revisit_cycle_days,prepaid_balance,memo_ai,memo_ai_recent').eq('tenant_id', tenantId).in('id', ids)
           .then((r) => (r.data as Detail[] | null) ?? [])
       : Promise.resolve([] as Detail[]),
     // '지난번에 뭘 했나' — 각자의 마지막 방문일 거래만. 손님당 몇 건이라 1000행 상한에 닿지 않는다.
     ids.length && lastDates.length
-      ? supabase.from('transactions').select('customer_id,date,service,kind').in('customer_id', ids).in('date', lastDates)
+      ? supabase.from('transactions').select('customer_id,date,service,kind').eq('tenant_id', tenantId).in('customer_id', ids).in('date', lastDates)
           .then((r) => (r.data as LastTx[] | null) ?? [])
       : Promise.resolve([] as LastTx[]),
   ]);
@@ -181,12 +186,17 @@ export default async function Page() {
     const c = byId.get(b.customer_id);
     const d = det.get(b.customer_id);
     if (!c || !known(b)) return { ...base, ...none, tag: null };
-    const rec = recommend(recVisits.get(c.id) ?? [], pairs, b.date, settings, catsOf(b.service))[0];
+    // 수집 뒤 다녀가신 방문이 있으면 그날이 마지막 방문 — 'N주 만'은 그날부터, '지난번'은 그 예약의 시술
+    const s = seen.get(c.id);
+    const lastVisit = laterDay(c.last_visit, s?.last);
+    const fresh = !!s && lastVisit === s.last;
+    const rec = recommend(recVisits.get(c.id) ?? [], pairs, b.date, settings,
+      [...catsOf(b.service), ...(fresh ? catsOf(s.service) : [])])[0];
     return {
       ...base,
-      tag: visitTag(c.visit_count),
-      gap: gapLine(c.last_visit, b.date, d?.revisit_cycle_days, settings),
-      last: lastSvc.get(c.id) ?? null,
+      tag: visitTag(c.visit_count + (s?.count ?? 0)),
+      gap: gapLine(lastVisit, b.date, d?.revisit_cycle_days, settings),
+      last: fresh ? friendlyService(s.service) || null : lastSvc.get(c.id) ?? null,
       prefer: memoLines(d?.memo_ai, 2),
       recent: latestRecent(d?.memo_ai_recent),
       prepaid: d?.prepaid_balance ?? 0,

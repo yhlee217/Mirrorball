@@ -5,6 +5,8 @@ import { agoWords, dayLabel, daysBetween, shortDate, spanWords } from '@/lib/wee
 import PocketToggle from './pocket-toggle';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
+import NoShowButton from '@/components/noshow-button';
+import { friendlyService } from '@/lib/service-name';
 import type { Carte } from './data';
 
 /**
@@ -247,24 +249,52 @@ function HistoryRow({ h, pocket }: { h: Carte['history'][number]; pocket: boolea
   );
 }
 
+/**
+ * 수집 전 방문(예약 기준) · 노쇼로 표시한 예약 — 시술 이력 맨 위. 머리말 'N회'에 이미 센 방문이라 이력에도 보인다
+ * (2026-10-15 '지금 기준'). 시술 · 금액은 다음 수집(일요일) 때 거래로 들어온다. [노쇼] · [되돌리기]는 방문 탭과 같다.
+ */
+function PendingRow({ b }: { b: Carte['recentBks'][number] }) {
+  const svc = friendlyService(b.service) || '시술';
+  return (
+    <div className="li" style={{ alignItems: 'center' }}>
+      <div className="bd">
+        <div className="nm" style={{ fontWeight: 600 }}>{b.noshow ? <s style={{ color: 'var(--muted)' }}>{svc}</s> : svc}</div>
+        <div className="sub">
+          {dayLabel(b.date)}
+          {b.time ? ' ' + b.time : ''} · {b.noshow ? '노쇼로 표시함' : '예약 기준'}
+        </div>
+      </div>
+      <NoShowButton id={b.id} undo={b.noshow} />
+    </div>
+  );
+}
+
 export function HistoryCard({
   history,
   pocketIds,
   top,
+  pending = [],
 }: {
   history: Carte['history'];
   pocketIds: string[];
   top: Carte['topSvc'];
+  pending?: Carte['recentBks'];
 }) {
   const pocket = new Set(pocketIds);
-  const recent = history.slice(0, RECENT_N);
-  const rest = history.slice(RECENT_N);
+  // 위에 보이는 줄은 수집 전 방문까지 합쳐 다섯 — 카드 길이는 그대로, 나머지는 '이전 N건'으로 접는다
+  const shown = Math.max(1, RECENT_N - pending.length);
+  const recent = history.slice(0, shown);
+  const rest = history.slice(shown);
+  const count = history.length + pending.filter((b) => !b.noshow).length; // 수집 전 방문도 센다(노쇼는 빼고)
   return (
     <div className="card">
       <div className="ch">
-        시술 이력{history.length ? ` ${history.length}건` : ''}
+        시술 이력{count ? ` ${count}건` : ''}
         {top.length ? <span className="ch-n"> · {top.slice(0, 3).map(([s, n]) => `${s} ${n}`).join(' · ')}</span> : null}
       </div>
+      {pending.map((b) => (
+        <PendingRow key={b.id} b={b} />
+      ))}
       {history.length ? (
         <>
           {recent.map((h) => (
@@ -279,7 +309,7 @@ export function HistoryCard({
             </details>
           )}
         </>
-      ) : (
+      ) : pending.length ? null : (
         <Empty title="시술 이력이 없어요" hint="첫 방문 전이거나 아직 수집되지 않았어요." />
       )}
     </div>

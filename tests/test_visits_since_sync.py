@@ -85,7 +85,7 @@ out({
     ]})
     if got is None:
         pytest.skip("node · web/node_modules 가 없다")
-    assert got["seen"] == {"a": {"count": 2, "last": "2026-10-14"}}
+    assert got["seen"] == {"a": {"count": 2, "last": "2026-10-14", "service": None}}
     assert got["none"] == 0                                          # 수집 기록이 없으면 세지 않는다
     assert got["later"] == ["2026-10-14", "2026-10-14", "2026-10-13", None]
 
@@ -126,3 +126,18 @@ out({
 def test_noshow_route_uses_the_same_rule():
     route = (Path(__file__).resolve().parent.parent / "web" / "app" / "api" / "booking-noshow" / "route.ts").read_text(encoding="utf-8")
     assert "noShowUpdate" in route and ".eq('tenant_id', tenantId)" in route and "getUser" in route
+
+
+def test_seen_since_sync_keeps_the_latest_service():
+    """홈 브리핑 '지난번' — 수집 뒤 다녀가신 방문이 마지막이면 그 예약(가장 늦은 것)의 시술."""
+    got = run_ts(["lib/visits.ts"], """
+const { seenSinceSync } = require('./visits.js');
+out(Object.fromEntries([...seenSinceSync(D.rows, D.sync, D.now).entries()]));
+""", {"sync": SYNC, "now": NOW, "rows": [
+        {"customer_id": "a", "date": "2026-10-13", "time": "11:00", "status": "예약", "service": "커트"},
+        {"customer_id": "a", "date": "2026-10-14", "time": "18:30", "status": "예약", "service": "뿌리염색"},
+        {"customer_id": "a", "date": "2026-10-14", "time": "10:00", "status": "예약", "service": "클리닉"},
+    ]})
+    if got is None:
+        pytest.skip("node · web/node_modules 가 없다")
+    assert got == {"a": {"count": 2, "last": "2026-10-14", "service": "뿌리염색"}}

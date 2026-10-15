@@ -89,20 +89,24 @@ export function noShowsSinceSync<B extends { date: string | null; time: string |
  * 수집 기준이 아니라 지금 기준으로 맞춘다("지금 이미 다녀가신 분은 세야지", 2026-10-15 폰 확인).
  * 같은 날 두 예약은 한 번. 노쇼였다면 다음 수집이 바로잡는다.
  */
-export function seenSinceSync<B extends { customer_id: string | null; date: string | null; time: string | null; status: string | null }>(
+export function seenSinceSync<B extends { customer_id: string | null; date: string | null; time: string | null; status: string | null; service?: string | null }>(
   rows: B[],
   sync: { date: string; time: string } | null,
   now: { date: string; time: string } = kstNow(),
-): Map<string, { count: number; last: string }> {
-  const out = new Map<string, { count: number; last: string }>();
+): Map<string, { count: number; last: string; service: string | null }> {
+  const out = new Map<string, { count: number; last: string; service: string | null }>();
   if (!sync) return out;
   const days = new Map<string, Set<string>>();
+  const latest = new Map<string, B>(); // 손님별 가장 늦은 예약 — 마지막 방문의 시술(홈 브리핑 '지난번')
   for (const b of visitsSinceSync(rows, sync, now)) {
-    if (b.customer_id && b.date) days.set(b.customer_id, (days.get(b.customer_id) ?? new Set()).add(b.date));
+    if (!b.customer_id || !b.date) continue;
+    days.set(b.customer_id, (days.get(b.customer_id) ?? new Set()).add(b.date));
+    const cur = latest.get(b.customer_id);
+    if (!cur || `${b.date} ${b.time ?? ''}` > `${cur.date} ${cur.time ?? ''}`) latest.set(b.customer_id, b);
   }
   for (const [id, ds] of days) {
     const sorted = [...ds].sort();
-    out.set(id, { count: sorted.length, last: sorted[sorted.length - 1] });
+    out.set(id, { count: sorted.length, last: sorted[sorted.length - 1], service: latest.get(id)?.service ?? null });
   }
   return out;
 }

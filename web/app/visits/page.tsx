@@ -39,7 +39,7 @@ export default async function VisitsPage() {
         .gte('date', since)
         .order('id')
         .range(from, to)),
-    lastSynced(supabase),
+    lastSynced(supabase, tenantId),
     // 마지막 수집 뒤 다녀가셨을 분 — 방문 기록은 다음 수집에 들어오니 그 사이는 지난 예약으로 보여 준다(lib/visits)
     supabase.from('bookings').select('id,customer_id,date,time,service,status,pii_enc')
       .eq('tenant_id', tenantId).gte('date', since).lte('date', today).limit(500),
@@ -67,7 +67,7 @@ export default async function VisitsPage() {
   const pending = synced
     ? visitsSinceSync(bks, synced).filter((b) => !(b.customer_id && byVisit.has(`${b.customer_id}|${b.date}`)))
     : [];
-  // 디자이너가 노쇼로 표시한 예약 — 세지 않고 줄을 그어 남긴다(되돌리기 자리, app/visits/noshow-button)
+  // 디자이너가 노쇼로 표시한 예약 — 세지 않고 줄을 그어 남긴다(되돌리기 자리, components/noshow-button)
   const marked = synced ? noShowsSinceSync(bks, synced) : [];
 
   const ids = [...new Set([...collected.map((v) => v.customer_id),
