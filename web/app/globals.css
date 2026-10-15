@@ -94,11 +94,12 @@ body{background:var(--bg);color:var(--ink);
 .card > div:first-child > .bf-day{border-top:none}
 
 /* 3-2. 이름 옆 뱃지 — 모양은 같고 색만 다르다 */
-.tag-new,.tag-vip,.tag-off{display:inline-block;font-size:12px;font-weight:800;
+.tag-new,.tag-vip,.tag-off,.tag-pend{display:inline-block;font-size:12px;font-weight:800;
   border-radius:20px;padding:1px 7px;margin-left:6px;vertical-align:middle}
 .tag-new{color:var(--sage-ink);background:#E7EFE5}
 .tag-vip{color:var(--gold-ink);background:#F2EAD8}
 .tag-off{color:var(--muted);background:var(--soft)}
+.tag-pend{color:var(--muted);background:var(--soft)}   /* 방문 탭 '예약 기준' — 수집 전이라 확정 아님(옅게) */
 /* 상태 뱃지 — 지금 이 손님에게 할 일(이탈 위험 · 재방문 도래 · 첫 방문 · 예약 있음). 챙길 고객 · 고객 목록 · 카르테 머리말 */
 .ctag{font-size:12px;font-weight:800;border-radius:20px;padding:1px 7px;white-space:nowrap}
 .ctag.overdue{background:#F3E6E2;color:var(--rose-ink)}

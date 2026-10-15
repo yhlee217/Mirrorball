@@ -9,7 +9,8 @@ import { kstNow } from '@/lib/kst';
 import { lastSynced } from '@/lib/sync';
 import { SyncChip } from '@/components/sync-chip';
 import { txKind } from '@/lib/tx';
-import VisitsList from './visits-list';
+import { visitOrdinals, visitsSinceSync } from '@/lib/visits';
+import VisitsList, { type Item } from './visits-list';
 import { ScreenReady } from '@/components/screen-timer';
 
 // 방문 관리 — '다녀가신 분'을 챙기는 화면('챙길 고객' 탭이 '아직 안 오신 분'을 맡는 것과 짝).
@@ -17,6 +18,7 @@ import { ScreenReady } from '@/components/screen-timer';
 
 type Tx = { customer_id: string | null; date: string; time: string | null; service: string | null; amount_won: number; memo: string | null; kind: string | null };
 type Cust = { id: string; ext_id: string | null; pii_enc: string | null; visit_count: number };
+type Bk = { customer_id: string | null; date: string | null; time: string | null; service: string | null; status: string | null; pii_enc: string | null };
 
 const DAY = 86400000;
 const KST = 9 * 3600000;
@@ -27,16 +29,20 @@ export default async function VisitsPage() {
   const today = kstNow().date;
   const since = new Date(Date.now() + KST - 13 * DAY).toISOString().slice(0, 10); // 최근 14일
 
-  const [{ data: tenant }, txs, synced] = await Promise.all([
+  const [{ data: tenant }, txs, synced, { data: bookings }] = await Promise.all([
     supabase.from('tenants').select('dek_wrapped').eq('id', tenantId).maybeSingle(),
     fetchAllRows<Tx>((from, to) =>
       supabase
         .from('transactions')
         .select('customer_id,date,time,service,amount_won,memo,kind')
+        .eq('tenant_id', tenantId)
         .gte('date', since)
         .order('id')
         .range(from, to)),
     lastSynced(supabase),
+    // 마지막 수집 뒤 다녀가셨을 분 — 방문 기록은 다음 수집에 들어오니 그 사이는 지난 예약으로 보여 준다(lib/visits)
+    supabase.from('bookings').select('customer_id,date,time,service,status,pii_enc')
+      .eq('tenant_id', tenantId).gte('date', since).lte('date', today).limit(500),
   ]);
 
   // 같은 날 여러 시술은 한 번의 방문으로 묶는다.
@@ -55,54 +61,77 @@ export default async function VisitsPage() {
     if (t.memo && !e.memo) e.memo = t.memo; // 그날 매장에 적어둔 메모
     byVisit.set(k, e);
   }
-  const visits = [...byVisit.values()]
-    .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : (a.time ?? '') < (b.time ?? '') ? 1 : -1))
-    .slice(0, 60);
+  const collected = [...byVisit.values()];
+  // 수집 뒤 지난 예약 — 이미 수집된 같은 날 방문과 겹치면 뺀다
+  const pending = synced
+    ? visitsSinceSync((bookings as Bk[] | null) ?? [], synced).filter(
+        (b) => !(b.customer_id && byVisit.has(`${b.customer_id}|${b.date}`)),
+      )
+    : [];
 
-  const ids = [...new Set(visits.map((v) => v.customer_id))];
+  const ids = [...new Set([...collected.map((v) => v.customer_id), ...pending.map((b) => b.customer_id).filter(Boolean) as string[]])];
   const custs: Cust[] = ids.length
-    ? (((await supabase.from('customers').select('id,ext_id,pii_enc,visit_count').in('id', ids)).data as Cust[]) ?? [])
+    ? (((await supabase.from('customers').select('id,ext_id,pii_enc,visit_count').eq('tenant_id', tenantId).in('id', ids)).data as Cust[]) ?? [])
     : [];
   const cmap = new Map(custs.map((c) => [c.id, c]));
+  const nth = visitOrdinals(collected, (id) => cmap.get(id)?.visit_count ?? 1);
 
   const dw = (tenant as { dek_wrapped: string | null } | null)?.dek_wrapped ?? null;
   const dek = await openDek(dw);
   const nameFrom = nameReader(dek);
 
-  const items = await Promise.all(
-    visits
-      .filter((v) => isRealCustomer(cmap.get(v.customer_id)?.ext_id ?? null))
-      .map(async (v) => {
-        const c = cmap.get(v.customer_id)!;
-        const name = await nameFrom(c.pii_enc);
-        const rawMain = v.services[0] ?? null;
-        const svc = [...new Set(v.services.map((s) => friendlyService(s)).filter(Boolean))].join('+'); // 홈 브리핑과 같은 표기
-        return {
-          id: v.customer_id,
-          name,
-          date: v.date,
-          time: v.time,
-          service: svc,
-          amount: v.amount,
-          visit_count: c.visit_count,
-          memo: v.memo ?? '', // 그날 매장에서 적어둔 메모
-          tip: careFor(rawMain)?.tip ?? '', // 그날 받은 시술의 홈케어 안내
-        };
-      }),
-  );
+  const visitItems = collected
+    .filter((v) => isRealCustomer(cmap.get(v.customer_id)?.ext_id ?? null))
+    .map(async (v): Promise<Item> => {
+      const c = cmap.get(v.customer_id)!;
+      const rawMain = v.services[0] ?? null;
+      return {
+        id: v.customer_id,
+        name: await nameFrom(c.pii_enc),
+        date: v.date,
+        time: v.time,
+        service: [...new Set(v.services.map((s) => friendlyService(s)).filter(Boolean))].join('+'), // 홈 브리핑과 같은 표기
+        amount: v.amount,
+        nth: nth.get(`${v.customer_id}|${v.date}`) ?? c.visit_count, // 그 방문이 몇 번째였나(지금 총 횟수가 아니라)
+        pending: false,
+        memo: v.memo ?? '', // 그날 매장에서 적어둔 메모
+        tip: careFor(rawMain)?.tip ?? '', // 그날 받은 시술의 홈케어 안내
+      };
+    });
+  // 수집 전 — 예약에 적힌 시각 · 시술. 처음 오신 분(손님 기록이 아직 없음)은 예약의 이름으로, 상세보기 없이.
+  const pendingItems = pending
+    .filter((b) => !b.customer_id || isRealCustomer(cmap.get(b.customer_id)?.ext_id ?? null))
+    .map(async (b): Promise<Item> => {
+      const c = b.customer_id ? cmap.get(b.customer_id) : undefined;
+      return {
+        id: c?.id ?? '',
+        name: await nameFrom(c?.pii_enc ?? b.pii_enc),
+        date: b.date as string,
+        time: b.time,
+        service: friendlyService(b.service) || '',
+        amount: 0,
+        nth: (c?.visit_count ?? 0) + 1,
+        pending: true,
+        memo: '',
+        tip: careFor(b.service)?.tip ?? '',
+      };
+    });
+  const items = (await Promise.all([...pendingItems, ...visitItems]))
+    .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : (a.time ?? '') < (b.time ?? '') ? 1 : -1))
+    .slice(0, 60);
 
   const yesterday = new Date(Date.now() + KST - DAY).toISOString().slice(0, 10);
 
   return (
     <main className="wrap">
       <div className="body">
-        {/* 머리말은 한 줄 — 수집 기준은 작은 표식 하나로(UX 계획 v3). 그 뒤 방문은 다음 수집에 들어온다. */}
+        {/* 머리말은 한 줄 — 수집 기준은 작은 표식 하나로(UX 계획 v3). 그 뒤 방문은 예약으로 보여 주고 다음 수집에 확정된다. */}
         <div className="top">
           <b>방문</b>
           <span className="sect-n">2주</span>
           <SyncChip synced={synced} />
         </div>
-        <VisitsList items={items} today={today} yesterday={yesterday} />
+        <VisitsList items={items} today={today} yesterday={yesterday} syncLabel={synced ? `${synced.label} ${synced.time}` : null} />
       </div>
       <ScreenReady />
     </main>

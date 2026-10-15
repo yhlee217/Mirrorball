@@ -32,7 +32,7 @@ export function isUpcoming(
  * date 는 KST 날짜(YYYY-MM-DD) — 홈 '이번 주 요약'이 수집일을 기준으로 지난 한 주를 잡는다.
  * null 이면 아직 기록이 없는 것(이 기능 이전에 수집된 데이터) — 호출부에서 표시를 생략한다.
  */
-export function kstStamp(iso: string | null | undefined): { label: string; daysAgo: number; date: string } | null {
+export function kstStamp(iso: string | null | undefined): { label: string; daysAgo: number; date: string; time: string } | null {
   if (!iso) return null;
   const t = new Date(iso);
   if (Number.isNaN(t.getTime())) return null;
@@ -43,5 +43,6 @@ export function kstStamp(iso: string | null | undefined): { label: string; daysA
     label: `${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일`,
     daysAgo: Math.max(0, Math.round((day(n) - day(k)) / 86400000)),
     date: k.toISOString().slice(0, 10),
+    time: k.toISOString().slice(11, 16), // 수집이 끝난 시각 — 그날 그 뒤 방문은 다음 수집에 들어온다(방문 탭)
   };
 }

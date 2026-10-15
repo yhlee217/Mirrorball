@@ -10,7 +10,7 @@ import { kstStamp } from './kst';
  */
 export async function lastSynced(
   supabase: ReturnType<typeof supabaseServer>,
-): Promise<{ label: string; daysAgo: number; date: string } | null> {
+): Promise<{ label: string; daysAgo: number; date: string; time: string } | null> {
   const { data } = await supabase
     .from('sync_jobs')
     .select('finished_at')

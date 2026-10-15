@@ -109,13 +109,17 @@ out.alerts = screen(bar('챙길 고객 <span class="sect-n">84명</span>', { bac
   r(load('app/alerts/alerts-list.js').default, { items, quiet: 3, quietDays: 14, effect: { contacted: 32, came: 11, booked: 4 } }));
 
 // 방문(app/visits/page.tsx) — 어제 셋 · 토 셋 · 목 넷, 셋 중 하나꼴로 매장 메모
-const visits = names.map((n, i) => ({
+const visits = names.slice(0, 9).map((n, i) => ({
   id: 'v' + i, name: n, date: i < 3 ? '2026-10-11' : i < 6 ? '2026-10-10' : '2026-10-08', time: `1${i % 8}:00`,
-  service: i % 2 ? '커트+뿌리염색' : '디지털펌', amount: 80000 + i * 10000, visit_count: 1 + i,
+  service: i % 2 ? '커트+뿌리염색' : '디지털펌', amount: 80000 + i * 10000, nth: 1 + i, pending: false,
   memo: i % 3 === 0 ? '뿌리 볼륨 원하심, 다음엔 클리닉 같이' : '', tip: '이틀은 감지 말고, 말릴 때 손으로 감아쥐듯 말리면 컬이 오래 살아요.',
 }));
+// 열째 분은 수집(일 14:05) 뒤 같은 날 16시 예약 — '예약 기준'(어제 손님이 방문에 없던 문제, 2026-10-15).
+// 견본은 그대로 열 줄(전후 비교가 되게) — 수집된 방문 아홉 + 수집 전 하나
+visits.unshift({ id: 'p0', name: names[9], date: '2026-10-11', time: '16:00', service: '뿌리염색', amount: 0, nth: 11, pending: true,
+  memo: '', tip: '' });
 out.visits = screen('', `<div class="top"><b>방문</b><span class="sect-n">2주</span>${chip}</div>`
-  + r(load('app/visits/visits-list.js').default, { items: visits, today: TODAY, yesterday: '2026-10-11' }));
+  + r(load('app/visits/visits-list.js').default, { items: visits, today: TODAY, yesterday: '2026-10-11', syncLabel: '10월 11일 14:05' }));
 
 // 고객 목록(app/customers/page.tsx)
 const rows = Array.from({ length: 20 }, (_, i) => ({
