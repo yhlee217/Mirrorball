@@ -133,7 +133,7 @@ export default async function SettingsPage() {
           {/* 시작 안내(v11 P0) — 로그인 없이 열리는 페이지라 새로 오신 디자이너께 이 주소를 그대로 보내면 된다 */}
           <Link className="btn ghost" href="/start" style={{ marginBottom: 4 }}>사용 안내</Link>
           {/* 운영 숫자(v12 P2) — 운영자 폰(?op=1)에서만 보이는 입구. 디자이너 화면엔 없다 */}
-          {cookies().get('mb-op')?.value === '1' ? (
+          {(await cookies()).get('mb-op')?.value === '1' ? (
             <Link className="btn ghost" href="/ops" style={{ marginBottom: 4 }}>운영 숫자</Link>
           ) : null}
           <div className="logout-row"><LogoutButton /></div>

@@ -11,7 +11,7 @@ import { mergeSettings } from '@/lib/settings';
 // '본인 테넌트'를 확인한 뒤 화이트리스트 컬럼만 service_role 로 기록한다. plan/dek_wrapped/slug
 // 등 민감 컬럼은 손대지 않는다(M1).
 export async function POST(request: Request) {
-  const auth = supabaseServer();
+  const auth = await supabaseServer();
   const {
     data: { user },
   } = await auth.auth.getUser();

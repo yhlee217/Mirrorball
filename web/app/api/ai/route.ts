@@ -8,7 +8,7 @@ import { templateImprove } from '@/lib/coach';
 // 별도 단계에서 붙인다(@cloudflare/next-on-pages 의 getRequestContext 로 env.AI 접근).
 // 자동 호출 금지 — 디자이너가 '다듬기' 누를 때만 호출된다(사용량이 작게 유지됨).
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

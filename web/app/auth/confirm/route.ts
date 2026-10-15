@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const type = searchParams.get('type') as EmailOtpType | null;
 
   if (token_hash && type) {
-    const supabase = supabaseServer();
+    const supabase = await supabaseServer();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) return NextResponse.redirect(new URL('/', origin));
   }

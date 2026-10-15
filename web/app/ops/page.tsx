@@ -13,7 +13,7 @@ import { BackButton } from '@/components/back-button';
  * 디자이너 화면엔 입구가 없다. 매장 단위 숫자뿐 — 손님 정보는 없다.
  */
 export default async function OpsPage() {
-  if (cookies().get('mb-op')?.value !== '1') notFound();
+  if ((await cookies()).get('mb-op')?.value !== '1') notFound();
   const { supabase } = await requireUser();
   const [usage, speed, csp] = await Promise.all([supabase.rpc('ops_usage'), supabase.rpc('ops_speed'), supabase.rpc('ops_csp')]);
   const urows = (usage.data as UsageRow[] | null) ?? [];

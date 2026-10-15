@@ -5,7 +5,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 
 // 고객 메모·취향 태그 저장 — RLS(tenant_rw)로 본인 테넌트 고객만 수정 가능.
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

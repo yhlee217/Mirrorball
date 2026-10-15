@@ -1,9 +1,9 @@
-import type { supabaseServer } from './supabase/server';
+import type { ServerClient } from './supabase/server';
 import { fetchAllRows } from './customers';
 import { pairStats, visitsByCustomer, type PairStats } from './recommend';
 import { addDays } from './week';
 
-type Sb = ReturnType<typeof supabaseServer>;
+type Sb = ServerClient;
 type StoreTx = { customer_id: string | null; date: string | null; service: string | null; kind: string | null };
 
 /**

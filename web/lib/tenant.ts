@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { supabaseServer } from './supabase/server';
+import { supabaseServer, type ServerClient } from './supabase/server';
 import { unwrapDek, decryptPII } from './crypto';
 import { pickTenant, type MembershipRow } from './tenant-pick';
 
@@ -13,7 +13,7 @@ import { pickTenant, type MembershipRow } from './tenant-pick';
 
 /** 로그인 필수. 아니면 /login 으로 보낸다. */
 export async function requireUser() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -23,7 +23,7 @@ export async function requireUser() {
 
 /** 이 사용자가 속한 테넌트. 없으면 null(가입 직후 등). */
 export async function getTenantId(
-  supabase: ReturnType<typeof supabaseServer>,
+  supabase: ServerClient,
 ): Promise<string | null> {
   // 정렬 없이 첫 줄을 고르면 여러 매장에 속한 계정은 요청마다 다른 매장이 될 수 있다 — 가장 먼저 소속된 매장으로 고정.
   // 데모 매장은 뒤로(lib/tenant-pick) — 매장 연결 전에 데모를 만들었어도 실제 매장이 열린다(개선 계획 v11 P0).

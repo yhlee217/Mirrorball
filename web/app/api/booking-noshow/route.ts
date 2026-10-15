@@ -11,7 +11,7 @@ import { noShowUpdate } from '@/lib/visits';
  * 다음 수집(일요일)이 지나면 그 주의 방문은 HandSOS 거래 기록으로 정해진다.
  */
 export async function POST(request: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

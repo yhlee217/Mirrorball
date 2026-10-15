@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   }
   const detail = cleanCsp(body);
   if (!detail) return done;
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();

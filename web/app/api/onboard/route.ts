@@ -8,7 +8,7 @@ import { DEMO_PREFIX } from '@/lib/tenant-pick';
 // 데모 온보딩: 로그인 사용자에게 데모 테넌트+멤버십+운영 데이터를 생성.
 // service_role 로 RLS 우회(서버 전용). PII 없이 운영 필드만 시드.
 export async function POST() {
-  const auth = supabaseServer();
+  const auth = await supabaseServer();
   const {
     data: { user },
   } = await auth.auth.getUser();

@@ -1,6 +1,6 @@
 import { isUpcoming, kstDatePlus, kstNow } from './kst';
 import { fetchAllRows } from './customers';
-import type { supabaseServer } from './supabase/server';
+import type { ServerClient } from './supabase/server';
 
 /**
  * 예약 판정 한 곳. 화면마다 따로 짜다가 고객 목록만 날짜를 안 걸러서,
@@ -68,7 +68,7 @@ export const BOOKING_LOOKBACK_DAYS = 28;
 
 /** 손님별 예약 판정 재료(bookingSets) — 4주 전부터. 수집일(since)은 화면이 같이 읽어 넘긴다. */
 export async function recentBookingRows(
-  supabase: ReturnType<typeof supabaseServer>,
+  supabase: ServerClient,
   tenantId: string,
 ): Promise<BookingRow[]> {
   return fetchAllRows<BookingRow>((from, to) =>
