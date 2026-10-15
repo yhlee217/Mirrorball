@@ -30,6 +30,7 @@
     · 화면별 보통 · 느린 때(지난 7일, 폰에서 잰 '누른 순간 → 내용이 뜬 순간')
     · 매장별 화면 연 수 · 연락한 손님 수 · 마지막 사용 — 다음 개선을 정하는 숫자(맥 점검 없이)
     · 0025 뒤(개선 계획 v10 P0): 화면 수는 디자이너 것만(운영자 폰은 따로) · 그중 홈 화면 앱으로 연 비율 · 기록 시작
+    · 0026 뒤(개선 계획 v14 P0): CSP(보고만) 어긋남 — 규칙 · 출처별 건수(출력만)
 
 사용:
     SUPABASE_URL=... SUPABASE_ANON_KEY=... python3 scripts/sync_health_check.py
@@ -150,6 +151,27 @@ def fmt_usage(rows: list[dict], now: dt.datetime) -> list[str]:
     return out
 
 
+def fmt_csp(rows: list[dict]) -> list[str]:
+    """CSP(보고만) 어긋남(0026 ops_csp, 개선 계획 v14 P0) — 지난 7일 규칙 · 출처별 건수. 출처와 숫자만."""
+    if not rows:
+        return ["  어긋남 없음"]
+    return [f"  {str(r.get('directive') or '?'):16s} {str(r.get('blocked') or '?'):40s} {int(r.get('n') or 0)}번" for r in rows]
+
+
+def report_csp(url: str, key: str) -> None:
+    """CSP 어긋남(0026) — 보고만 하는 한 주 동안 무엇이 막힐 뻔했나. 실패로 만들지 않는다. 0026 전이면 한 줄만."""
+    try:
+        rows = fetch(url, key, "ops_csp")
+    except urllib.error.HTTPError as exc:
+        print(f"\nCSP(보고만) — 조회 실패 HTTP {exc.code} — 0026_csp_reports.sql 을 적용했는지 확인하세요")
+        return
+    except Exception as exc:  # noqa: BLE001
+        print(f"\nCSP(보고만) — 조회 실패: {exc}")
+        return
+    print("\nCSP(보고만) — 지난 7일 어긋남(규칙 · 출처 · 건수)")
+    print("\n".join(fmt_csp(rows)))
+
+
 def report_speed_usage(url: str, key: str) -> None:
     """화면 속도 · 매장별 사용(0024) — 알려 주기만 하고 실패로 만들지 않는다. 다음 개선(v7 P1 · P2)을 정하는 숫자."""
     try:
@@ -230,6 +252,7 @@ def main() -> int:
     late = evaluate(rows, stale_days)
     ops_bad = check_ops(url, key)
     report_speed_usage(url, key)
+    report_csp(url, key)
     if not late and not ops_bad:
         print("\n정상 — 모두 기준 안입니다.")
         return 0

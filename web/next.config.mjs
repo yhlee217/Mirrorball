@@ -1,3 +1,5 @@
+import { securityHeaders } from './lib/security-headers.mjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -6,6 +8,10 @@ const nextConfig = {
     // 손님 정보를 바꾸는 손잡이(메모 · 이탈 · 성별 · 사비 · 설정)는 router.refresh() 로 이 저장분을 비운다.
     // 앱을 다시 열 때(refresh-on-focus)도 비운다.
     staleTimes: { dynamic: 180 },
+  },
+  // 보안 응답 헤더 — 모든 경로(화면 · API)에(lib/security-headers.mjs, 개선 계획 v14 P0)
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders(process.env.NEXT_PUBLIC_SUPABASE_URL) }];
   },
 };
 export default nextConfig;

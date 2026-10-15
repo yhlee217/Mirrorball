@@ -56,3 +56,10 @@ export function speedLine(r: SpeedRow): string {
     : '기다린 적 없음';
   return speed + (instant ? ` (바로 ${instant}번)` : '');
 }
+
+/** CSP(보고만, v14 P0) 한 줄 — 'https://static.cloudflareinsights.com · 3번'. 출처와 숫자만. */
+export type CspRow = { directive: string | null; blocked: string | null; n: number | null; last_at: string | null };
+
+export function cspLine(r: CspRow): string {
+  return `${r.blocked ?? '?'} · ${Number(r.n ?? 0)}번`;
+}

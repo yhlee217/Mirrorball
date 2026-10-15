@@ -32,3 +32,40 @@ export function cleanTiming(body: unknown): Timing | null {
     op: b.op === true, app: b.app === true,
   };
 }
+
+export type CspHit = { directive: string; blocked: string; path: string };
+
+/** 막힐 뻔한 것 — 바깥 주소는 출처(https://host)만, 그 밖엔 이름(inline · eval · data · blob …)만. 주소의 경로 · 쿼리는 버린다. */
+export function blockedOf(raw: unknown): string {
+  const s = typeof raw === 'string' ? raw.trim() : '';
+  if (!s) return 'unknown';
+  if (/^[a-z-]+$/i.test(s)) return s.toLowerCase().slice(0, 20); // inline · eval · self · data · blob · wasm-eval
+  try {
+    const u = new URL(s);
+    if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'wss:') return u.origin.slice(0, 80);
+    return u.protocol.replace(':', '').slice(0, 20); // data: · blob: · chrome-extension: …
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * CSP 어긋남 기록(개선 계획 v14 P0) — 정책은 '보고만'이라 화면은 그대로다. 남기는 건 어긋난 규칙 · 막힐 뻔한 것의 출처 ·
+ * 화면 경로(id 는 지움)뿐 — 손님 정보는 없다. 브라우저 보고(report-uri, {"csp-report": {...}})와 화면의 어긋남 소식
+ * (components/csp-watch) 두 모양을 다 받는다.
+ */
+export function cleanCsp(body: unknown): CspHit | null {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const r = (b['csp-report'] && typeof b['csp-report'] === 'object' ? b['csp-report'] : b) as Record<string, unknown>;
+  const dir = r['effective-directive'] ?? r['violated-directive'] ?? r.directive;
+  const directive = typeof dir === 'string' ? dir.trim().split(/\s+/)[0].toLowerCase() : '';
+  if (!/^[a-z-]{2,40}$/.test(directive)) return null;
+  const page = r['document-uri'] ?? r.path;
+  let path = typeof page === 'string' ? page : '/';
+  try {
+    if (/^https?:/i.test(path)) path = new URL(path).pathname;
+  } catch {
+    path = '/';
+  }
+  return { directive, blocked: blockedOf(r['blocked-uri'] ?? r.blocked), path: cleanPath(path) };
+}

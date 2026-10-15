@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/tenant';
-import { sinceLine, speedLine, usageLine, type SpeedRow, type UsageRow } from '@/lib/ops-view';
+import { cspLine, sinceLine, speedLine, usageLine, type CspRow, type SpeedRow, type UsageRow } from '@/lib/ops-view';
 import { BackButton } from '@/components/back-button';
 
 /**
@@ -15,9 +15,10 @@ import { BackButton } from '@/components/back-button';
 export default async function OpsPage() {
   if (cookies().get('mb-op')?.value !== '1') notFound();
   const { supabase } = await requireUser();
-  const [usage, speed] = await Promise.all([supabase.rpc('ops_usage'), supabase.rpc('ops_speed')]);
+  const [usage, speed, csp] = await Promise.all([supabase.rpc('ops_usage'), supabase.rpc('ops_speed'), supabase.rpc('ops_csp')]);
   const urows = (usage.data as UsageRow[] | null) ?? [];
   const srows = (speed.data as SpeedRow[] | null) ?? [];
+  const crows = (csp.data as CspRow[] | null) ?? [];
   const now = Date.now();
   const since = sinceLine(urows);
   return (
@@ -56,6 +57,21 @@ export default async function OpsPage() {
             ))
           ) : (
             <div className="li ops-err">아직 기록 없음</div>
+          )}
+        </div>
+        <div className="sect-h">보안 정책 <span className="sect-n">보고만 · 지난 7일 어긋남</span></div>
+        <div className="card">
+          {csp.error ? (
+            <div className="li ops-err">아직 못 읽어요 — 0026 SQL 을 실행하면 보여요</div>
+          ) : crows.length ? (
+            crows.map((r) => (
+              <div className="li ops-r" key={`${r.directive}|${r.blocked}`}>
+                <b>{r.directive ?? '?'}</b>
+                <span>{cspLine(r)}</span>
+              </div>
+            ))
+          ) : (
+            <div className="li ops-err">어긋남 없음</div>
           )}
         </div>
         <p className="ops-note">매일 감시와 같은 숫자예요. 매장 단위 숫자뿐 — 손님 정보는 없어요. 이 화면은 운영자 폰에서만 열려요.</p>
