@@ -2,10 +2,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { sendError, verifyError } from '@/lib/login-errors';
 
 // PWA(홈 화면 앱)는 브라우저와 쿠키·저장소가 분리된다(특히 iOS). 메일의 '로그인 링크'를 누르면
 // 브라우저에서만 로그인되고 앱은 로그아웃 상태로 남는다 → 앱 안에서 인증 코드를 입력해 세션을
-// 만드는 OTP 방식이 기본. 메일 발송이 막힌 경우를 위해 '코드 직접 입력' 경로도 둔다(관리자 발급 코드).
+// 만드는 OTP 방식이 기본. 메일 발송이 막힌 경우를 위해 '코드 직접 입력' 경로도 둔다 — 운영자가 맥에서 만든 코드
+// (worker/login_code.py, 개선 계획 v15 P0). 오류는 한국어로(lib/login-errors).
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -25,8 +27,8 @@ export default function LoginPage() {
     });
     setLoading(false);
     if (error) {
-      // 발송 실패(메일 설정 문제)여도 관리자 발급 코드로 로그인할 수 있게 코드 단계는 열어둔다.
-      setErr(error.message + ' — 발급받은 코드가 있으면 아래에 입력하세요.');
+      // 발송 실패(메일 설정 문제)여도 운영자가 만든 코드로 로그인할 수 있게 코드 단계는 열어둔다.
+      setErr(sendError(error));
       setStep('code');
       return;
     }
@@ -47,7 +49,7 @@ export default function LoginPage() {
     }
     setLoading(false);
     if (error) {
-      setErr(error.message);
+      setErr(verifyError(error));
       return;
     }
     router.replace('/');
@@ -62,6 +64,9 @@ export default function LoginPage() {
           <form onSubmit={verify} className="loginform">
             <p className="muted" style={{ marginBottom: 10, lineHeight: 1.5 }}>
               {email} 의 <b>인증 코드</b>를 입력하세요.
+            </p>
+            <p className="muted" style={{ marginBottom: 10, lineHeight: 1.5 }}>
+              메일이 안 오면 스팸함을 보거나, 운영자에게 코드를 받아 넣어도 돼요.
             </p>
             <input
               inputMode="numeric"
