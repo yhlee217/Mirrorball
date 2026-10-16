@@ -8,6 +8,7 @@
 - 매장별 JSON 을 KEK 로 감싸 {MIRRORBALL_BACKUP_DIR}/{날짜}/{slug}.json.enc 로 남긴다(기본 ~/Mirrorball-backups).
   56일(8주) 지난 날짜 폴더는 지운다. KEK 를 바꾸면 worker/rotate_kek.py 가 이 파일들도 다시 감싼다.
 - 손님·거래는 고객번호·거래번호(ext_id)로 묶는다 — DB 를 새로 만들어 다시 수집한 뒤에도 이어 붙는다.
+- 쓴 파일은 바로 다시 열어 지금 KEK 로 풀리는지 · 담은 것과 같은지 본다(개선 계획 v15 P1 — 'checked').
 - 끝나면 ops_events 에 'backup' 을 남긴다 — sync-health 가 매일 보고 8일 넘게 없으면 알린다.
 
 사용:
@@ -82,6 +83,16 @@ def unseal(text: str, keys: list[bytes]) -> dict:
         except InvalidTag:
             continue
     raise InvalidTag("백업 파일이 지금 키·옛 키 어느 쪽으로도 안 풀린다")
+
+
+def verify_written(path: Path, key: bytes, payload: dict) -> None:
+    """쓴 백업 파일을 바로 다시 열어 지금 열쇠로 풀리는지 · 담은 것과 같은지(개선 계획 v15 P1).
+
+    안 풀리는 백업은 되살릴 때가 돼서야 안다 — 그때는 이미 늦다. 어긋나면 예외(그 매장은 '백업 실패'로 센다).
+    """
+    back = unseal(path.read_text(encoding="utf-8"), [key])
+    if back != json.loads(json.dumps(payload, ensure_ascii=False)):
+        raise RuntimeError("백업 파일을 다시 읽었더니 담은 내용과 다르다")
 
 
 def plan_restore(payload: dict, ids: dict[str, str], existing: set[tuple[str, str]]) -> dict:
@@ -180,10 +191,13 @@ def run_backup() -> int:
             cred = supa._get("/pos_credentials", {**q, "select": "provider,enc_blob,session_cookie,status"})
             payload = collect(t, customers, pocket, contacts, prof[0] if prof else None, mem, cred[0] if cred else None,
                               now.isoformat())
-            (folder / f"{slug}.json.enc").write_text(seal(payload, key), encoding="utf-8")
+            path = folder / f"{slug}.json.enc"
+            path.write_text(seal(payload, key), encoding="utf-8")
+            verify_written(path, key, payload)
             n = {"customers": len(payload["customers"]), "pocket": len(payload["pocket"]),
-                 "contacts": len(payload["contacts"])}
-            print(f"  [{slug}] 손님 기록 {n['customers']}명 · 사비 표시 {n['pocket']}건 · 연락 {n['contacts']}건")
+                 "contacts": len(payload["contacts"]), "checked": True}
+            print(f"  [{slug}] 손님 기록 {n['customers']}명 · 사비 표시 {n['pocket']}건 · 연락 {n['contacts']}건"
+                  " · 다시 읽어 확인")
             try:
                 supa.insert("ops_events", [{"tenant_id": tid, "kind": "backup", "detail": n}])
             except Exception as exc:  # noqa: BLE001 — 기록 실패가 백업을 무르게 하지 않게

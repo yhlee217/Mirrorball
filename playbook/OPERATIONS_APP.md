@@ -15,6 +15,7 @@
 | 매일 감시 | GitHub Actions `sync-health`, 매일 10시 | 수집 지연 · 백업 · 화면 오류는 실패(메일), 화면 속도 · 매장별 사용은 출력만 |
 | 자동 검증 | GitHub Actions `test`, 푸시마다 | 타입 검사 + 테스트. 빨갛게 끝나면 메일 |
 | 취약점 점검 | GitHub Actions `deps-audit`, 매주 월요일 10시 30분 | 운영 의존성에 받아들이지 않은 높음 · 심각이 있으면 메일(`scripts/deps_audit.py`) |
+| 열쇠 한 부 | 운영자 비밀번호 관리자 | `MIRRORBALL_KEK` — 맥 밖에서 다시 읽을 수 있는 유일한 사본(Cloudflare · GitHub 는 넣기만 된다). 맥이 없어져도 이것으로 되살린다(§6) |
 
 ## 1. 매주 흐름
 
@@ -112,6 +113,15 @@ cd ~/Dev/Mirrorball && .venv/bin/python worker/usage_probe.py
 ```
 
 - 수집은 launchd(`com.mirrorball.collect`)가 일요일에 돌린다 — 손댈 것 없음. 확인은 `DEPLOY.md` 의 `launchctl list | grep mirrorball`.
+- **열쇠 한 부**(한 번, v15) — `web/.env.local` 의 `MIRRORBALL_KEK` 값을 비밀번호 관리자(아이폰 '암호' 앱 · 1Password 등)에
+  한 부 둔다. 채팅 · 문서 · 메신저엔 붙여 넣지 않는다. 그다음 맞게 적었는지 — 매장마다 '매장 열쇠 풀림', 비밀번호 관리자
+  값을 붙여 넣으면 '같아요'(값은 화면에 안 보이고 어디에도 찍히지 않는다):
+
+```bash
+cd ~/Dev/Mirrorball && .venv/bin/python worker/kek_check.py
+```
+
+  열쇠를 바꾸면(`playbook/KEY_ROTATION.md`) 비밀번호 관리자 값도 새 열쇠로 바꾸고 다시 확인한다.
 
 ## 6. 문제가 생기면
 
@@ -124,9 +134,32 @@ cd ~/Dev/Mirrorball && .venv/bin/python worker/usage_probe.py
 | 취약점 점검(`deps-audit`) 메일 — 빨강 | GitHub → Actions → deps-audit 의 '받아들이지 않은' 줄 | 그대로 알려 주시면 의존성을 올린다 |
 | 손님 이름이 '고객'으로만 보임 | 매장 키(`dek_wrapped`) · 맥 `.env.local` 의 KEK | `playbook/KEY_ROTATION.md` |
 | 데이터를 되살려야 함 | 백업 파일 | 미리보기 `.venv/bin/python worker/backup.py --restore 파일` → 확인 뒤 `--apply` |
+| 맥이 고장 나거나 없어짐 | 비밀번호 관리자의 열쇠 한 부 | 아래 '맥이 없어지면' 순서. 앱은 Cloudflare 에 있는 열쇠로 그대로 돈다 |
+
+### 맥이 없어지면
+
+앱 · 매일 감시는 그대로 돈다. 멈추는 것은 일요일 수집 · 백업뿐이다. 손님 데이터의 원본은 DB 이고, HandSOS 접속 정보 ·
+매장 열쇠는 열쇠(KEK)로 감싸서 DB 에 있다 — 그래서 열쇠 한 부만 있으면 새 맥에서 모두 되살아난다.
+
+1. 새 맥에 저장소를 받고 파이썬 환경을 만든다:
+
+```bash
+mkdir -p ~/Dev && cd ~/Dev && git clone https://github.com/yhlee217/Mirrorball.git
+```
+
+```bash
+cd ~/Dev/Mirrorball && python3 -m venv .venv && .venv/bin/pip install -r worker/requirements.txt && .venv/bin/python -m playwright install chromium
+```
+
+2. `web/.env.local` 을 채운다 — Supabase 주소 · 공개 키 · 서비스 키는 Supabase 대시보드(설정 → API)에서, `MIRRORBALL_KEK` 는
+   비밀번호 관리자에서. 키 값은 그 파일에만 넣는다.
+3. 열쇠가 맞는지(§5 `kek_check.py`) → 수집 한 번(`FORCE=1 bash worker/run_mac.sh`) → 일요일 자동 실행 다시 걸기
+   (`bash scripts/mac/install_schedule.sh collect`, `DEPLOY.md` A-2).
+4. 백업은 다음 일요일부터 다시 쌓인다. Cloudflare · GitHub 는 손대지 않는다.
 
 ## 7. 남은 운영자 확인(계획서에서 이어짐)
 
+- **열쇠 한 부**(v15 P1) — 비밀번호 관리자에 `MIRRORBALL_KEK` → 맥에서 `kek_check.py`(§5)
 - **`0026` SQL**(v14 P0) — CSP 어긋남 기록. 실행 전엔 기록만 조용히 건너뛴다
 - HandSOS 고객 화면에 **생일** 칸이 있나 — 칸 이름만(v13 P3)
 - HandSOS 에서 **엑셀 내보내기**(예약 · 매출)가 되나 — 열 이름만(v8 P3)
