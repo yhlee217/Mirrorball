@@ -4,17 +4,19 @@ export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/tenant';
+import { canSeeOps } from '@/lib/ops-gate';
 import { cspLine, sinceLine, speedLine, usageLine, type CspRow, type SpeedRow, type UsageRow } from '@/lib/ops-view';
 import { BackButton } from '@/components/back-button';
 
 /**
  * 운영자 화면(개선 계획 v12 P2) — 매장별 사용 · 연락 · 화면 속도. 매일 감시(GitHub)와 같은 함수(0024 · 0025 ops_usage ·
- * ops_speed)의 숫자를 폰에서 바로 — 전에는 제가 감시 기록을 읽어 드려야 했다. 운영자 폰(설정 ?op=1 → 쿠키)에서만 열리고,
- * 디자이너 화면엔 입구가 없다. 매장 단위 숫자뿐 — 손님 정보는 없다.
+ * ops_speed)의 숫자를 폰에서 바로 — 전에는 제가 감시 기록을 읽어 드려야 했다. 운영자 계정(0027 ops_add_reader — v15 P2)만
+ * 열리고(0027 전엔 운영자 폰 쿠키 ?op=1), 디자이너 화면엔 입구가 없다. 매장 단위 숫자뿐 — 손님 정보는 없다.
  */
 export default async function OpsPage() {
-  if ((await cookies()).get('mb-op')?.value !== '1') notFound();
+  const opCookie = (await cookies()).get('mb-op')?.value === '1';
   const { supabase } = await requireUser();
+  if (!(await canSeeOps(supabase, opCookie))) notFound();
   const [usage, speed, csp] = await Promise.all([supabase.rpc('ops_usage'), supabase.rpc('ops_speed'), supabase.rpc('ops_csp')]);
   const urows = (usage.data as UsageRow[] | null) ?? [];
   const srows = (speed.data as SpeedRow[] | null) ?? [];

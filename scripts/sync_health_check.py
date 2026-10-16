@@ -32,6 +32,8 @@
     · 0025 뒤(개선 계획 v10 P0): 화면 수는 디자이너 것만(운영자 폰은 따로) · 그중 홈 화면 앱으로 연 비율 · 기록 시작
     · 0026 뒤(개선 계획 v14 P0): CSP(보고만) 어긋남 — 규칙 · 출처별 건수(출력만)
 
+0027 뒤(개선 계획 v15 P2) — 운영 숫자 함수는 공개 키만으로는 거절한다. 감시 열쇠(OPS_WATCH_KEY)를 본문에 넣는다.
+
 사용:
     SUPABASE_URL=... SUPABASE_ANON_KEY=... python3 scripts/sync_health_check.py
     STALE_DAYS=8    지연 판정 기준(기본 8)
@@ -39,6 +41,7 @@
     ERROR_LIMIT=5   매장별 24시간 화면 오류 기준(기본 5)
     BACKUP_REQUIRED_SINCE=YYYY-MM-DD   이 날부터 백업 기록이 없으면 실패
     ALERT_WEBHOOK   (선택) 설정하면 지연 시 JSON 을 POST 한다
+    OPS_WATCH_KEY   (0027 뒤 필수) 감시 열쇠 — SQL `select ops_new_watch_key();` 가 한 번 보여 준 값
 """
 
 from __future__ import annotations
@@ -163,7 +166,8 @@ def report_csp(url: str, key: str) -> None:
     try:
         rows = fetch(url, key, "ops_csp")
     except urllib.error.HTTPError as exc:
-        print(f"\nCSP(보고만) — 조회 실패 HTTP {exc.code} — 0026_csp_reports.sql 을 적용했는지 확인하세요")
+        hint = LOCKED if exc.code in (401, 403) else "0026_csp_reports.sql 을 적용했는지 확인하세요"
+        print(f"\nCSP(보고만) — 조회 실패 HTTP {exc.code} — {hint}")
         return
     except Exception as exc:  # noqa: BLE001
         print(f"\nCSP(보고만) — 조회 실패: {exc}")
@@ -178,7 +182,8 @@ def report_speed_usage(url: str, key: str) -> None:
         speed = fetch(url, key, "ops_speed")
         usage = fetch(url, key, "ops_usage")
     except urllib.error.HTTPError as exc:
-        print(f"\n! 화면 속도 · 사용 수 조회 실패 HTTP {exc.code} — 0024_speed_usage.sql 을 적용했는지 확인하세요")
+        hint = LOCKED if exc.code in (401, 403) else "0024_speed_usage.sql 을 적용했는지 확인하세요"
+        print(f"\n! 화면 속도 · 사용 수 조회 실패 HTTP {exc.code} — {hint}")
         return
     except Exception as exc:  # noqa: BLE001
         print(f"\n! 화면 속도 · 사용 수 조회 실패: {exc}")
@@ -189,10 +194,10 @@ def report_speed_usage(url: str, key: str) -> None:
     print("\n".join(fmt_usage(usage, dt.datetime.now(dt.timezone.utc))) if usage else "  아직 기록 없음")
 
 
-def fetch(url: str, key: str, fn: str = "sync_health") -> list[dict]:
+def _post(url: str, key: str, fn: str, body: dict) -> list[dict]:
     req = urllib.request.Request(
         url.rstrip("/") + f"/rest/v1/rpc/{fn}",
-        data=b"{}",
+        data=json.dumps(body).encode("utf-8"),
         headers={
             "apikey": key,
             "Authorization": f"Bearer {key}",
@@ -202,6 +207,23 @@ def fetch(url: str, key: str, fn: str = "sync_health") -> list[dict]:
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:  # noqa: S310 (고정 호스트)
         return json.loads(r.read().decode("utf-8"))
+
+
+def fetch(url: str, key: str, fn: str = "sync_health") -> list[dict]:
+    """운영 숫자 함수 하나. 0027 뒤엔 감시 열쇠(OPS_WATCH_KEY — 운영 숫자만 여는 값, 서비스 키 아님)를 본문에 넣어야
+    숫자를 준다(개선 계획 v15 P2). 열쇠는 주소가 아니라 본문으로 — 주소는 기록에 남는다. 0027 전 함수엔 p_key 자리가
+    없어 404(PGRST202)가 나므로 그때만 예전처럼 빈 본문으로 다시 부른다."""
+    watch = os.environ.get("OPS_WATCH_KEY", "").strip()
+    if watch:
+        try:
+            return _post(url, key, fn, {"p_key": watch})
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:
+                raise
+    return _post(url, key, fn, {})
+
+
+LOCKED = "0027 뒤라면 감시 열쇠(GitHub 비밀값 OPS_WATCH_KEY)가 없거나 틀렸다 — playbook/OPERATIONS_APP.md §4"
 
 
 def notify(webhook: str, late: list[dict], stale_days: float) -> None:
@@ -234,8 +256,10 @@ def main() -> int:
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]
         print(f"X 조회 실패 HTTP {exc.code}: {detail}")
-        if exc.code in (401, 403, 404):
-            print("  → 0022_sync_health.sql 을 적용했는지 확인하세요(함수가 없거나 권한 없음)")
+        if exc.code in (401, 403):
+            print(f"  → {LOCKED}")
+        elif exc.code == 404:
+            print("  → 0022_sync_health.sql 을 적용했는지 확인하세요(함수가 없음)")
         return 1
     except Exception as exc:  # noqa: BLE001
         print(f"X 조회 실패: {exc}  (프로젝트가 일시정지 상태일 수 있습니다)")
@@ -275,7 +299,8 @@ def check_ops(url: str, key: str) -> list[str]:
     try:
         rows = fetch(url, key, "ops_health")
     except urllib.error.HTTPError as exc:
-        msg = f"운영 기록 조회 실패 HTTP {exc.code} — 0023_ops_events.sql 을 적용했는지 확인하세요"
+        msg = (f"운영 기록 조회 실패 HTTP {exc.code} — "
+               + (LOCKED if exc.code in (401, 403) else "0023_ops_events.sql 을 적용했는지 확인하세요"))
         if required:
             print(f"\nX {msg}")
             return [msg]

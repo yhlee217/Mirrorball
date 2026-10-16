@@ -56,17 +56,19 @@ out({
     assert [norm(x) for x in got["speed"]] == [norm(x) for x in shc.fmt_speed(SPEED)]
 
 
-def test_ops_screen_opens_only_on_the_operator_phone():
+def test_ops_screen_opens_only_for_the_operator():
+    """0027 뒤엔 운영자 계정만(lib/ops-gate — 쿠키는 누구나 켤 수 있다), 그 전엔 운영자 폰 쿠키(v15 P2)."""
     page = (WEB / "app" / "ops" / "page.tsx").read_text(encoding="utf-8")
     body = page[page.index("export default async function OpsPage"):]
-    gate_line = next(l for l in body.splitlines() if "notFound();" in l)                     # Next 14 · 15(await) 모양 모두
-    assert "get('mb-op')?.value !== '1'" in gate_line
+    assert "const opCookie = (await cookies()).get('mb-op')?.value === '1';" in body
+    gate_line = next(l for l in body.splitlines() if "notFound();" in l)
+    assert "canSeeOps(supabase, opCookie)" in gate_line
     gate = body.index(gate_line)
-    assert gate < body.index("requireUser()") < body.index("supabase.rpc('ops_usage')")   # 쿠키부터 — 그 전엔 아무것도 안 읽는다
+    assert body.index("requireUser()") < gate < body.index("supabase.rpc('ops_usage')")   # 문을 본 뒤에야 숫자를 읽는다
     for banned in ("from('customers')", "from('transactions')", "pii_enc", "contactReader"):
         assert banned not in page, banned                                                  # 손님 정보는 안 읽는다
     settings = (WEB / "app" / "settings" / "page.tsx").read_text(encoding="utf-8")
-    assert "get('mb-op')?.value === '1' ? (" in settings and 'href="/ops"' in settings
+    assert "get('mb-op')?.value === '1' && (await canSeeOps(supabase, true)) ? (" in settings and 'href="/ops"' in settings
     mark = (WEB / "components" / "op-mark.tsx").read_text(encoding="utf-8")
     assert "setOpCookie(q === '1')" in mark
     timer = (WEB / "components" / "screen-timer.tsx").read_text(encoding="utf-8")

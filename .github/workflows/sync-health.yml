@@ -41,4 +41,6 @@ jobs:
           BACKUP_DAYS: '8'
           ERROR_LIMIT: '5'
           BACKUP_REQUIRED_SINCE: '2026-10-20'
+          # 운영 숫자 감시 열쇠(0027, 개선 계획 v15 P2) — 서비스 키가 아니라 운영 숫자만 연다. 0027 전엔 비어 있어도 된다.
+          OPS_WATCH_KEY: ${{ secrets.OPS_WATCH_KEY }}
         run: python3 scripts/sync_health_check.py

@@ -15,6 +15,7 @@ import { Help } from '@/components/help';
 import { BackButton } from '@/components/back-button';
 import { ScreenReady } from '@/components/screen-timer';
 import OpMark from '@/components/op-mark';
+import { canSeeOps } from '@/lib/ops-gate';
 
 export default async function SettingsPage() {
   const { supabase, user, tenantId } = await requireTenant();
@@ -132,8 +133,8 @@ export default async function SettingsPage() {
           </a>
           {/* 시작 안내(v11 P0) — 로그인 없이 열리는 페이지라 새로 오신 디자이너께 이 주소를 그대로 보내면 된다 */}
           <Link className="btn ghost" href="/start" style={{ marginBottom: 4 }}>사용 안내</Link>
-          {/* 운영 숫자(v12 P2) — 운영자 폰(?op=1)에서만 보이는 입구. 디자이너 화면엔 없다 */}
-          {(await cookies()).get('mb-op')?.value === '1' ? (
+          {/* 운영 숫자(v12 P2) — 운영자 폰(?op=1)에서만, 0027 뒤엔 운영자 계정일 때만(v15 P2). 디자이너 화면엔 없다 */}
+          {(await cookies()).get('mb-op')?.value === '1' && (await canSeeOps(supabase, true)) ? (
             <Link className="btn ghost" href="/ops" style={{ marginBottom: 4 }}>운영 숫자</Link>
           ) : null}
           <div className="logout-row"><LogoutButton /></div>
