@@ -14,7 +14,9 @@ name: sync-health
 
 "on":
   schedule:
-    - cron: '0 1 * * *'      # 매일 01:00 UTC = 10:00 KST
+    # 매일 01:07 UTC = 10:07 KST. 정시(:00)는 GitHub 스케줄이 가장 붐벼 4~6시간 늦게 돌았다(10.13~15 — 14:38 · 14:54 ·
+    # 16:27 KST) → 정시를 피한다(개선 계획 v15 P3). 그래도 늦을 수 있다 — 판정은 '몇 시'가 아니라 '며칠'이라 상관없다.
+    - cron: '7 1 * * *'
   workflow_dispatch: {}
 
 permissions:
@@ -29,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: 수집 지연 확인
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

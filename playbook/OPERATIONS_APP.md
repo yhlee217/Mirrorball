@@ -12,7 +12,7 @@
 | 데이터 | Supabase | 손님 이름 · 번호는 매장 키로 암호화(`pii_enc`) — 화면만 푼다 |
 | 수집 | 매장 맥(국내 IP), 매주 일요일 14시 | HandSOS → Supabase. 약관 리스크로 주 1회(`LAUNCH.md`) |
 | 백업 | 같은 맥, 수집 뒤 | 앱에만 있는 데이터(메모 · 노쇼 표시 · 연락 기록 등)를 암호화해 주 1회 |
-| 매일 감시 | GitHub Actions `sync-health`, 매일 10시 | 수집 지연 · 백업 · 화면 오류는 실패(메일), 화면 속도 · 매장별 사용은 출력만 |
+| 매일 감시 | GitHub Actions `sync-health`, 매일 10시쯤(GitHub 사정으로 늦을 수 있다) | 수집 지연 · 백업 · 화면 오류는 실패(메일), 화면 속도 · 매장별 사용은 출력만 |
 | 자동 검증 | GitHub Actions `test`, 푸시마다 | 타입 검사 + 테스트. 빨갛게 끝나면 메일 |
 | 취약점 점검 | GitHub Actions `deps-audit`, 매주 월요일 10시 30분 | 운영 의존성에 받아들이지 않은 높음 · 심각이 있으면 메일(`scripts/deps_audit.py`) |
 | 열쇠 한 부 | 운영자 비밀번호 관리자 | `MIRRORBALL_KEK` — 맥 밖에서 다시 읽을 수 있는 유일한 사본(Cloudflare · GitHub 는 넣기만 된다). 맥이 없어져도 이것으로 되살린다(§6) |
