@@ -113,7 +113,7 @@ def test_watch_workflow_passes_the_key_and_explains_a_locked_door():
     assert "OPS_WATCH_KEY: ${{ secrets.OPS_WATCH_KEY }}" in wf and "SUPABASE_SERVICE_ROLE_KEY" not in wf
     assert "OPS_WATCH_KEY" in shc.LOCKED and "§4" in shc.LOCKED
     src = (ROOT / "scripts" / "sync_health_check.py").read_text(encoding="utf-8")
-    assert src.count("LOCKED if exc.code in (401, 403)") == 3                               # 운영 기록 · 속도 · CSP
+    assert src.count("LOCKED if exc.code in (401, 403)") == 4                               # 운영 기록 · 속도 · CSP · DB 용량
 
 
 def test_app_gate_falls_back_to_the_cookie_only_before_0027():

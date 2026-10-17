@@ -5,7 +5,10 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/tenant';
 import { canSeeOps } from '@/lib/ops-gate';
-import { cspLine, sinceLine, speedLine, usageLine, type CspRow, type SpeedRow, type UsageRow } from '@/lib/ops-view';
+import {
+  cspLine, dbLines, DB_LIMIT_MB, DB_WARN_MB, sinceLine, speedLine, usageLine,
+  type CspRow, type DbRow, type SpeedRow, type UsageRow,
+} from '@/lib/ops-view';
 import { BackButton } from '@/components/back-button';
 
 /**
@@ -17,7 +20,9 @@ export default async function OpsPage() {
   const opCookie = (await cookies()).get('mb-op')?.value === '1';
   const { supabase } = await requireUser();
   if (!(await canSeeOps(supabase, opCookie))) notFound();
-  const [usage, speed, csp] = await Promise.all([supabase.rpc('ops_usage'), supabase.rpc('ops_speed'), supabase.rpc('ops_csp')]);
+  const [usage, speed, csp, db] = await Promise.all([
+    supabase.rpc('ops_usage'), supabase.rpc('ops_speed'), supabase.rpc('ops_csp'), supabase.rpc('ops_db_size'),
+  ]);
   const urows = (usage.data as UsageRow[] | null) ?? [];
   const srows = (speed.data as SpeedRow[] | null) ?? [];
   const crows = (csp.data as CspRow[] | null) ?? [];
@@ -76,7 +81,19 @@ export default async function OpsPage() {
             <div className="li ops-err">어긋남 없음</div>
           )}
         </div>
-        <p className="ops-note">매일 감시와 같은 숫자예요. 매장 단위 숫자뿐 — 손님 정보는 없어요. 이 화면은 운영자 폰에서만 열려요.</p>
+        <div className="sect-h">DB 용량 <span className="sect-n">무료 {DB_LIMIT_MB}MB · {DB_WARN_MB}MB 넘으면 알림</span></div>
+        <div className="card">
+          {db.error ? (
+            <div className="li ops-err">아직 못 읽어요 — 0028 SQL 을 실행하면 보여요</div>
+          ) : (
+            dbLines((db.data as DbRow[] | null) ?? []).map((l) => (
+              <div className="li ops-r" key={l}>
+                <span>{l}</span>
+              </div>
+            ))
+          )}
+        </div>
+        <p className="ops-note">매일 감시와 같은 숫자예요. 매장 단위 숫자뿐 — 손님 정보는 없어요. 이 화면은 운영자만 열 수 있어요.</p>
       </div>
     </main>
   );

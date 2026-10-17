@@ -63,3 +63,34 @@ export type CspRow = { directive: string | null; blocked: string | null; n: numb
 export function cspLine(r: CspRow): string {
   return `${r.blocked ?? '?'} · ${Number(r.n ?? 0)}번`;
 }
+
+/**
+ * DB 용량(0028) 두 줄 — '전체 52MB / 무료 500MB (10%)' · '큰 표: transactions 12MB · …'. 매일 감시(fmt_db_size)와 같은 글.
+ * 무료 플랜은 500MB 를 넘으면 읽기 전용이 된다(쓰기가 모두 막힘) — 400MB 를 넘으면 감시가 메일로 알린다.
+ */
+export type DbRow = { part: string | null; bytes: number | null };
+export const DB_LIMIT_MB = 500;
+export const DB_WARN_MB = 400;
+const MB = 1048576;
+
+/** '4.3MB' · '52MB' — 10MB 아래만 소수 한 자리(정수로 반올림해 감시와 같은 글). */
+export function mbText(n: number): string {
+  const v = (n || 0) / MB;
+  if (v < 10) {
+    const t = Math.round(v * 10);
+    return `${Math.floor(t / 10)}.${t % 10}MB`;
+  }
+  return `${Math.round(v)}MB`;
+}
+
+export function dbLines(rows: DbRow[], limitMb = DB_LIMIT_MB, warnMb = DB_WARN_MB): string[] {
+  const total = rows.find((r) => r.part === 'total');
+  if (!total) return ['용량을 못 읽었다(전체 줄 없음)'];
+  const bytes = Number(total.bytes ?? 0);
+  const pct = Math.round((bytes / (limitMb * MB)) * 100);
+  const over = bytes >= warnMb * MB;
+  const lines = [`전체 ${mbText(bytes)} / 무료 ${limitMb}MB (${pct}%)` + (over ? ` · 경고 ${warnMb}MB 넘음` : '')];
+  const tables = rows.filter((r) => r.part !== 'total').sort((a, b) => Number(b.bytes ?? 0) - Number(a.bytes ?? 0));
+  if (tables.length) lines.push('큰 표: ' + tables.map((r) => `${r.part} ${mbText(Number(r.bytes ?? 0))}`).join(' · '));
+  return lines;
+}

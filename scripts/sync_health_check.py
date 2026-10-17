@@ -34,6 +34,9 @@
 
 0027 뒤(개선 계획 v15 P2) — 운영 숫자 함수는 공개 키만으로는 거절한다. 감시 열쇠(OPS_WATCH_KEY)를 본문에 넣는다.
 
+DB 용량(0028 ops_db_size, 2026-10-17) — 무료 플랜은 500MB 를 넘으면 읽기 전용(쓰기가 모두 막힘)이라, DB_WARN_MB(기본
+400MB)를 넘으면 실패로 알린다. 0028 전이면 한 줄만 쓰고 실패로 만들지 않는다.
+
 사용:
     SUPABASE_URL=... SUPABASE_ANON_KEY=... python3 scripts/sync_health_check.py
     STALE_DAYS=8    지연 판정 기준(기본 8)
@@ -42,6 +45,7 @@
     BACKUP_REQUIRED_SINCE=YYYY-MM-DD   이 날부터 백업 기록이 없으면 실패
     ALERT_WEBHOOK   (선택) 설정하면 지연 시 JSON 을 POST 한다
     OPS_WATCH_KEY   (0027 뒤 필수) 감시 열쇠 — SQL `select ops_new_watch_key();` 가 한 번 보여 준 값
+    DB_LIMIT_MB=500 DB 용량 한도(무료 플랜) · DB_WARN_MB=400 이만큼 넘으면 실패
 """
 
 from __future__ import annotations
@@ -57,6 +61,9 @@ import urllib.request
 # 8 이상은 예정된 일요일이 통째로 빈 것이다. web/lib/sync.ts 의 isSyncStale 과 같은 기준.
 DEFAULT_STALE_DAYS = 8
 DEFAULT_BACKUP_DAYS = 8      # 백업도 일요일 1회 — 수집과 같은 이유로 8
+DEFAULT_DB_LIMIT_MB = 500    # Supabase 무료 플랜 DB 한도 — 넘으면 읽기 전용(쓰기 25006)
+DEFAULT_DB_WARN_MB = 400     # 80% — 넘으면 미리 알린다
+MB = 1048576
 DEFAULT_ERROR_LIMIT = 5      # 디자이너 한 명이 하루에 오류 화면을 다섯 번 보면 쓰기 어렵다
 TIMEOUT = 30
 
@@ -159,6 +166,53 @@ def fmt_csp(rows: list[dict]) -> list[str]:
     if not rows:
         return ["  어긋남 없음"]
     return [f"  {str(r.get('directive') or '?'):16s} {str(r.get('blocked') or '?'):40s} {int(r.get('n') or 0)}번" for r in rows]
+
+
+def mb_text(n: float) -> str:
+    """'4.3MB' · '52MB' — 10MB 아래만 소수 한 자리. 반올림을 정수로 해서 운영 숫자 화면(web/lib/ops-view mbText)과 같다."""
+    v = (n or 0) / MB
+    if v < 10:
+        t = int(v * 10 + 0.5)
+        return f"{t // 10}.{t % 10}MB"
+    return f"{int(v + 0.5)}MB"
+
+
+def fmt_db_size(rows: list[dict], limit_mb: int = DEFAULT_DB_LIMIT_MB,
+                warn_mb: int = DEFAULT_DB_WARN_MB) -> tuple[list[str], list[str]]:
+    """(출력 줄, 실패 줄). 0028 ops_db_size — 'total' 한 줄 + 큰 표들(바이트)."""
+    total = next((int(r.get("bytes") or 0) for r in rows if r.get("part") == "total"), None)
+    if total is None:
+        return ["  용량을 못 읽었다(전체 줄 없음)"], []
+    pct = int(total / (limit_mb * MB) * 100 + 0.5)
+    over = total >= warn_mb * MB
+    lines = [f"  전체 {mb_text(total)} / 무료 {limit_mb}MB ({pct}%)" + (f" · 경고 {warn_mb}MB 넘음" if over else "")]
+    tables = sorted((r for r in rows if r.get("part") != "total"), key=lambda r: -int(r.get("bytes") or 0))
+    if tables:
+        lines.append("  큰 표: " + " · ".join(f"{r.get('part')} {mb_text(int(r.get('bytes') or 0))}" for r in tables))
+    bad = [f"DB 용량 {mb_text(total)} — 무료 한도 {limit_mb}MB 의 {pct}%(경고 {warn_mb}MB)"] if over else []
+    return lines, bad
+
+
+def report_db_size(url: str, key: str) -> list[str]:
+    """DB 용량(0028) — 경고선을 넘으면 실패 줄을 돌려준다. 0028 전 · 조회 실패는 한 줄만(실패로 만들지 않는다)."""
+    limit = int(os.environ.get("DB_LIMIT_MB") or DEFAULT_DB_LIMIT_MB)
+    warn = int(os.environ.get("DB_WARN_MB") or DEFAULT_DB_WARN_MB)
+    try:
+        rows = fetch(url, key, "ops_db_size")
+    except urllib.error.HTTPError as exc:
+        hint = LOCKED if exc.code in (401, 403) else "0028_db_size.sql 을 적용했는지 확인하세요"
+        print(f"\nDB 용량 — 조회 실패 HTTP {exc.code} — {hint}")
+        return []
+    except Exception as exc:  # noqa: BLE001
+        print(f"\nDB 용량 — 조회 실패: {exc}")
+        return []
+    lines, bad = fmt_db_size(rows, limit, warn)
+    print(f"\nDB 용량 — 무료 한도 {limit}MB, {warn}MB 넘으면 알림")
+    print("\n".join(lines))
+    if bad:
+        print("X " + bad[0])
+        print("   큰 표부터 보세요 — playbook/OPERATIONS_APP.md §6 'DB 용량'")
+    return bad
 
 
 def report_csp(url: str, key: str) -> None:
@@ -275,9 +329,10 @@ def main() -> int:
 
     late = evaluate(rows, stale_days)
     ops_bad = check_ops(url, key)
+    size_bad = report_db_size(url, key)
     report_speed_usage(url, key)
     report_csp(url, key)
-    if not late and not ops_bad:
+    if not late and not ops_bad and not size_bad:
         print("\n정상 — 모두 기준 안입니다.")
         return 0
 
