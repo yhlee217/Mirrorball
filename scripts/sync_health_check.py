@@ -82,10 +82,20 @@ def evaluate(rows: list[dict], stale_days: float) -> list[dict]:
     return late
 
 
-def _fmt(r: dict) -> str:
+def _fmt(r: dict, stale_days: float = DEFAULT_STALE_DAYS) -> str:
+    """매장 한 줄. 성공 뒤에 시도가 있으면 '마지막 시도 … 실패', 밀렸는데 시도도 없으면 '그 뒤 시도 없음' —
+    맥에서 작업이 아예 시작되지 않았는지(꺼짐 · 잠자기 · 자동 실행 등록), 돌다 실패했는지를 가른다(2026-10-18 수집이
+    안 돌았을 때 감시 출력만으로는 둘을 구분할 수 없었다)."""
     d = r.get("days_since")
     days = "기록 없음" if d is None else f"{float(d):.1f}일 전"
-    return f"  {r.get('slug', '?'):12s} 마지막 성공 {str(r.get('last_ok') or '-')[:19]:19s} ({days})"
+    line = f"  {r.get('slug', '?'):12s} 마지막 성공 {str(r.get('last_ok') or '-')[:19]:19s} ({days})"
+    ok, tried = str(r.get("last_ok") or ""), str(r.get("last_attempt") or "")
+    if tried and tried > ok:
+        kst = _when(tried).astimezone(dt.timezone(dt.timedelta(hours=9)))
+        return line + f" · 마지막 시도 {kst.month}.{kst.day:02d} {kst:%H:%M}(KST) 실패"
+    if d is not None and float(d) >= stale_days:
+        return line + " · 그 뒤 시도 없음"
+    return line
 
 
 def evaluate_ops(rows: list[dict], now: dt.datetime, backup_days: float, error_limit: int,
@@ -325,7 +335,7 @@ def main() -> int:
 
     print(f"테넌트 {len(rows)}곳 · 지연 기준 {stale_days:g}일\n")
     for r in sorted(rows, key=lambda x: (x.get("days_since") is None, -(float(x.get("days_since") or 0)))):
-        print(_fmt(r))
+        print(_fmt(r, stale_days))
 
     late = evaluate(rows, stale_days)
     ops_bad = check_ops(url, key)
@@ -340,7 +350,10 @@ def main() -> int:
         print(f"\nX 갱신 지연 {len(late)}곳 — 맥 수집 작업을 확인해주세요.")
         print("   맥에서:  .venv/bin/python worker/sync_log.py")
         print("            launchctl list | grep mirrorball")
-        print("            tail -40 runs/collect.out.log")
+        print("            tail -40 ~/Library/Logs/Mirrorball/collect.out.log")
+        if any(not (str(r.get("last_attempt") or "") > str(r.get("last_ok") or "")) for r in late):
+            print("   '그 뒤 시도 없음' — 맥에서 작업이 시작되지 않았다(꺼짐 · 잠자기 · 자동 실행 등록). 맥을 켜고 수동 수집:")
+            print("            FORCE=1 bash worker/run_mac.sh   (백업도 따라 돈다)")
         webhook = os.environ.get("ALERT_WEBHOOK", "").strip()
         if webhook:
             notify(webhook, late, stale_days)
