@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { man, manRange, price } from '@/lib/format';
-import { BANDS, DOW_MON, type Cohort, type SvcRow, type weekHeat } from '@/lib/trends';
+import { BANDS, DOW_MON, MIN_HEAT_DAYS, type Cohort, type SvcRow, type weekHeat } from '@/lib/trends';
 import { MIN_WORKED, type Forecast } from '@/lib/forecast';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
@@ -206,14 +206,18 @@ const avg1 = (n: number) => (Math.round(n * 10) / 10).toFixed(1);
 /**
  * 바쁜 시간(D4) — 요일 × 시간대, 그 요일에 영업한 날 하루 평균 방문.
  * 휴가 간 주가 끼어도 그 요일이 한산한 요일로 꼽히지 않게 평균으로 본다(lib/trends weekHeat).
- * 정기 휴무 요일은 '휴무'로 따로 칠한다 — 방문이 없는 칸(테두리만)과 뜻이 다르다.
+ * 정기 휴무 요일은 '휴무'로 따로 칠한다 — 방문이 없는 칸(테두리만)과 뜻이 다르다. 그 요일에 따로 일한 날은 비교에서
+ * 빼고(전에는 이틀 일한 수요일이 이틀 평균으로 '가장 붐빔'에 꼽혔다 — 2026-10-21), 영업한 날이 몇 안 되는 요일(thin)도
+ * '가장 붐빔 · 한산'을 고를 때 견주지 않는다(lib/trends weekHeat).
  * 답(가장 붐비는 때 · 가장 한산한 요일)을 먼저 한 줄로, 가장 붐비는 칸에만 숫자, 나머지는 진하기·표로.
  */
 export function HeatCard({ heat, hasOff }: { heat: ReturnType<typeof weekHeat>; hasOff: boolean }) {
   let peak = { b: -1, d: -1, v: 0 };
-  heat.avg.forEach((row, b) => row.forEach((v, d) => { if (v > peak.v) peak = { b, d, v }; }));
+  const counted = (d: number) => !heat.off[d] && !heat.thin[d];
+  heat.avg.forEach((row, b) => row.forEach((v, d) => { if (counted(d) && v > peak.v) peak = { b, d, v }; }));
   const dayAvg = DOW_MON.map((_, d) => heat.avg.reduce((s, row) => s + row[d], 0));
-  const worked = DOW_MON.map((_, d) => d).filter((d) => heat.days[d] > 0);
+  const worked = DOW_MON.map((_, d) => d).filter((d) => heat.days[d] > 0 && counted(d));
+  const thinDays = DOW_MON.filter((_, d) => heat.thin[d]);
   const quiet = worked.length > 1 ? worked.reduce((a, b) => (dayAvg[b] < dayAvg[a] ? b : a)) : null;
   const offDays = DOW_MON.filter((_, d) => heat.off[d]);
   const empty = DOW_MON.filter((_, d) => !heat.off[d] && dayAvg[d] === 0);
@@ -226,14 +230,18 @@ export function HeatCard({ heat, hasOff }: { heat: ReturnType<typeof weekHeat>; 
             칸이 진할수록 그 요일 그 시간에 손님이 많았다는 뜻이에요 — 영업한 날 하루 평균 방문이고, 가장 붐비는 칸에만
             숫자를 적었어요(하루 평균 {avg1(peak.v)}회). 방문 {heat.total.toLocaleString()}회 기준
             {hasOff ? ' · 정기 휴무·휴가는 빼고 영업한 날로 나눴어요' : ''}
+            {heat.offWorked ? ` · 휴무 요일에 따로 일한 ${heat.offWorked}일(방문 ${heat.offVisits}회)은 뺐어요` : ''}
+            {thinDays.length ? ` · 영업한 날이 ${MIN_HEAT_DAYS}일이 안 되는 요일(${thinDays.join('·')})은 견주지 않았어요` : ''}
             {empty.length ? ` · 방문이 없는 요일 ${empty.join('·')}` : ''}
             {heat.noTime ? ` · 시각이 없는 ${heat.noTime.toLocaleString()}회는 뺐어요` : ''}.
             {' '}한산한 때로 예약을 옮겨드릴 수 있는 분이 있는지 살펴보세요.
           </Help>
-          <div className="coh-h">
-            <b>{DOW_MON[peak.d]} {BANDS[peak.b]}</b> 가장 붐빔
-            {quiet !== null ? <> · <b>{DOW_MON[quiet]}요일</b> 가장 한산</> : null}
-          </div>
+          {peak.d >= 0 ? (
+            <div className="coh-h">
+              <b>{DOW_MON[peak.d]} {BANDS[peak.b]}</b> 가장 붐빔
+              {quiet !== null ? <> · <b>{DOW_MON[quiet]}요일</b> 가장 한산</> : null}
+            </div>
+          ) : null}
           <div className="hm" role="img" aria-label="요일과 시간대별 하루 평균 방문. 아래 '표로 보기'에서 숫자로 볼 수 있어요.">
             <div />
             {DOW_MON.map((d) => <div className="hm-h" key={d}>{d}</div>)}

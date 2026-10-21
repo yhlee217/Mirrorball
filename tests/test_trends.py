@@ -133,13 +133,17 @@ def test_week_heat(ts):
     assert h["days"] == [26, 26, 26, 26, 26, 26, 27]
     assert h["avg"][2][5] == pytest.approx(2 / 26) and h["max"] == pytest.approx(2 / 26)
     assert h["off"] == [False] * 7
+    assert h["offWorked"] == 0 and h["offVisits"] == 0 and h["thin"] == [False] * 7
 
 
 def test_week_heat_with_off_days(ts):
-    """화요일 정기 휴무 · 휴가는 영업한 날에서 빠진다. 휴무로 정한 날이라도 방문이 있었으면 영업한 날."""
+    """화요일 정기 휴무 · 휴가는 영업한 날에서 빠진다. 정기 휴무 요일에 따로 일한 날은 비교에서 빼고 따로 센다
+    (2026-10-21 — 전에는 그날만 '영업한 날'로 세어, 예외로 이틀 일한 수요일이 '가장 붐빔'에 꼽혔다)."""
     h = ts["heatOff"]
-    # 화요일: 26일 모두 휴무지만 10.6(E, 시각 없음)에 방문이 있었다 → 그날 하루만 영업한 날
-    assert h["days"][1] == 1 and h["off"][1] is False
+    # 화요일: 정기 휴무 — 10.6(E, 시각 없음)에 방문이 있었어도 휴무로 두고, 그 하루는 따로 센다
+    assert h["days"][1] == 0 and h["off"][1] is True
+    assert h["offWorked"] == 1 and h["offVisits"] == 1 and h["noTime"] == 0
+    assert h["thin"] == [False] * 7
     # 토요일: 26일 중 휴가 2일(7.4·7.11)과 10.3 → 23일. 평균의 분모가 줄어 같은 2회도 더 붐빈다
     assert h["days"][5] == 23
     assert h["avg"][2][5] == pytest.approx(2 / 23)
@@ -166,3 +170,55 @@ def test_active_trend(ts):
     """그날까지 90일 안에 방문한 실고객 — 달 말일마다, 마지막은 수집일. 워크인 집계는 빠진다."""
     assert [p["label"] for p in ts["active"]] == ["5월", "6월", "7월", "8월", "9월", "10.11"]
     assert [p["count"] for p in ts["active"]] == [1, 2, 2, 0, 1, 1]
+
+
+def _weeks(as_of: str, off_weekdays: tuple[int, ...], per_day: int, extra: dict[str, int], hour: str = "14:30"):
+    """6개월 방문 — 쉬는 요일 빼고 날마다 per_day 명(같은 시각), extra = {날짜: 그날 따로 온 손님 수}."""
+    import datetime as dt
+    end = dt.date.fromisoformat(as_of)
+    d, n, tx = end - dt.timedelta(days=182), 0, []
+    while d <= end:
+        k = extra.get(d.isoformat(), 0 if d.weekday() in off_weekdays else per_day)
+        for _ in range(k):
+            n += 1
+            tx.append({"customer_id": f"C{n}", "date": d.isoformat(), "time": hour, "service": "커트", "kind": "service"})
+        d += dt.timedelta(days=1)
+    return tx
+
+
+def test_off_weekday_with_a_few_worked_days_is_not_the_busiest():
+    """hayewoni(화 · 수 휴무) 통계에 '수요일 오후 가장 붐빔'이 떴다(2026-10-21). 예외로 일한 수요일 이틀(각 6명)이
+    이틀 평균 6명으로 평소 요일(3명)을 넘었다. 정기 휴무 요일은 비교에서 빠지고, 뺀 날 · 방문은 따로 센다."""
+    as_of = "2026-10-18"
+    tx = _weeks(as_of, (1, 2), 3, {"2026-09-23": 6, "2026-09-30": 6})
+    import datetime as dt
+    sats = [dt.date(2026, 4, 25) + dt.timedelta(weeks=i) for i in range(26)]
+    rest_sats = [d.isoformat() for d in sats if d.isoformat() not in ("2026-10-03", "2026-10-10", "2026-10-17")]
+    long_rest = {"off_weekdays": [1, 2], "off_dates": [{"from": d, "to": d} for d in rest_sats]}   # 토요일만 휴가
+    thin_extra = {d: 0 for d in rest_sats} | {"2026-10-03": 9, "2026-10-10": 9, "2026-10-17": 9}
+    got = run_ts(["lib/trends.ts"], """
+const T = require('./trends.js');
+const W = require('./week.js');
+const peak = (h) => {
+  let p = { b: -1, d: -1, v: 0 };
+  h.avg.forEach((row, b) => row.forEach((v, d) => { if (!h.off[d] && !h.thin[d] && v > p.v) p = { b, d, v }; }));
+  return p.d < 0 ? null : T.DOW_MON[p.d] + ' ' + T.BANDS[p.b];
+};
+const h = T.weekHeat(T.toVisits(D.tx), W.addDays(D.asOf, -182), D.asOf, D.off);
+const t = T.weekHeat(T.toVisits(D.thinTx), W.addDays(D.asOf, -182), D.asOf, D.rest);
+out({ h: { days: h.days, off: h.off, offWorked: h.offWorked, offVisits: h.offVisits, total: h.total, max: h.max, peak: peak(h) },
+      t: { days: t.days, thin: t.thin, max: t.max, peak: peak(t) } });
+""", {"tx": tx, "asOf": as_of, "off": {"off_weekdays": [1, 2], "off_dates": []},
+      "thinTx": _weeks(as_of, (1, 2), 3, thin_extra), "rest": long_rest})
+    if got is None:
+        pytest.skip("node/npx 또는 web/node_modules 가 없다 — TS 실행 생략")
+    h = got["h"]
+    assert h["off"] == [False, True, True, False, False, False, False] and h["days"][1:3] == [0, 0]
+    assert h["offWorked"] == 2 and h["offVisits"] == 12 and h["total"] == 131 * 3   # 화 · 수 뺀 131일 × 3명
+    assert h["peak"] is not None and not h["peak"].startswith(("화", "수"))
+    assert h["max"] == pytest.approx(3.0)
+    # 토요일마다 휴가를 내 영업한 토요일이 사흘(각 9명)뿐 — 사흘 평균 9명이 '가장 붐빔'에 꼽히지 않는다(칸은 칠한다)
+    t = got["t"]
+    assert t["days"][5] == 3 and t["thin"][5] is True and t["thin"].count(True) == 1
+    assert t["peak"] is not None and not t["peak"].startswith("토") and t["max"] == pytest.approx(3.0)
+

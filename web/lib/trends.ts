@@ -133,10 +133,17 @@ export function bandOf(time: string | null): number | null {
   return h < 12 ? 0 : h < 14 ? 1 : h < 16 ? 2 : h < 18 ? 3 : 4;
 }
 
+/** 영업한 날이 이만큼 안 되는 요일은 '가장 붐빔 · 한산'을 고를 때 견주지 않는다 — 며칠의 평균은 한 날에 크게 흔들린다. */
+export const MIN_HEAT_DAYS = 4;
+
 /**
  * 언제 바쁘고 언제 한가하지(D4) — 요일 × 시간대. grid[시간대][요일(월=0)] 은 방문 수,
  * avg 는 그 요일에 영업한 날 하루 평균(days = 요일별 영업한 날 수). 휴가 간 요일이 한산한 요일로
- * 꼽히지 않게 평균으로 견준다. 정기 휴무로 영업한 날이 하나도 없는 요일은 off.
+ * 꼽히지 않게 평균으로 견준다.
+ * 정기 휴무 요일(off_weekdays)은 따로 나와 일한 날이 있어도 휴무(off)로 두고 칸 · 평균에서 뺀다 — 전에는 그날만
+ * '영업한 날'로 세어, 예외로 이틀 일한 수요일이 이틀 평균으로 '가장 붐빔'에 꼽혔다(2026-10-21 hayewoni, 화 · 수 휴무).
+ * 뺀 날 · 방문은 offWorked · offVisits 로 따로 센다. 영업한 날이 MIN_HEAT_DAYS 보다 적은 요일(긴 휴가 등)은 thin —
+ * 칸은 칠하되 '가장 붐빔 · 한산' 비교와 진하기 기준(max)에서 뺀다.
  * 시각은 그날 첫 시술 시각. 시각이 비어 있는 방문은 칸에 넣지 않고 noTime 으로 따로 센다
  * (2026-10-12 실측: 시각 채움 95~99%).
  */
@@ -145,32 +152,49 @@ export function weekHeat(
   since: string,
   asOf: string,
   off: OffDays = NO_OFF,
-): { grid: number[][]; avg: number[][]; days: number[]; off: boolean[]; max: number; total: number; noTime: number } {
+): {
+  grid: number[][]; avg: number[][]; days: number[]; off: boolean[]; thin: boolean[]; max: number; total: number;
+  noTime: number; offWorked: number; offVisits: number;
+} {
+  const isOffW = DOW_MON.map((_, d) => off.off_weekdays.includes(d));
   const grid = BANDS.map(() => DOW_MON.map(() => 0));
   const visited = new Set<string>();
+  const offDates = new Set<string>();
   let total = 0;
   let noTime = 0;
+  let offVisits = 0;
   for (const v of visits) {
     if (v.date < since || v.date > asOf) continue;
+    const d = dowMon(v.date);
+    if (isOffW[d]) {
+      offVisits++;
+      offDates.add(v.date);
+      continue;
+    }
     visited.add(v.date);
     const b = bandOf(v.time);
     if (b === null) {
       noTime++;
       continue;
     }
-    grid[b][dowMon(v.date)]++;
+    grid[b][d]++;
     total++;
   }
-  const days = workedByWeekday(since, asOf, off, visited);
+  const days = workedByWeekday(since, asOf, off, visited).map((n, d) => (isOffW[d] ? 0 : n));
   const avg = grid.map((row) => row.map((n, d) => (days[d] ? n / days[d] : 0)));
+  const thin = days.map((n, d) => !isOffW[d] && n > 0 && n < MIN_HEAT_DAYS);
+  const counted = (d: number) => !isOffW[d] && !thin[d];
   return {
     grid,
     avg,
     days,
-    off: days.map((n, d) => n === 0 && off.off_weekdays.includes(d)),
-    max: Math.max(0, ...avg.flat()),
+    off: isOffW,
+    thin,
+    max: Math.max(0, ...avg.flatMap((row) => row.filter((_, d) => counted(d)))),
     total,
     noTime,
+    offWorked: offDates.size,
+    offVisits,
   };
 }
 

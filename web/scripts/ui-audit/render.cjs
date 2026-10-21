@@ -190,7 +190,8 @@ out.stats = screen(bar('통계', { sync: true }),
       .map(([month, total, back, open]) => ({ month, label: `${Number(month.slice(5))}월`, total, back, open })),
     medianDays: 38, repeat: 512, total: 1136, vacation: true,
   })
-  + r(S.HeatCard, { heat: { grid, avg, days, off: days.map((n, d) => n === 0 && d === 1), max: Math.max(...avg.flat()), total: 400, noTime: 12 }, hasOff: true })
+  + r(S.HeatCard, { heat: { grid, avg, days, off: days.map((n, d) => n === 0 && d === 1), thin: days.map(() => false),
+      max: Math.max(...avg.flat()), total: 400, noTime: 12, offWorked: 0, offVisits: 0 }, hasOff: true })
   + r(S.MonthCard, {
     months: [['2026-05', '5월', 19800000], ['2026-06', '6월', 21200000], ['2026-07', '7월', 15400000], ['2026-08', '8월', 20100000], ['2026-09', '9월', 20500000], ['2026-10', '10월', 9820000]]
       .map(([key, label, rev], i) => ({ key, label, rev, partial: i === 5 })),
