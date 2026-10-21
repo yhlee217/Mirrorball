@@ -352,7 +352,8 @@ def main() -> int:
         print("            launchctl list | grep mirrorball")
         print("            tail -40 ~/Library/Logs/Mirrorball/collect.out.log")
         if any(not (str(r.get("last_attempt") or "") > str(r.get("last_ok") or "")) for r in late):
-            print("   '그 뒤 시도 없음' — 맥에서 작업이 시작되지 않았다(꺼짐 · 잠자기 · 자동 실행 등록). 맥을 켜고 수동 수집:")
+            print("   '그 뒤 시도 없음' — 맥에서 작업이 시작되지 않았다(꺼짐 · 잠자기 · 자동 실행 등록). 맥을 켜고 로그인하면")
+            print("   밀린 수집이 한 번 돈다(com.mirrorball.catchup — 등록 안 됐으면 install_schedule.sh collect). 바로 돌리려면:")
             print("            FORCE=1 bash worker/run_mac.sh   (백업도 따라 돈다)")
         webhook = os.environ.get("ALERT_WEBHOOK", "").strip()
         if webhook:

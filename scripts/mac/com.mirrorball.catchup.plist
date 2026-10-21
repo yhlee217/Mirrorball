@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Mirrorball 밀린 수집 (macOS launchd) — 로그인할 때 한 번 worker/run_catchup.sh → catchup.py 를 부른다(2026-10-21).
+  일요일 14:00 에 맥이 꺼져 있으면 launchd 는 그 주 수집(com.mirrorball.collect)을 건너뛴다(잠자기면 깨어난 뒤 돈다).
+  catchup.py 가 마지막 수집 성공이 7일 넘었을 때만 평소 수집(run_mac.sh)을 한 번 돌린다 — '주 1회'는 그대로.
+
+  ⚠ 경로를 직접 적지 말 것. {PROJECT}/{LOGS} 는 install_schedule.sh 가 채운다(collect 와 함께 깔린다).
+     로그는 일요일 수집과 같은 파일(collect.out.log)에 쌓인다 — 한 곳만 보면 된다.
+
+  설치:  bash scripts/mac/install_schedule.sh collect
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.mirrorball.catchup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>{PROJECT}/worker/run_catchup.sh</string>
+  </array>
+  <key>WorkingDirectory</key><string>{PROJECT}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>{LOGS}/collect.out.log</string>
+  <key>StandardErrorPath</key><string>{LOGS}/collect.err.log</string>
+</dict>
+</plist>

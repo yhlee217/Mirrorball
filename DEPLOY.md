@@ -42,7 +42,8 @@ CHECK=1 .venv/bin/python worker/summarize_memos.py
 뜬다 — 저장소의 Stop hook(`.claude/settings.json`)이 끼어든 것이다. 메모 정리·노출 측정·자가치유는
 모두 저장소 밖 전용 폴더에서 `claude` 를 부른다(`worker/claude_cli.py` 의 `cli_cwd`).
 
-**3. 수집 주기 등록·갱신** — plist 가 바뀐 배포일 때만. 경로는 자리표로 채워진다(아래 ⚠).
+**3. 수집 주기 등록·갱신** — plist 가 바뀐 배포일 때만. 경로는 자리표로 채워진다(아래 ⚠). 일요일 수집과 함께
+'밀린 수집'(로그인할 때 — 일요일에 맥이 꺼져 있었으면 한 번, `worker/catchup.py`)도 깔린다(2026-10-21 추가 — 한 번 다시 등록).
 
 ```bash
 bash scripts/mac/install_schedule.sh collect

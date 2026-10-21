@@ -10,7 +10,7 @@
 |---|---|---|
 | 앱 | `web/` → Cloudflare Pages | 브랜치 `claude/charming-planck-hmgazi` 에 푸시되면 몇 분 뒤 배포 |
 | 데이터 | Supabase | 손님 이름 · 번호는 매장 키로 암호화(`pii_enc`) — 화면만 푼다 |
-| 수집 | 매장 맥(국내 IP), 매주 일요일 14시 | HandSOS → Supabase. 약관 리스크로 주 1회(`LAUNCH.md`) |
+| 수집 | 매장 맥(국내 IP), 매주 일요일 14시 | HandSOS → Supabase. 약관 리스크로 주 1회(`LAUNCH.md`). 그 시각 맥이 꺼져 있었으면 다음에 켜고 로그인할 때 밀린 수집이 한 번 돈다(`worker/catchup.py`) |
 | 백업 | 같은 맥, 수집 뒤 | 앱에만 있는 데이터(메모 · 노쇼 표시 · 연락 기록 등)를 암호화해 주 1회 |
 | 매일 감시 | GitHub Actions `sync-health`, 매일 10시쯤(GitHub 사정으로 늦을 수 있다) | 수집 지연 · 백업 · 화면 오류 · DB 용량(400MB 넘음)은 실패(메일), 화면 속도 · 매장별 사용은 출력만 |
 | 자동 검증 | GitHub Actions `test`, 푸시마다 | 타입 검사 + 테스트. 빨갛게 끝나면 메일 |
@@ -136,6 +136,15 @@ cd ~/Dev/Mirrorball && .venv/bin/python worker/usage_probe.py
 ```
 
 - 수집은 launchd(`com.mirrorball.collect`)가 일요일에 돌린다 — 손댈 것 없음. 확인은 `DEPLOY.md` 의 `launchctl list | grep mirrorball`.
+- **밀린 수집**(2026-10-21) — 일요일 14시에 맥이 꺼져 있으면 그 주 수집이 빠진다(잠자기는 깨어난 뒤 돈다). 그래서 로그인할 때
+  `com.mirrorball.catchup` 이 마지막 성공을 보고 7일 넘었으면 평소 수집(백업까지)을 한 번 돌린다 — 밀린 주만이라 주 1회 그대로,
+  실패하면 하루 한 번까지만. 코드를 받은 뒤 **한 번** 다시 등록한다(일요일 수집과 함께 깔린다):
+
+```bash
+cd ~/Dev/Mirrorball && bash scripts/mac/install_schedule.sh collect
+```
+
+  등록하는 순간에도 한 번 판단한다 — 로그(`~/Library/Logs/Mirrorball/collect.out.log`)에 `[catchup]` 줄이 보이면 걸린 것이다.
 - **열쇠 한 부**(한 번, v15) — `web/.env.local` 의 `MIRRORBALL_KEK` 값을 비밀번호 관리자(아이폰 '암호' 앱 · 1Password 등)에
   한 부 둔다. 채팅 · 문서 · 메신저엔 붙여 넣지 않는다. 그다음 맞게 적었는지 — 매장마다 '매장 열쇠 풀림', 비밀번호 관리자
   값을 붙여 넣으면 '같아요'(값은 화면에 안 보이고 어디에도 찍히지 않는다):
@@ -150,7 +159,7 @@ cd ~/Dev/Mirrorball && .venv/bin/python worker/kek_check.py
 
 | 증상 | 먼저 볼 곳 | 할 일 |
 |---|---|---|
-| 감시 메일 — 수집 지연(8일 넘음) | 맥이 켜져 있나 · 잠자기 | 맥을 깨우고 수동 수집: `cd ~/Dev/Mirrorball && FORCE=1 bash worker/run_mac.sh` |
+| 감시 메일 — 수집 지연(8일 넘음) | 감시 기록의 '그 뒤 시도 없음'(맥이 꺼져 있었다) · '마지막 시도 … 실패' | 꺼져 있었으면 맥을 켜고 로그인하면 밀린 수집이 돈다(§5 등록 뒤). 바로 돌리려면 수동 수집: `cd ~/Dev/Mirrorball && FORCE=1 bash worker/run_mac.sh` |
 | 감시 메일 — 백업 없음 · 늦음 | 맥의 코드가 최신인가(§5 코드 받기) | 코드를 받고 다음 일요일을 기다리거나, 수동 수집(백업이 따라 돈다) |
 | 감시 메일 — 화면 오류가 많음 | 운영 숫자 · 디자이너님께 어느 화면인지 | 화면 이름(경로)을 알려 주시면 고친다 — 오류 기록엔 손님 정보가 없다 |
 | 자동 검증(`test`) 메일 — 빨강 | GitHub → Actions → test | 그대로 알려 주시면 고친다(배포된 앱은 그 전 상태로 돈다) |

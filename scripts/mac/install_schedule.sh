@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # macOS 스케줄 등록기 — plist 의 {PROJECT}/{LOGS}/{SLUG} 를 실제 값으로 채워 설치·로드.
 #   scripts/mac/install_schedule.sh              # collect(주 1회) + expose(주 1회)
-#   scripts/mac/install_schedule.sh collect      # v2 수집만 — 평소 이것
+#   scripts/mac/install_schedule.sh collect      # v2 수집(일 14:00) + 밀린 수집(로그인할 때) — 평소 이것
+#   scripts/mac/install_schedule.sh catchup      # 밀린 수집만(맥을 켤 때 — 마지막 성공이 7일 넘었으면 한 번)
 #   scripts/mac/install_schedule.sh expose hayewoni
 #   scripts/mac/install_schedule.sh handsos      # ⚠ v1 레거시(매일 03:10) — 아래 주의
-#   scripts/mac/install_schedule.sh uninstall    # collect + expose 해제
+#   scripts/mac/install_schedule.sh uninstall    # collect + catchup + expose 해제
 #
 # ⚠ handsos(v1, 매일 03:10)는 'all' 에서 뺐다. 수집은 2026-08 부터 주 1회(collect)로
 #   낮춘 상태이고, 레거시가 같이 깔리면 실제 접속이 주 7회가 되어 그 결정이 무의미해진다.
@@ -43,17 +44,21 @@ _uninstall() {
 }
 
 case "${1:-all}" in
-  collect) _install com.mirrorball.collect "$ROOT/scripts/mac/com.mirrorball.collect.plist" ;;
+  collect)
+    _install com.mirrorball.collect "$ROOT/scripts/mac/com.mirrorball.collect.plist"
+    _install com.mirrorball.catchup "$ROOT/scripts/mac/com.mirrorball.catchup.plist" ;;
+  catchup) _install com.mirrorball.catchup "$ROOT/scripts/mac/com.mirrorball.catchup.plist" ;;
   expose)  _install com.mirrorball.expose  "$ROOT/scripts/mac/com.mirrorball.expose.plist" ;;
   handsos)
     echo "⚠ v1 레거시(매일 03:10)를 설치합니다. 지금 운영 기준은 주 1회(collect)입니다."
     _install com.mirrorball.handsos "$ROOT/scripts/mac/com.mirrorball.handsos.plist" ;;
   all)
     _install com.mirrorball.collect "$ROOT/scripts/mac/com.mirrorball.collect.plist"
+    _install com.mirrorball.catchup "$ROOT/scripts/mac/com.mirrorball.catchup.plist"
     _install com.mirrorball.expose  "$ROOT/scripts/mac/com.mirrorball.expose.plist" ;;
   uninstall)
-    _uninstall com.mirrorball.collect; _uninstall com.mirrorball.expose ;;
-  *) echo "사용: install_schedule.sh [all|collect|expose|handsos|uninstall] [slug]"; exit 2 ;;
+    _uninstall com.mirrorball.collect; _uninstall com.mirrorball.catchup; _uninstall com.mirrorball.expose ;;
+  *) echo "사용: install_schedule.sh [all|collect|catchup|expose|handsos|uninstall] [slug]"; exit 2 ;;
 esac
 
 echo
@@ -61,4 +66,4 @@ echo "확인:  launchctl list | grep mirrorball        # 2번째 칸이 종료�
 echo "       launchctl print gui/\$(id -u)/com.mirrorball.collect | grep 'last exit code'"
 echo "즉시 1회 실행:  launchctl start com.mirrorball.collect"
 echo "로그:  $LOGS/collect.out.log  ·  $ROOT/runs/memoai.log"
-echo "※ Mac 이 그 시각 깨어 있어야 함(잠자기면 깨어난 뒤 밀린 작업 실행). 완전 종료면 실행 안 됨."
+echo "※ 그 시각 잠자기면 깨어난 뒤 밀린 수집이 돈다. 완전 종료였으면 다음 로그인 때 밀린 수집(catchup)이 돈다."

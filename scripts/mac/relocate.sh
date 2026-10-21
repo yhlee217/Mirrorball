@@ -34,7 +34,7 @@ SRC="${MB_SRC:?}"
 DST="${1:-$HOME/Dev/Mirrorball}"
 DST="${DST/#\~/$HOME}"
 LOGS="$HOME/Library/Logs/Mirrorball"
-AGENTS="com.mirrorball.collect com.mirrorball.expose com.mirrorball.handsos"
+AGENTS="com.mirrorball.collect com.mirrorball.catchup com.mirrorball.expose com.mirrorball.handsos"
 
 say() { echo "[$(date '+%H:%M:%S')] $*"; }
 die() { echo "X $*" >&2; exit 1; }
