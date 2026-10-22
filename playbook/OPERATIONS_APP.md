@@ -137,8 +137,9 @@ cd ~/Dev/Mirrorball && .venv/bin/python worker/usage_probe.py
 
 - 수집은 launchd(`com.mirrorball.collect`)가 일요일에 돌린다 — 손댈 것 없음. 확인은 `DEPLOY.md` 의 `launchctl list | grep mirrorball`.
 - **밀린 수집**(2026-10-21) — 일요일 14시에 맥이 꺼져 있으면 그 주 수집이 빠진다(잠자기는 깨어난 뒤 돈다). 그래서 로그인할 때
-  `com.mirrorball.catchup` 이 마지막 성공을 보고 7일 넘었으면 평소 수집(백업까지)을 한 번 돌린다 — 밀린 주만이라 주 1회 그대로,
-  실패하면 하루 한 번까지만. 코드를 받은 뒤 **한 번** 다시 등록한다(일요일 수집과 함께 깔린다):
+  `com.mirrorball.catchup` 이 마지막 성공을 보고 지난 일요일 14시 뒤로 성공이 없으면 평소 수집(백업까지)을 한 번 돌린다 — 밀린
+  주만이라 주 1회 그대로, 실패하면 하루 한 번까지만, 일요일 수집 2시간 전부터는 그쪽에 맡긴다(10.22 — 주중에 수동 수집을 한
+  다음 주도 놓치지 않게 '7일 넘었나'에서 바꿈). 코드를 받은 뒤 **한 번** 다시 등록한다(일요일 수집과 함께 깔린다):
 
 ```bash
 cd ~/Dev/Mirrorball && bash scripts/mac/install_schedule.sh collect

@@ -2,7 +2,7 @@
 # macOS 스케줄 등록기 — plist 의 {PROJECT}/{LOGS}/{SLUG} 를 실제 값으로 채워 설치·로드.
 #   scripts/mac/install_schedule.sh              # collect(주 1회) + expose(주 1회)
 #   scripts/mac/install_schedule.sh collect      # v2 수집(일 14:00) + 밀린 수집(로그인할 때) — 평소 이것
-#   scripts/mac/install_schedule.sh catchup      # 밀린 수집만(맥을 켤 때 — 마지막 성공이 7일 넘었으면 한 번)
+#   scripts/mac/install_schedule.sh catchup      # 밀린 수집만(맥을 켤 때 — 지난 일요일 수집을 놓쳤으면 한 번)
 #   scripts/mac/install_schedule.sh expose hayewoni
 #   scripts/mac/install_schedule.sh handsos      # ⚠ v1 레거시(매일 03:10) — 아래 주의
 #   scripts/mac/install_schedule.sh uninstall    # collect + catchup + expose 해제
