@@ -53,7 +53,7 @@ def test_report_reads_like_a_price_list_without_customers():
     assert ("  여자컷(부원장) — 10건 · 보통 33,000원(70%) · 중간 33,000원 · 범위 30,000~33,000원 · 최근 6개월 33,000원"
             " · 마지막 26.10.21 · 0원 1건") in out
     assert "뿌리펌 — 8건 · 보통 150,000원(62%)" in out and "최근 6개월 165,000원 ← 바뀜" in out
-    assert "최근 6개월에 보통 금액이 바뀐 메뉴: 뿌리펌" in out
+    assert "최근 6개월에 보통 금액이 바뀐 것: 뿌리펌" in out
     for banned in ("customer", "선불충전", "제품 판매"):
         assert banned not in out, banned
 
@@ -63,3 +63,36 @@ def test_ties_pick_the_list_price_and_main_reads_only_menu_columns():
     src = (ROOT / "worker" / "price_probe.py").read_text(encoding="utf-8")
     assert 'supa.select_all("transactions", t["id"], "service,amount_won,date,kind")' in src
     assert "customer" not in src.split("def main", 1)[1]
+
+
+COMBO_ROWS = ROWS + (
+    [tx("남자컷(부원장)", 25000, "2026-10-10")] * 4
+    + [tx("여자컷(원장)", 40000, "2026-10-11")]                          # 같은 시술 · 다른 메뉴(원장)
+    + [tx("여자컷(부원장)+뿌리펌", 175000, "2026-10-12")] * 2              # 함께 받음 — 금액이 합
+    + [tx("여자컷(부원장) + 매직셋팅", 210000, "2026-10-13")]
+    + [tx("드라이", 20000, "2026-10-14")]                                # 분류 없음 — 기타
+)
+
+
+def test_by_treatment_groups_single_payments_and_keeps_combos_apart():
+    singles, combos = pp.by_treatment(COMBO_ROWS, TODAY)
+    assert [m["name"] for m in singles] == ["여자커트", "뿌리펌", "남자커트", "기타"]
+    women = singles[0]
+    assert (women["n"], women["common"]) == (11, 33000)                   # 부원장 10 + 원장 1
+    assert women["menus"] == [("여자컷(부원장)", 10), ("여자컷(원장)", 1)]
+    assert (singles[2]["n"], singles[2]["common"]) == (4, 25000)
+    assert [(m["name"], m["n"], m["common"]) for m in combos] == [("여자커트 + 뿌리펌", 2, 175000), ("여자커트 + 펌", 1, 210000)]
+
+
+def test_report_shows_treatments_first_and_menus_only_when_asked():
+    menus, total = pp.summarize(COMBO_ROWS, TODAY)
+    singles, combos = pp.by_treatment(COMBO_ROWS, TODAY)
+    out = pp.report("hayewoni", menus, total, singles, combos, menu_detail=False)
+    text = "\n".join(out)
+    assert "시술별 — 한 가지만 받은 결제" in text and "함께 받은 시술 — 'A+B' 결제는 금액이 합이라 따로" in text
+    assert "  여자커트 — 11건 · 보통 33,000원(64%)" in text                       # 7/11
+    assert "      메뉴: 여자컷(부원장) 10건 · 여자컷(원장) 1건" in text
+    assert "  여자커트 + 뿌리펌 — 2건 · 보통 175,000원(100%)" in text
+    assert "메뉴 이름별" not in text                                      # MENU=1 일 때만
+    assert "메뉴 이름별 — HandSOS 메뉴 그대로" in "\n".join(pp.report("hayewoni", menus, total, singles, combos))
+    assert text.index("시술별 —") < text.index("함께 받은 시술")
