@@ -12,3 +12,13 @@ export async function canSeeOps(supabase: ServerClient, opCookie: boolean): Prom
   if (error) return opCookie;
   return data === true;
 }
+
+/**
+ * 운영자 계정인가 — 기록(화면 속도 · 챙길 고객 펼침)의 '운영자 폰' 칸을 계정으로도 채운다(2026-10-26).
+ * 폰 표시(?op=1)는 그 브라우저에만 남는데, 아이폰 홈 화면 앱은 사파리와 저장을 따로 써서 표시가 없었다 — 운영자가
+ * 앱으로 연 화면이 디자이너 사용으로 섞였다. 0027 전(함수 없음)엔 false — 예전처럼 폰 표시만.
+ */
+export async function isOpsReader(supabase: ServerClient): Promise<boolean> {
+  const { data, error } = await supabase.rpc('ops_is_reader');
+  return !error && data === true;
+}

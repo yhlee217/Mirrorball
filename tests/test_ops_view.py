@@ -74,3 +74,16 @@ def test_ops_screen_opens_only_for_the_operator():
     assert "setOpCookie(q === '1')" in mark
     timer = (WEB / "components" / "screen-timer.tsx").read_text(encoding="utf-8")
     assert "if (isOp() && !document.cookie.includes('mb-op=1')) setOpCookie(true);" in timer   # 쿠키 전에 표시한 폰
+
+
+def test_operator_account_counts_as_operator_phone():
+    """운영자 계정이 연 화면 · 펼침은 폰 표시가 없어도 운영자 것으로(2026-10-26) — 아이폰 홈 화면 앱은 사파리와 저장을
+    따로 써서 ?op=1 표시가 없었고, 운영자가 앱으로 본 화면이 디자이너 사용 · 챙길 고객 펼침에 섞였다."""
+    gate = (WEB / "lib" / "ops-gate.ts").read_text(encoding="utf-8")
+    body = gate[gate.index("export async function isOpsReader"):]
+    assert "supabase.rpc('ops_is_reader')" in body and "return !error && data === true;" in body   # 0027 전엔 false
+    for route in ("client-timing", "care-event"):
+        src = (WEB / "app" / "api" / route / "route.ts").read_text(encoding="utf-8")
+        line = "if (!detail.op && (await isOpsReader(supabase))) detail.op = true;"
+        assert line in src, route
+        assert src.index("if (!user)") < src.index(line) < src.index(".insert("), route        # 로그인 확인 뒤 · 남기기 전

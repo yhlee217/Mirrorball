@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase/server';
 import { getTenantId } from '@/lib/tenant';
+import { isOpsReader } from '@/lib/ops-gate';
 import { cleanCare } from '@/lib/ops';
 
 /**
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
 
   const detail = cleanCare(await request.json().catch(() => null));
   if (!detail) return NextResponse.json({ ok: false }, { status: 400 });
+  // 운영자 계정이면 폰 표시가 없어도(홈 화면 앱) 운영자 것으로 — 디자이너 사용 수에 섞이지 않게(lib/ops-gate)
+  if (!detail.op && (await isOpsReader(supabase))) detail.op = true;
   const { error } = await supabase.from('ops_events').insert({ tenant_id: tenantId, kind: 'care', detail });
   return NextResponse.json({ ok: !error });
 }
