@@ -8,9 +8,11 @@
  *   Permissions      — 카메라 · 마이크 · 위치 · 결제 · USB 를 쓰지 않는다(공유 · 클립보드는 그대로).
  *   HSTS             — 늘 https 로.
  *
- * 콘텐츠 보안 정책(CSP) 전체는 '보고만'(Report-Only) — 막지 않고, 어긋나면 운영 기록에 남긴다(api/csp-report,
- * components/csp-watch, 0026). 한 주 어긋남이 없으면 막기로 바꾼다. 'unsafe-inline' 은 Next 가 화면을 여는 인라인
- * 스크립트 때문 — Next 14 의 nonce 방식은 알려진 XSS 가 있어 쓰지 않는다(GHSA-ffhc-5mcf-pf4q).
+ * 콘텐츠 보안 정책(CSP)은 막는다(개선 계획 v16 P3) — 한 주 '보고만'(Report-Only, v14 P0)으로 실제 폰의 모든 화면을
+ * 돌려 본 결과 어긋남 0(10.19~26). 보고는 그대로라 막힌 것이 생기면 운영 기록에 남고 매일 감시 · /ops 에 뜬다
+ * (api/csp-report, components/csp-watch, 0026). 'unsafe-inline' 은 Next 가 화면을 여는 인라인 스크립트 때문 — nonce
+ * 방식은 알려진 XSS 가 있어 쓰지 않는다(GHSA-ffhc-5mcf-pf4q). 'unsafe-eval' 은 개발 서버(next dev)에만 — 바로 고침이
+ * eval 을 쓴다(Next 문서). 문제가 생기면 이 커밋을 되돌리면 된다(SQL 없음).
  */
 
 /** Supabase 주소의 출처(https://xxx.supabase.co) — 없거나 이상하면 *.supabase.co. */
@@ -22,11 +24,11 @@ export function supabaseOrigin(url) {
   }
 }
 
-export function cspReportOnly(supabaseUrl) {
+export function contentSecurityPolicy(supabaseUrl, dev = process.env.NODE_ENV === 'development') {
   const sb = supabaseOrigin(supabaseUrl);
   return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob: ${sb}`,
     "font-src 'self' data:",
@@ -43,8 +45,7 @@ export function cspReportOnly(supabaseUrl) {
 
 export function securityHeaders(supabaseUrl) {
   return [
-    { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" }, // 이것만은 바로 막는다 — 화면 동작과 무관
-    { key: 'Content-Security-Policy-Report-Only', value: cspReportOnly(supabaseUrl) },
+    { key: 'Content-Security-Policy', value: contentSecurityPolicy(supabaseUrl) },
     { key: 'X-Frame-Options', value: 'DENY' },
     { key: 'X-Content-Type-Options', value: 'nosniff' },
     { key: 'Referrer-Policy', value: 'same-origin' },

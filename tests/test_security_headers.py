@@ -1,7 +1,8 @@
-"""보안 응답 헤더 · CSP '보고만'(개선 계획 v14 P0).
+"""보안 응답 헤더 · CSP(개선 계획 v14 P0 — 한 주 '보고만', v16 P3 — 막기).
 
 손님 이름 · 번호를 보여 주는 앱인데 보안 헤더가 하나도 없었다(2026-10-15). 틀 넣기 금지 · nosniff · Referrer · Permissions ·
 HSTS 는 바로, CSP 전체는 한 주 '보고만' — 어긋나면 운영 기록에 남기되(kind 'csp', 0026) 손님 정보는 없이 규칙 · 출처 · 경로만.
+10.19~26 어긋남 0 이라 막기로 바꿨다(v16 P3). 보고 길은 그대로 — 막힌 것도 같은 길로 남는다.
 '화면 오류'(kind 'error')와 섞이면 매일 감시가 거짓으로 실패한다.
 """
 
@@ -40,17 +41,34 @@ def _headers(url: str | None) -> dict:
 
 def test_headers_cover_framing_sniffing_referrer_and_https():
     h = _headers("https://abc.supabase.co/rest/v1")
-    assert h["Content-Security-Policy"] == "frame-ancestors 'none'"          # 이것만은 바로 막는다
     assert h["X-Frame-Options"] == "DENY" and h["X-Content-Type-Options"] == "nosniff"
     assert h["Referrer-Policy"] == "same-origin"                               # 손님 주소가 바깥으로 안 샌다
     assert "camera=()" in h["Permissions-Policy"] and "geolocation=()" in h["Permissions-Policy"]
     assert "web-share" not in h["Permissions-Policy"]                          # 카톡 등 공유는 그대로
     assert h["Strict-Transport-Security"].startswith("max-age=")
-    csp = h["Content-Security-Policy-Report-Only"]
+    assert "Content-Security-Policy-Report-Only" not in h                      # 보고만이 아니라 막는다(v16 P3)
+    csp = h["Content-Security-Policy"]
+    assert "frame-ancestors 'none'" in csp                                      # 틀 넣기 금지도 이 안에
     assert "connect-src 'self' https://abc.supabase.co" in csp                 # Supabase 는 출처만
     assert "'unsafe-eval'" not in csp and "report-uri /api/csp-report" in csp
     assert "object-src 'none'" in csp and "base-uri 'self'" in csp
-    assert "https://*.supabase.co" in _headers(None)["Content-Security-Policy-Report-Only"]   # 주소가 없을 때
+    assert "https://*.supabase.co" in _headers(None)["Content-Security-Policy"]   # 주소가 없을 때
+
+
+def test_eval_only_for_the_dev_server():
+    """next dev 의 바로 고침은 eval 을 쓴다 — 막는 정책에서 개발 서버만 열어 둔다. 배포(production)엔 없다."""
+    if not shutil.which("node"):
+        pytest.skip("node 가 없다")
+    out = subprocess.run(
+        ["node", "--input-type=module", "-e",
+         "import('./lib/security-headers.mjs').then((m) => console.log(JSON.stringify("
+         "[m.contentSecurityPolicy('https://a.supabase.co', true), m.contentSecurityPolicy('https://a.supabase.co', false)])))"],
+        cwd=WEB, capture_output=True, text=True, timeout=60,
+    )
+    assert out.returncode == 0, out.stderr
+    dev, prod = json.loads(out.stdout)
+    assert "script-src 'self' 'unsafe-inline' 'unsafe-eval'" in dev
+    assert "'unsafe-eval'" not in prod and "script-src 'self' 'unsafe-inline';" in prod
 
 
 def test_next_config_puts_headers_on_every_path():
