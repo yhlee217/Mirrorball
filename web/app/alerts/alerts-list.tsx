@@ -1,9 +1,10 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
+import { sendCareOpen } from '@/components/screen-timer';
 import { MSG } from '@/lib/copy';
 import { smsHref, telHref, type ContactVia } from '@/lib/contact';
 import type { ContactButton } from '@/lib/settings';
@@ -53,6 +54,16 @@ export default function AlertsList({
   const [open, setOpen] = useState<string | null>(init.open);
   const [shown, setShown] = useState(init.shown);
   useEffect(() => replaceQuery(encodeAlerts(shown, open, STEP)), [shown, open]);
+  // 펼친 수(개선 계획 v16 P1) — 연락이 0인 까닭을 가르는 숫자. 손으로 펼칠 때만(주소로 되살린 줄은 안 셈), 같은 분은
+  // 이 화면에서 한 번만. 어느 손님인지는 보내지 않는다(api/care-event).
+  const counted = useRef(new Set<string>());
+  function toggle(id: string, isOpen: boolean) {
+    if (!isOpen && !counted.current.has(id)) {
+      counted.current.add(id);
+      sendCareOpen();
+    }
+    setOpen(isOpen ? null : id);
+  }
 
   const flash = (m: string) => {
     setToast(m);
@@ -188,7 +199,7 @@ export default function AlertsList({
           return (
             <div className={'crow' + (sent ? ' done' : '') + (isOpen ? ' open' : '')} key={it.id}>
               <div className="crow-r">
-                <button type="button" className="crow-m" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : it.id)}>
+                <button type="button" className="crow-m" aria-expanded={isOpen} onClick={() => toggle(it.id, isOpen)}>
                   <span className="crow-n">
                     <b>{it.name}</b>
                     {it.fresh ? <span className="ctag fresh">새로</span> : null}

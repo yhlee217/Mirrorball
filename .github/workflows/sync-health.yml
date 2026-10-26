@@ -37,6 +37,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           ALERT_WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          # 일요일 수집 차례(일 14시) 뒤로 성공이 없으면 월요일 10시 뒤 감시부터 실패(개선 계획 v16 P0 — 밀린 수집과 같은
+          # 판정, SLOT_GRACE_HOURS 기본 20). 8일은 바깥 테두리 — 앱의 '수집 지연' 표시와 같은 기준.
           STALE_DAYS: '8'
           # 백업·화면 오류(0023 ops_health, 개선 계획 v5). 맥에 새 코드가 깔리고 첫 일요일 백업이 지난 뒤부터
           # 백업 기록이 없으면 실패한다 — 그 전엔 경고만.

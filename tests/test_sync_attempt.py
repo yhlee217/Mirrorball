@@ -32,6 +32,16 @@ def test_hints_point_to_the_real_log_and_manual_run():
     src = (ROOT / "scripts" / "sync_health_check.py").read_text(encoding="utf-8")
     main = src[src.index("def main"):]
     assert "tail -40 ~/Library/Logs/Mirrorball/collect.out.log" in main and "runs/collect.out.log" not in main
-    assert "FORCE=1 bash worker/run_mac.sh" in main and "print(_fmt(r, stale_days))" in main
+    assert "FORCE=1 bash worker/run_mac.sh" in main and "print(_fmt(r, stale_days, slot))" in main
     deploy = (ROOT / "DEPLOY.md").read_text(encoding="utf-8")
     assert "~/Library/Logs/Mirrorball/collect.out.log" in deploy                              # 안내서와 같은 경로
+
+
+def test_mac_alerts_and_sync_log_point_to_the_real_log():
+    """맥 알림 · sync_log.py 도 launchd 가 쓰는 곳(~/Library/Logs/Mirrorball)을 가리킨다(개선 계획 v16 P4)."""
+    sh = (ROOT / "worker" / "run_mac.sh").read_text(encoding="utf-8")
+    alerts = [l for l in sh.splitlines() if "notify \"" in l and "확인" in l]
+    assert len(alerts) == 2 and all("runs/collect" not in l for l in alerts)
+    assert "~/Library/Logs/Mirrorball/collect.err.log 확인" in sh and "~/Library/Logs/Mirrorball/collect.out.log 확인" in sh
+    log = (ROOT / "worker" / "sync_log.py").read_text(encoding="utf-8")
+    assert "tail -40 ~/Library/Logs/Mirrorball/collect.out.log" in log and "runs/collect" not in log

@@ -14,7 +14,9 @@ export function cleanPath(raw: unknown): string {
     .slice(0, 120);
 }
 
-export type Timing = { path: string; ms: number; cached: boolean; first: boolean; op: boolean; app: boolean };
+export type Timing = {
+  path: string; ms: number; cached: boolean; first: boolean; op: boolean; app: boolean; server?: number;
+};
 
 /**
  * 화면 속도 기록(개선 계획 v7 P0) — 화면을 누른 순간 → 내용이 뜬 순간. 남기는 건 경로(id 는 ':id') ·
@@ -22,15 +24,31 @@ export type Timing = { path: string; ms: number; cached: boolean; first: boolean
  * 폰이 잠겼다 깨어난 것 같은 잡음이라 버린다.
  * v10 P0 — 운영자 폰이었나(op, 설정 ?op=1) · 홈 화면 앱으로 열었나(app)도 참/거짓으로. 두 칸은 늘 남긴다 —
  * 감시(0025 ops_usage)가 '두 칸이 있는 기록'부터 디자이너 사용으로 센다.
+ * v16 P2 — 앱 첫 열기 때만 서버가 첫 바이트를 보낸 때(server, ms)도. 전체 시간보다 길면 버린다(0029 ops_speed).
  */
 export function cleanTiming(body: unknown): Timing | null {
   const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
   const ms = typeof b.ms === 'number' && Number.isFinite(b.ms) ? Math.round(b.ms) : -1;
   if (ms < 0 || ms > 60_000) return null;
+  const first = b.first === true;
+  const server = first && typeof b.server === 'number' && Number.isFinite(b.server) ? Math.round(b.server) : -1;
   return {
-    path: cleanPath(b.path), ms, cached: b.cached === true, first: b.first === true,
+    path: cleanPath(b.path), ms, cached: b.cached === true, first,
     op: b.op === true, app: b.app === true,
+    ...(server >= 0 && server <= ms ? { server } : {}),
   };
+}
+
+export type CareOpen = { step: 'open'; op: boolean; app: boolean };
+
+/**
+ * 챙길 고객 줄을 펼쳤다(개선 계획 v16 P1) — 연락이 0인 까닭을 가르는 숫자. 펼쳤다는 것과 운영자 폰 · 홈 화면 앱
+ * 여부뿐, 어느 손님인지는 남기지 않는다(보내 와도 버린다). 감시 · /ops 가 매장별 '챙길 고객 펼침 N번'으로 센다(0029).
+ */
+export function cleanCare(body: unknown): CareOpen | null {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  if (b.step !== 'open') return null;
+  return { step: 'open', op: b.op === true, app: b.app === true };
 }
 
 export type CspHit = { directive: string; blocked: string; path: string };
@@ -50,7 +68,7 @@ export function blockedOf(raw: unknown): string {
 }
 
 /**
- * CSP 어긋남 기록(개선 계획 v14 P0) — 정책은 '보고만'이라 화면은 그대로다. 남기는 건 어긋난 규칙 · 막힐 뻔한 것의 출처 ·
+ * CSP 어긋남 기록(개선 계획 v14 P0 — v16 P3 부터는 막힌 것). 남기는 건 어긋난 규칙 · 막힌(막힐 뻔한) 것의 출처 ·
  * 화면 경로(id 는 지움)뿐 — 손님 정보는 없다. 브라우저 보고(report-uri, {"csp-report": {...}})와 화면의 어긋남 소식
  * (components/csp-watch) 두 모양을 다 받는다.
  */

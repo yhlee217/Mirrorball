@@ -46,17 +46,39 @@ function isApp(): boolean {
   }
 }
 
-function send(body: { path: string; ms: number; cached: boolean; first: boolean }) {
+function post(url: string, body: Record<string, unknown>) {
   try {
     const json = JSON.stringify({ ...body, op: isOp(), app: isApp() });
     const ok = typeof navigator.sendBeacon === 'function'
-      && navigator.sendBeacon('/api/client-timing', new Blob([json], { type: 'application/json' }));
+      && navigator.sendBeacon(url, new Blob([json], { type: 'application/json' }));
     if (!ok) {
-      void fetch('/api/client-timing', { method: 'POST', body: json, headers: { 'content-type': 'application/json' }, keepalive: true })
+      void fetch(url, { method: 'POST', body: json, headers: { 'content-type': 'application/json' }, keepalive: true })
         .catch(() => undefined);
     }
   } catch {
     /* 재기 실패는 화면과 무관하다 */
+  }
+}
+
+function send(body: { path: string; ms: number; cached: boolean; first: boolean; server?: number }) {
+  post('/api/client-timing', body);
+}
+
+/** 챙길 고객 줄을 펼쳤다(개선 계획 v16 P1) — 펼쳤다는 것만 보낸다. 어느 손님인지는 안 보낸다(api/care-event). */
+export function sendCareOpen() {
+  post('/api/care-event', { step: 'open' });
+}
+
+/**
+ * 앱 첫 열기 — 서버가 첫 바이트를 보낸 때(문서를 열기 시작한 때부터, ms). 브라우저가 이미 잰 값이라 따로 재지 않는다
+ * (개선 계획 v16 P2). 전체 시간 가운데 서버 몫(로그인 확인 · 첫 화면 데이터)과 폰이 그린 몫을 가른다.
+ */
+function serverMs(): number | undefined {
+  try {
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    return nav && nav.responseStart > 0 ? nav.responseStart : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -100,7 +122,7 @@ export function ScreenReady() {
       send({ path, ms: now - start, cached: !skeleton, first: false });
       start = null;
     } else if (!opened) {
-      send({ path, ms: now, cached: false, first: true }); // 앱을 처음 열 때 — 문서를 열기 시작한 때부터
+      send({ path, ms: now, cached: false, first: true, server: serverMs() }); // 앱을 처음 열 때 — 문서를 열기 시작한 때부터
     }
     opened = true;
   }, []);

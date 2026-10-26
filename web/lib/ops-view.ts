@@ -10,8 +10,12 @@ export type UsageRow = {
   app_7d?: number | null;
   op_7d?: number | null;
   since?: string | null;
+  care_opens_7d?: number | null; // 0029(v16 P1) — 챙길 고객 펼침
 };
-export type SpeedRow = { screen: string | null; opened: number | null; p50_ms: number | null; p90_ms: number | null; instant: number | null };
+export type SpeedRow = {
+  screen: string | null; opened: number | null; p50_ms: number | null; p90_ms: number | null; instant: number | null;
+  server_p50_ms?: number | null; server_p90_ms?: number | null; // 0029(v16 P2) — 앱 첫 열기 서버 첫 바이트
+};
 
 const KST = 9 * 3600000;
 
@@ -28,7 +32,10 @@ export function seenWord(lastSeen: string | null, now: number): string {
   return days < 1 ? '오늘' : `${Math.floor(days)}일 전`;
 }
 
-/** 매장 한 줄 — '디자이너 화면 12번(앱 83%) · 연락 0명 · 마지막 사용 오늘 · 운영자 폰 35번'. */
+/**
+ * 매장 한 줄 — '디자이너 화면 12번(앱 83%) · 연락 0명 · 마지막 사용 오늘 · 운영자 폰 35번'.
+ * 0029 뒤엔 연락 앞에 '챙길 고객 펼침 N번'(v16 P1) — 펼침도 0인지, 펼치는데 연락이 0인지.
+ */
 export function usageLine(r: UsageRow, now: number): string {
   const screens = Number(r.screens_7d ?? 0);
   const contacts = Number(r.contacts_7d ?? 0);
@@ -37,7 +44,8 @@ export function usageLine(r: UsageRow, now: number): string {
   const app = Number(r.app_7d ?? 0);
   const op = Number(r.op_7d ?? 0);
   const share = screens ? `(앱 ${Math.round((app * 100) / screens)}%)` : '';
-  return `디자이너 화면 ${screens}번${share} · 연락 ${contacts}명 · 마지막 사용 ${seen}` + (op ? ` · 운영자 폰 ${op}번` : '');
+  const opens = 'care_opens_7d' in r ? ` · 챙길 고객 펼침 ${Number(r.care_opens_7d ?? 0)}번` : '';
+  return `디자이너 화면 ${screens}번${share}${opens} · 연락 ${contacts}명 · 마지막 사용 ${seen}` + (op ? ` · 운영자 폰 ${op}번` : '');
 }
 
 /** 맨 위 한 줄 — 기록 시작('0번'이 며칠 기준인지). 0025 전이면 null. */
@@ -47,17 +55,23 @@ export function sinceLine(rows: UsageRow[]): string | null {
   return rows.some((r) => 'op_7d' in r) ? '화면 기록 — 새 앱의 기록이 아직 없음' : null;
 }
 
-/** 화면 한 줄 — '보통 0.6초 · 느린 때 0.7초 · 4번 (바로 9번)'. 받아 둔 화면을 바로 보여준 것은 횟수만. */
+/**
+ * 화면 한 줄 — '보통 0.6초 · 느린 때 0.7초 · 4번 (바로 9번)'. 받아 둔 화면을 바로 보여준 것은 횟수만.
+ * 앱 첫 열기 줄엔 0029 뒤 '— 그중 서버 보통 0.4초 · 느린 때 1.9초'(v16 P2) — 서버 몫과 폰이 그린 몫을 가른다.
+ */
 export function speedLine(r: SpeedRow): string {
   const instant = Number(r.instant ?? 0);
   const waited = Number(r.opened ?? 0) - instant;
   const speed = r.p50_ms != null && r.p90_ms != null
     ? `보통 ${(r.p50_ms / 1000).toFixed(1)}초 · 느린 때 ${(r.p90_ms / 1000).toFixed(1)}초 · ${waited}번`
     : '기다린 적 없음';
-  return speed + (instant ? ` (바로 ${instant}번)` : '');
+  const server = r.server_p50_ms != null && r.server_p90_ms != null
+    ? ` — 그중 서버 보통 ${(r.server_p50_ms / 1000).toFixed(1)}초 · 느린 때 ${(r.server_p90_ms / 1000).toFixed(1)}초`
+    : '';
+  return speed + server + (instant ? ` (바로 ${instant}번)` : '');
 }
 
-/** CSP(보고만, v14 P0) 한 줄 — 'https://static.cloudflareinsights.com · 3번'. 출처와 숫자만. */
+/** CSP(v14 P0 보고만 → v16 P3 막기) 한 줄 — 'https://static.cloudflareinsights.com · 3번'. 출처와 숫자만. */
 export type CspRow = { directive: string | null; blocked: string | null; n: number | null; last_at: string | null };
 
 export function cspLine(r: CspRow): string {

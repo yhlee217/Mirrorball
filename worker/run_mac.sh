@@ -72,7 +72,7 @@ echo "[$(ts)] collect 시작"
 SYNC_ALL=1 SYNC_DAYS="${SYNC_DAYS:-14}" "$PY" worker/run.py; rc=$?
 echo "[$(ts)] collect 종료(exit=$rc)"
 # run.py 안에서 테넌트별 error 는 이미 sync_jobs 에 남는다. 여기선 알림만 더한다.
-[ "$rc" -ne 0 ] && notify "수집 실패(exit=$rc) — runs/collect.err.log 확인"
+[ "$rc" -ne 0 ] && notify "수집 실패(exit=$rc) — ~/Library/Logs/Mirrorball/collect.err.log 확인"
 
 # 매장 메모 AI 정리 — 수집으로 메모가 늘었을 수 있으니 이어서 한 번 돌린다.
 # 메모가 그대로인 고객은 건너뛰므로 보통 몇 명만 처리된다. 실패해도 수집 결과는 유효하다.
@@ -87,7 +87,7 @@ fi
 # 앱에만 있는 데이터(메모·태그·연락 기록·이탈·성별 지정·사비 표시·설정·프로필) 백업 — 수집 성패와 무관하게
 # 돈다(디자이너가 쌓은 기록은 HandSOS 에 없다). 실패하면 알림만 — 수집 결과는 그대로 유효하다.
 echo "[$(ts)] 백업 시작"
-"$PY" worker/backup.py || notify "앱 데이터 백업 실패 — runs/collect.out.log 확인"
+"$PY" worker/backup.py || notify "앱 데이터 백업 실패 — ~/Library/Logs/Mirrorball/collect.out.log 확인"
 echo "[$(ts)] 백업 종료"
 
 exit $rc

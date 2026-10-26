@@ -20,6 +20,12 @@
     0  정상
     1  수집 지연 — Actions 실행이 실패로 뜨고 저장소 소유자에게 메일이 간다
 
+지연 판정(개선 계획 v16 P0, 2026-10-26)
+    · 판정할 일요일 수집 차례(일 14:00 KST — 그 뒤 20시간, 월 10시부터 판정) 뒤로 성공이 없으면 그 주를 놓친 것이다.
+      밀린 수집(worker/catchup.py)과 같은 판정이다. '마지막 성공 8일'로만 보면 주중에 수동 수집을 한 주는 일요일이
+      빠져도 열흘 가까이 몰랐다(10.21 수 수동 수집 → 10.25 일 빠짐 → 10.30 에야 실패).
+    · 마지막 성공 8일(STALE_DAYS)은 바깥 테두리로 그대로 둔다 — 앱(web/lib/sync.ts isSyncStale)과 같은 기준.
+
 운영 기록(0023 ops_health, 개선 계획 v5) — 같은 길로 함께 본다
     · 앱 데이터 백업(worker/backup.py, 맥 일요일) — 매장별 마지막 백업이 8일 넘으면 실패
     · 화면 오류(app/error.tsx 가 기록) — 지난 24시간 매장별 ERROR_LIMIT 건 이상이면 실패
@@ -30,7 +36,7 @@
     · 화면별 보통 · 느린 때(지난 7일, 폰에서 잰 '누른 순간 → 내용이 뜬 순간')
     · 매장별 화면 연 수 · 연락한 손님 수 · 마지막 사용 — 다음 개선을 정하는 숫자(맥 점검 없이)
     · 0025 뒤(개선 계획 v10 P0): 화면 수는 디자이너 것만(운영자 폰은 따로) · 그중 홈 화면 앱으로 연 비율 · 기록 시작
-    · 0026 뒤(개선 계획 v14 P0): CSP(보고만) 어긋남 — 규칙 · 출처별 건수(출력만)
+    · 0026 뒤(개선 계획 v14 P0): CSP 어긋남 — 규칙 · 출처별 건수(출력만). v16 P3 부터 정책이 막으니 '막힌 것'이다
 
 0027 뒤(개선 계획 v15 P2) — 운영 숫자 함수는 공개 키만으로는 거절한다. 감시 열쇠(OPS_WATCH_KEY)를 본문에 넣는다.
 
@@ -40,6 +46,7 @@ DB 용량(0028 ops_db_size, 2026-10-17) — 무료 플랜은 500MB 를 넘으면
 사용:
     SUPABASE_URL=... SUPABASE_ANON_KEY=... python3 scripts/sync_health_check.py
     STALE_DAYS=8    지연 판정 기준(기본 8)
+    SLOT_GRACE_HOURS=20   일요일 수집 차례 뒤 판정까지 기다리는 시간(기본 20 — 월 10시)
     BACKUP_DAYS=8   백업 지연 기준(기본 8)
     ERROR_LIMIT=5   매장별 24시간 화면 오류 기준(기본 5)
     BACKUP_REQUIRED_SINCE=YYYY-MM-DD   이 날부터 백업 기록이 없으면 실패
@@ -60,6 +67,10 @@ import urllib.request
 # 수집은 일요일 1회다. 정상이면 '마지막 성공으로부터'는 최대 7일(일요일 수집 직전)이므로
 # 8 이상은 예정된 일요일이 통째로 빈 것이다. web/lib/sync.ts 의 isSyncStale 과 같은 기준.
 DEFAULT_STALE_DAYS = 8
+# 일요일 수집 차례(일 14:00 KST) — 일요일 수집 plist · 밀린 수집(worker/catchup.py)과 같다(테스트가 본다).
+SLOT_WEEKDAY = 6             # 일요일(파이썬 월=0)
+SLOT_HOUR = 14
+DEFAULT_SLOT_GRACE_HOURS = 20  # 차례 뒤 이만큼 지나서(월 10시)부터 판정 — 일요일 오후 감시가 수집을 기다리다 실패하지 않게
 DEFAULT_BACKUP_DAYS = 8      # 백업도 일요일 1회 — 수집과 같은 이유로 8
 DEFAULT_DB_LIMIT_MB = 500    # Supabase 무료 플랜 DB 한도 — 넘으면 읽기 전용(쓰기 25006)
 DEFAULT_DB_WARN_MB = 400     # 80% — 넘으면 미리 알린다
@@ -68,31 +79,39 @@ DEFAULT_ERROR_LIMIT = 5      # 디자이너 한 명이 하루에 오류 화면�
 TIMEOUT = 30
 
 
-def evaluate(rows: list[dict], stale_days: float) -> list[dict]:
+def evaluate(rows: list[dict], stale_days: float, now: dt.datetime | None = None,
+             grace_hours: float = DEFAULT_SLOT_GRACE_HOURS) -> list[dict]:
     """지연된 테넌트만 돌려준다. 네트워크와 분리해 두어 테스트가 가능하다.
 
+    판정할 일요일 수집 차례 뒤로 성공이 없거나(missed), 마지막 성공이 stale_days 넘었으면 지연이다.
     days_since 가 None 인 경우(= 성공 기록이 한 번도 없음)도 지연으로 본다 —
     '아직 한 번도 안 됐다'를 조용히 넘기면 설치 직후 실패를 영원히 모른다.
     """
+    slot = judged_slot(now or dt.datetime.now(dt.timezone.utc), grace_hours)
     late = []
     for r in rows:
         d = r.get("days_since")
-        if d is None or float(d) >= stale_days:
+        if d is None or float(d) >= stale_days or missed(r, slot):
             late.append(r)
     return late
 
 
-def _fmt(r: dict, stale_days: float = DEFAULT_STALE_DAYS) -> str:
+def _fmt(r: dict, stale_days: float = DEFAULT_STALE_DAYS, slot: dt.datetime | None = None) -> str:
     """매장 한 줄. 성공 뒤에 시도가 있으면 '마지막 시도 … 실패', 밀렸는데 시도도 없으면 '그 뒤 시도 없음' —
     맥에서 작업이 아예 시작되지 않았는지(꺼짐 · 잠자기 · 자동 실행 등록), 돌다 실패했는지를 가른다(2026-10-18 수집이
-    안 돌았을 때 감시 출력만으로는 둘을 구분할 수 없었다)."""
+    안 돌았을 때 감시 출력만으로는 둘을 구분할 수 없었다). 판정할 일요일 수집 차례(slot)를 놓쳤으면 그 날짜를 앞에."""
     d = r.get("days_since")
     days = "기록 없음" if d is None else f"{float(d):.1f}일 전"
     line = f"  {r.get('slug', '?'):12s} 마지막 성공 {str(r.get('last_ok') or '-')[:19]:19s} ({days})"
     ok, tried = str(r.get("last_ok") or ""), str(r.get("last_attempt") or "")
+    failed = ""
     if tried and tried > ok:
-        kst = _when(tried).astimezone(dt.timezone(dt.timedelta(hours=9)))
-        return line + f" · 마지막 시도 {kst.month}.{kst.day:02d} {kst:%H:%M}(KST) 실패"
+        kst = _when(tried).astimezone(KST)
+        failed = f"마지막 시도 {kst.month}.{kst.day:02d} {kst:%H:%M}(KST) 실패"
+    if slot is not None and missed(r, slot):
+        return line + f" · {slot.month}.{slot.day:02d} 일요일 수집 없음 — " + (failed or "시도 없음(맥이 꺼져 있었나요?)")
+    if failed:
+        return line + " · " + failed
     if d is not None and float(d) >= stale_days:
         return line + " · 그 뒤 시도 없음"
     return line
@@ -119,7 +138,8 @@ def evaluate_ops(rows: list[dict], now: dt.datetime, backup_days: float, error_l
 
 def fmt_speed(rows: list[dict]) -> list[str]:
     """화면별 속도(0024 ops_speed, 개선 계획 v7) — 기다린 화면의 보통(중간값) · 느린 때(10번 중 가장 느린 1번).
-    받아 둔 화면을 바로 보여준 것은 횟수만 — 섞으면 서버가 느린 것이 가려진다."""
+    받아 둔 화면을 바로 보여준 것은 횟수만 — 섞으면 서버가 느린 것이 가려진다.
+    0029(v16 P2) 뒤엔 앱 첫 열기 줄에 '— 그중 서버 보통 · 느린 때'(서버 첫 바이트) — 서버 몫과 폰이 그린 몫을 가른다."""
     out = []
     for r in rows:
         p50, p90 = r.get("p50_ms"), r.get("p90_ms")
@@ -127,6 +147,9 @@ def fmt_speed(rows: list[dict]) -> list[str]:
         waited = int(r.get("opened") or 0) - instant
         speed = (f"보통 {p50 / 1000:.1f}초 · 느린 때 {p90 / 1000:.1f}초 · {waited}번"
                  if p50 is not None and p90 is not None else "기다린 적 없음")
+        s50, s90 = r.get("server_p50_ms"), r.get("server_p90_ms")
+        if s50 is not None and s90 is not None:
+            speed += f" — 그중 서버 보통 {s50 / 1000:.1f}초 · 느린 때 {s90 / 1000:.1f}초"
         out.append(f"  {str(r.get('screen') or '?'):20s} {speed}" + (f" (바로 {instant}번)" if instant else ""))
     return out
 
@@ -138,11 +161,31 @@ def _when(ts: object) -> dt.datetime:
     return dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
 
 
+def last_slot(now: dt.datetime) -> dt.datetime:
+    """now 와 같거나 앞선 마지막 일요일 수집 차례(일 14:00 KST) — worker/catchup.py last_slot 과 같다."""
+    k = now.astimezone(KST)
+    slot = (k - dt.timedelta(days=(k.weekday() - SLOT_WEEKDAY) % 7)).replace(
+        hour=SLOT_HOUR, minute=0, second=0, microsecond=0)
+    return slot if slot <= k else slot - dt.timedelta(days=7)
+
+
+def judged_slot(now: dt.datetime, grace_hours: float = DEFAULT_SLOT_GRACE_HOURS) -> dt.datetime:
+    """판정할 차례 — 유예(grace_hours)가 지난 마지막 일요일 수집 차례. 일요일 15시 감시는 아직 지난주 차례를 본다."""
+    return last_slot(now - dt.timedelta(hours=grace_hours))
+
+
+def missed(r: dict, slot: dt.datetime) -> bool:
+    """그 차례 뒤로 성공이 없나. 성공 기록이 아예 없으면 여기선 보지 않는다(evaluate 의 '기록 없음'이 잡는다)."""
+    ok = r.get("last_ok")
+    return bool(ok) and _when(ok) < slot
+
+
 def fmt_usage(rows: list[dict], now: dt.datetime) -> list[str]:
     """매장별 사용(ops_usage) — 화면 연 수 · 연락한 손님 수(지난 7일) · 마지막으로 앱을 쓴 때. 숫자만.
 
     0025(개선 계획 v10 P0) 뒤엔 화면 수가 디자이너 것만이다 — 운영자 폰은 따로 세고(op_7d), 그중 홈 화면 앱으로
     연 비율(app_7d)을 붙이고, 맨 위에 기록 시작(since)을 찍는다('0번'이 며칠 기준인지). 칸이 없으면(0024) 예전 그대로.
+    0029(v16 P1) 뒤엔 연락 앞에 '챙길 고객 펼침 N번' — 펼침도 0인지, 펼치는데 연락이 0인지.
     """
     out = []
     marked = any("op_7d" in r for r in rows)
@@ -166,13 +209,14 @@ def fmt_usage(rows: list[dict], now: dt.datetime) -> list[str]:
             continue
         app, op = int(r.get("app_7d") or 0), int(r.get("op_7d") or 0)
         share = f"(앱 {round(app * 100 / screens)}%)" if screens else ""
-        out.append(f"  {slug:12s} 디자이너 화면 {screens}번{share} · 연락 {contacts}명 · 마지막 사용 {seen}"
+        opens = f" · 챙길 고객 펼침 {int(r.get('care_opens_7d') or 0)}번" if "care_opens_7d" in r else ""
+        out.append(f"  {slug:12s} 디자이너 화면 {screens}번{share}{opens} · 연락 {contacts}명 · 마지막 사용 {seen}"
                    + (f" · 운영자 폰 {op}번" if op else ""))
     return out
 
 
 def fmt_csp(rows: list[dict]) -> list[str]:
-    """CSP(보고만) 어긋남(0026 ops_csp, 개선 계획 v14 P0) — 지난 7일 규칙 · 출처별 건수. 출처와 숫자만."""
+    """CSP 막힌 것(0026 ops_csp, 개선 계획 v14 P0 · v16 P3) — 지난 7일 규칙 · 출처별 건수. 출처와 숫자만."""
     if not rows:
         return ["  어긋남 없음"]
     return [f"  {str(r.get('directive') or '?'):16s} {str(r.get('blocked') or '?'):40s} {int(r.get('n') or 0)}번" for r in rows]
@@ -226,17 +270,17 @@ def report_db_size(url: str, key: str) -> list[str]:
 
 
 def report_csp(url: str, key: str) -> None:
-    """CSP 어긋남(0026) — 보고만 하는 한 주 동안 무엇이 막힐 뻔했나. 실패로 만들지 않는다. 0026 전이면 한 줄만."""
+    """CSP 막힌 것(0026) — 막는 정책(v16 P3)에 무엇이 걸렸나. 실패로 만들지 않는다. 0026 전이면 한 줄만."""
     try:
         rows = fetch(url, key, "ops_csp")
     except urllib.error.HTTPError as exc:
         hint = LOCKED if exc.code in (401, 403) else "0026_csp_reports.sql 을 적용했는지 확인하세요"
-        print(f"\nCSP(보고만) — 조회 실패 HTTP {exc.code} — {hint}")
+        print(f"\nCSP(막기) — 조회 실패 HTTP {exc.code} — {hint}")
         return
     except Exception as exc:  # noqa: BLE001
-        print(f"\nCSP(보고만) — 조회 실패: {exc}")
+        print(f"\nCSP(막기) — 조회 실패: {exc}")
         return
-    print("\nCSP(보고만) — 지난 7일 어긋남(규칙 · 출처 · 건수)")
+    print("\nCSP(막기) — 지난 7일 막힌 것(규칙 · 출처 · 건수)")
     print("\n".join(fmt_csp(rows)))
 
 
@@ -293,7 +337,7 @@ LOCKED = "0027 뒤라면 감시 열쇠(GitHub 비밀값 OPS_WATCH_KEY)가 없거
 def notify(webhook: str, late: list[dict], stale_days: float) -> None:
     """지연 알림을 외부로. 저장소가 공개라 로그에 남는 문구는 일부러 중립적으로 쓴다."""
     body = json.dumps({
-        "text": "Mirrorball 데이터 갱신이 "
+        "text": "Mirrorball 일요일 수집이 빠졌거나 데이터 갱신이 "
                 f"{stale_days:g}일 이상 지연됐습니다 ({len(late)}곳). 맥 수집 작업을 확인해주세요.",
         "detail": [{"slug": r.get("slug"), "days_since": r.get("days_since")} for r in late],
     }).encode("utf-8")
@@ -314,6 +358,9 @@ def main() -> int:
         print("X SUPABASE_URL / SUPABASE_ANON_KEY 가 없습니다 (저장소 Secrets 확인)")
         return 1
     stale_days = float(os.environ.get("STALE_DAYS") or DEFAULT_STALE_DAYS)
+    grace = float(os.environ.get("SLOT_GRACE_HOURS") or DEFAULT_SLOT_GRACE_HOURS)
+    now = dt.datetime.now(dt.timezone.utc)
+    slot = judged_slot(now, grace)
 
     try:
         rows = fetch(url, key)
@@ -333,11 +380,11 @@ def main() -> int:
         print("X 수집 기록이 아예 없습니다 — 한 번도 성공하지 않았거나 테넌트가 없습니다")
         return 1
 
-    print(f"테넌트 {len(rows)}곳 · 지연 기준 {stale_days:g}일\n")
+    print(f"테넌트 {len(rows)}곳 · 판정할 일요일 수집 {slot.month}.{slot.day:02d} {SLOT_HOUR}시 · 지연 기준 {stale_days:g}일\n")
     for r in sorted(rows, key=lambda x: (x.get("days_since") is None, -(float(x.get("days_since") or 0)))):
-        print(_fmt(r, stale_days))
+        print(_fmt(r, stale_days, slot))
 
-    late = evaluate(rows, stale_days)
+    late = evaluate(rows, stale_days, now, grace)
     ops_bad = check_ops(url, key)
     size_bad = report_db_size(url, key)
     report_speed_usage(url, key)
@@ -352,7 +399,7 @@ def main() -> int:
         print("            launchctl list | grep mirrorball")
         print("            tail -40 ~/Library/Logs/Mirrorball/collect.out.log")
         if any(not (str(r.get("last_attempt") or "") > str(r.get("last_ok") or "")) for r in late):
-            print("   '그 뒤 시도 없음' — 맥에서 작업이 시작되지 않았다(꺼짐 · 잠자기 · 자동 실행 등록). 맥을 켜고 로그인하면")
+            print("   '시도 없음' — 맥에서 작업이 시작되지 않았다(꺼짐 · 잠자기 · 자동 실행 등록). 맥을 켜고 로그인하면")
             print("   밀린 수집이 한 번 돈다(com.mirrorball.catchup — 등록 안 됐으면 install_schedule.sh collect). 바로 돌리려면:")
             print("            FORCE=1 bash worker/run_mac.sh   (백업도 따라 돈다)")
         webhook = os.environ.get("ALERT_WEBHOOK", "").strip()

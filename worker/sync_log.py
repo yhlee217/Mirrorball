@@ -82,7 +82,7 @@ def main() -> int:
             print(f"  {d} (일)  ← run_mac.sh 가 아예 안 돌았거나 중간에 빠져나갔다")
         print("\n  맥에서 확인:")
         print("    launchctl list | grep mirrorball                 # 등록·마지막 종료코드")
-        print("    tail -40 runs/collect.out.log                    # 그날 로그가 있는지")
+        print("    tail -40 ~/Library/Logs/Mirrorball/collect.out.log   # 그날 로그가 있는지(launchd 가 쓰는 곳)")
         return 1
 
     print("예정된 일요일에 모두 기록이 남아 있다.")

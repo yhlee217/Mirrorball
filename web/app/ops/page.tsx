@@ -66,7 +66,7 @@ export default async function OpsPage() {
             <div className="li ops-err">아직 기록 없음</div>
           )}
         </div>
-        <div className="sect-h">보안 정책 <span className="sect-n">보고만 · 지난 7일 어긋남</span></div>
+        <div className="sect-h">보안 정책 <span className="sect-n">막기 · 지난 7일 막힌 것</span></div>
         <div className="card">
           {csp.error ? (
             <div className="li ops-err">아직 못 읽어요 — 0026 SQL 을 실행하면 보여요</div>

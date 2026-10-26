@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 
 /**
- * CSP 어긋남 듣기(개선 계획 v14 P0) — 정책은 '보고만'(lib/security-headers.mjs)이라 화면은 그대로 돌고, 어긋나면
+ * CSP 어긋남 듣기(개선 계획 v14 P0) — 정책(lib/security-headers.mjs)은 v16 P3 부터 막는다. 막히면(보고만이던 때는 어긋나면)
  * 무엇이 · 어디서만 운영 기록으로 보낸다(api/csp-report). 브라우저 자체 보고(report-uri)도 있지만 로그인 쿠키가
  * 안 실리는 브라우저가 있어 화면에서도 한 번 더. 같은 어긋남은 이 문서에서 한 번만.
  */
