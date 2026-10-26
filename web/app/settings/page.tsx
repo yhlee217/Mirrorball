@@ -133,8 +133,10 @@ export default async function SettingsPage() {
           </a>
           {/* 시작 안내(v11 P0) — 로그인 없이 열리는 페이지라 새로 오신 디자이너께 이 주소를 그대로 보내면 된다 */}
           <Link className="btn ghost" href="/start" style={{ marginBottom: 4 }}>사용 안내</Link>
-          {/* 운영 숫자(v12 P2) — 운영자 폰(?op=1)에서만, 0027 뒤엔 운영자 계정일 때만(v15 P2). 디자이너 화면엔 없다 */}
-          {(await cookies()).get('mb-op')?.value === '1' && (await canSeeOps(supabase, true)) ? (
+          {/* 운영 숫자(v12 P2) — 0027 뒤엔 운영자 계정이면 어느 폰에서나(v15 P2), 그 전엔 운영자 폰(?op=1)에서만. 디자이너
+              화면엔 없다. 아이폰 홈 화면 앱은 사파리와 쿠키를 따로 써서 ?op=1 표시가 없을 수 있다 — 운영자 계정인데도
+              버튼이 안 보였다(10.26). /ops 의 문과 같은 기준(lib/ops-gate). */}
+          {(await canSeeOps(supabase, (await cookies()).get('mb-op')?.value === '1')) ? (
             <Link className="btn ghost" href="/ops" style={{ marginBottom: 4 }}>운영 숫자</Link>
           ) : null}
           <div className="logout-row"><LogoutButton /></div>

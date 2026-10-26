@@ -68,7 +68,8 @@ def test_ops_screen_opens_only_for_the_operator():
     for banned in ("from('customers')", "from('transactions')", "pii_enc", "contactReader"):
         assert banned not in page, banned                                                  # 손님 정보는 안 읽는다
     settings = (WEB / "app" / "settings" / "page.tsx").read_text(encoding="utf-8")
-    assert "get('mb-op')?.value === '1' && (await canSeeOps(supabase, true)) ? (" in settings and 'href="/ops"' in settings
+    # 버튼도 /ops 와 같은 문 — 0027 뒤엔 운영자 계정이면 쿠키 없이도(홈 화면 앱엔 ?op=1 쿠키가 없을 수 있다, 10.26)
+    assert "(await canSeeOps(supabase, (await cookies()).get('mb-op')?.value === '1')) ? (" in settings and 'href="/ops"' in settings
     mark = (WEB / "components" / "op-mark.tsx").read_text(encoding="utf-8")
     assert "setOpCookie(q === '1')" in mark
     timer = (WEB / "components" / "screen-timer.tsx").read_text(encoding="utf-8")
