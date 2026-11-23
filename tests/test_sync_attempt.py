@@ -32,7 +32,7 @@ def test_hints_point_to_the_real_log_and_manual_run():
     src = (ROOT / "scripts" / "sync_health_check.py").read_text(encoding="utf-8")
     main = src[src.index("def main"):]
     assert "tail -40 ~/Library/Logs/Mirrorball/collect.out.log" in main and "runs/collect.out.log" not in main
-    assert "FORCE=1 bash worker/run_mac.sh" in main and "print(_fmt(r, stale_days, slot))" in main
+    assert "FORCE=1 bash worker/run_mac.sh" in main and "_fmt(r, stale_days, slot)" in main
     deploy = (ROOT / "DEPLOY.md").read_text(encoding="utf-8")
     assert "~/Library/Logs/Mirrorball/collect.out.log" in deploy                              # 안내서와 같은 경로
 

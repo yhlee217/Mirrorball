@@ -26,6 +26,11 @@
       빠져도 열흘 가까이 몰랐다(10.21 수 수동 수집 → 10.25 일 빠짐 → 10.30 에야 실패).
     · 마지막 성공 8일(STALE_DAYS)은 바깥 테두리로 그대로 둔다 — 앱(web/lib/sync.ts isSyncStale)과 같은 기준.
 
+수집 쉼(COLLECT_PAUSED, 2026-11-23 운영자 결정 — 약관 · 운영 부담으로 맥 수집을 멈춤)
+    · 날짜를 넣으면 수집 지연을 실패로 치지 않는다 — 날마다 오던 실패 메일을 멈춘다. 매장 줄은 그대로 찍는다.
+    · 주 1회 백업도 맥 수집에 붙어 함께 멈추므로 백업이 오래돼도 경고만 한다. 화면 오류 · DB 용량은 그대로 실패.
+    · 다시 켜면(맥 install_schedule.sh collect) 이 값을 비운다.
+
 운영 기록(0023 ops_health, 개선 계획 v5) — 같은 길로 함께 본다
     · 앱 데이터 백업(worker/backup.py, 맥 일요일) — 매장별 마지막 백업이 8일 넘으면 실패
     · 화면 오류(app/error.tsx 가 기록) — 지난 24시간 매장별 ERROR_LIMIT 건 이상이면 실패
@@ -47,6 +52,7 @@ DB 용량(0028 ops_db_size, 2026-10-17) — 무료 플랜은 500MB 를 넘으면
     SUPABASE_URL=... SUPABASE_ANON_KEY=... python3 scripts/sync_health_check.py
     STALE_DAYS=8    지연 판정 기준(기본 8)
     SLOT_GRACE_HOURS=20   일요일 수집 차례 뒤 판정까지 기다리는 시간(기본 20 — 월 10시)
+    COLLECT_PAUSED=YYYY-MM-DD   수집을 멈춘 날 — 있으면 수집 지연 · 백업 지연은 실패가 아니라 알림만
     BACKUP_DAYS=8   백업 지연 기준(기본 8)
     ERROR_LIMIT=5   매장별 24시간 화면 오류 기준(기본 5)
     BACKUP_REQUIRED_SINCE=YYYY-MM-DD   이 날부터 백업 기록이 없으면 실패
@@ -59,6 +65,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import os
 import sys
 import urllib.error
@@ -118,18 +125,19 @@ def _fmt(r: dict, stale_days: float = DEFAULT_STALE_DAYS, slot: dt.datetime | No
 
 
 def evaluate_ops(rows: list[dict], now: dt.datetime, backup_days: float, error_limit: int,
-                 required: bool) -> tuple[list[str], list[str]]:
-    """(실패, 경고). 네트워크와 분리해 테스트한다. rows = ops_health() 결과."""
+                 required: bool, backup_paused: bool = False) -> tuple[list[str], list[str]]:
+    """(실패, 경고). 네트워크와 분리해 테스트한다. rows = ops_health() 결과.
+    backup_paused — 수집 쉼(COLLECT_PAUSED) 동안은 백업도 함께 멈추므로 백업 문제는 경고만."""
     bad, warn = [], []
     for r in rows:
         slug = r.get("slug", "?")
         last = r.get("last_backup")
         if last is None:
-            (bad if required else warn).append(f"{slug}: 백업 기록 없음")
+            (bad if required and not backup_paused else warn).append(f"{slug}: 백업 기록 없음")
         else:
             age = (now - dt.datetime.fromisoformat(str(last).replace("Z", "+00:00"))).total_seconds() / 86400
             if age >= backup_days:
-                bad.append(f"{slug}: 마지막 백업 {age:.1f}일 전")
+                (warn if backup_paused else bad).append(f"{slug}: 마지막 백업 {age:.1f}일 전")
         n = int(r.get("errors_24h") or 0)
         if n >= error_limit:
             bad.append(f"{slug}: 지난 24시간 화면 오류 {n}건")
@@ -380,12 +388,17 @@ def main() -> int:
         print("X 수집 기록이 아예 없습니다 — 한 번도 성공하지 않았거나 테넌트가 없습니다")
         return 1
 
-    print(f"테넌트 {len(rows)}곳 · 판정할 일요일 수집 {slot.month}.{slot.day:02d} {SLOT_HOUR}시 · 지연 기준 {stale_days:g}일\n")
+    paused = os.environ.get("COLLECT_PAUSED", "").strip()
+    if paused:
+        p = dt.date.fromisoformat(paused)
+        print(f"테넌트 {len(rows)}곳 · 수집 쉼 — {p.month}.{p.day:02d}부터(운영자 결정) · 수집 · 백업 지연은 실패로 치지 않는다\n")
+    else:
+        print(f"테넌트 {len(rows)}곳 · 판정할 일요일 수집 {slot.month}.{slot.day:02d} {SLOT_HOUR}시 · 지연 기준 {stale_days:g}일\n")
     for r in sorted(rows, key=lambda x: (x.get("days_since") is None, -(float(x.get("days_since") or 0)))):
-        print(_fmt(r, stale_days, slot))
+        print(_fmt(r, math.inf, None) if paused else _fmt(r, stale_days, slot))
 
-    late = evaluate(rows, stale_days, now, grace)
-    ops_bad = check_ops(url, key)
+    late = [] if paused else evaluate(rows, stale_days, now, grace)
+    ops_bad = check_ops(url, key, paused=bool(paused))
     size_bad = report_db_size(url, key)
     report_speed_usage(url, key)
     report_csp(url, key)
@@ -408,10 +421,11 @@ def main() -> int:
     return 1
 
 
-def check_ops(url: str, key: str) -> list[str]:
-    """백업·화면 오류(0023 ops_health). 실패 줄을 돌려준다 — 없으면 정상."""
+def check_ops(url: str, key: str, paused: bool = False) -> list[str]:
+    """백업·화면 오류(0023 ops_health). 실패 줄을 돌려준다 — 없으면 정상. paused — 수집 쉼(백업도 멈춤)."""
     since = os.environ.get("BACKUP_REQUIRED_SINCE", "").strip()
     required = bool(since) and dt.date.today().isoformat() >= since
+    why = "수집 쉼 동안은 경고만 — 백업도 맥 수집과 함께 멈췄다" if paused else f"아직 경고만 — {since or '기한 미정'}부터 실패"
     try:
         rows = fetch(url, key, "ops_health")
     except urllib.error.HTTPError as exc:
@@ -430,9 +444,10 @@ def check_ops(url: str, key: str) -> list[str]:
         float(os.environ.get("BACKUP_DAYS") or DEFAULT_BACKUP_DAYS),
         int(os.environ.get("ERROR_LIMIT") or DEFAULT_ERROR_LIMIT),
         required,
+        backup_paused=paused,
     )
     for w in warn:
-        print(f"! {w} (아직 경고만 — {since or '기한 미정'}부터 실패)")
+        print(f"! {w} ({why})")
     if bad:
         print("\nX 운영 기록 — " + " · ".join(bad))
         print("   백업: 맥에서 .venv/bin/python worker/backup.py  (일요일 수집 직후 자동)")

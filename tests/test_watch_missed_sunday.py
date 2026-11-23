@@ -95,7 +95,7 @@ def test_slot_is_the_collection_and_catchup_time():
 def test_main_prints_the_slot_and_workflow_explains_it():
     src = (ROOT / "scripts" / "sync_health_check.py").read_text(encoding="utf-8")
     main = src[src.index("def main"):]
-    assert "slot = judged_slot(now, grace)" in main and "late = evaluate(rows, stale_days, now, grace)" in main
+    assert "slot = judged_slot(now, grace)" in main and "late = [] if paused else evaluate(rows, stale_days, now, grace)" in main
     assert "판정할 일요일 수집" in main
     wf = (ROOT / ".github" / "workflows" / "sync-health.yml").read_text(encoding="utf-8")
     assert "SLOT_GRACE_HOURS" in wf and "STALE_DAYS: '8'" in wf

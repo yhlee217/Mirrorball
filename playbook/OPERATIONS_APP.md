@@ -10,9 +10,9 @@
 |---|---|---|
 | 앱 | `web/` → Cloudflare Pages | 브랜치 `claude/charming-planck-hmgazi` 에 푸시되면 몇 분 뒤 배포 |
 | 데이터 | Supabase | 손님 이름 · 번호는 매장 키로 암호화(`pii_enc`) — 화면만 푼다 |
-| 수집 | 매장 맥(국내 IP), 매주 일요일 14시 | HandSOS → Supabase. 약관 리스크로 주 1회(`LAUNCH.md`). 그 시각 맥이 꺼져 있었으면 다음에 켜고 로그인할 때 밀린 수집이 한 번 돈다(`worker/catchup.py`) |
-| 백업 | 같은 맥, 수집 뒤 | 앱에만 있는 데이터(메모 · 노쇼 표시 · 연락 기록 등)를 암호화해 주 1회 |
-| 매일 감시 | GitHub Actions `sync-health`, 매일 10시쯤(GitHub 사정으로 늦을 수 있다) | 수집 지연(일요일 수집이 빠지면 월요일부터 · 8일) · 백업 · 화면 오류 · DB 용량(400MB 넘음)은 실패(메일), 화면 속도 · 매장별 사용은 출력만 |
+| 수집 | 매장 맥(국내 IP), 매주 일요일 14시 — **2026-11-23부터 쉼** | **운영자 결정으로 멈춤**(약관 리스크(`LAUNCH.md`) · 맥 운영 부담 — 맥에서 `launchctl unload` 로 일요일 수집 · 밀린 수집을 내림). 앱은 10.21까지 데이터로 열린다. 다음 길은 매장이 내보낸 파일 올리기(HandSOS 엑셀 열 이름 확인부터). 다시 켜려면 맥 `bash scripts/mac/install_schedule.sh collect` + 감시의 `COLLECT_PAUSED` 비우기. 켜 있을 땐 HandSOS → Supabase, 주 1회, 맥이 꺼져 있었으면 다음 로그인 때 밀린 수집(`worker/catchup.py`) |
+| 백업 | 같은 맥, 수집 뒤 | 앱에만 있는 데이터(메모 · 노쇼 표시 · 연락 기록 등)를 암호화해 주 1회 — **수집과 함께 쉼**(11.23). 따로 돌리려면 맥에서 `.venv/bin/python worker/backup.py` |
+| 매일 감시 | GitHub Actions `sync-health`, 매일 10시쯤(GitHub 사정으로 늦을 수 있다) | 수집 지연(일요일 수집이 빠지면 월요일부터 · 8일) · 백업 · 화면 오류 · DB 용량(400MB 넘음)은 실패(메일), 화면 속도 · 매장별 사용은 출력만. **수집 쉼(`COLLECT_PAUSED`) 동안엔 수집 · 백업 지연은 알림만**(11.23~) |
 | 자동 검증 | GitHub Actions `test`, 푸시마다 | 타입 검사 + 테스트. 빨갛게 끝나면 메일 |
 | 취약점 점검 | GitHub Actions `deps-audit`, 매주 월요일 10시 30분 | 운영 의존성에 받아들이지 않은 높음 · 심각이 있으면 메일(`scripts/deps_audit.py`) |
 | 열쇠 한 부 | 운영자 비밀번호 관리자 | `MIRRORBALL_KEK` — 맥 밖에서 다시 읽을 수 있는 유일한 사본(Cloudflare · GitHub 는 넣기만 된다). 맥이 없어져도 이것으로 되살린다(§6) |
