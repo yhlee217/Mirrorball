@@ -198,6 +198,9 @@ body{background:var(--bg);color:var(--ink);
 /* 기준 표시 — 화면 위 작은 '10.11 기준'. 8일 넘게 밀리면 경고색(components/sync-chip.tsx) */
 .sync{font-size:12px;color:var(--muted);white-space:nowrap}
 .sync.stale{color:var(--rose-ink);font-weight:700}
+/* 멈춘 자료 안내(v17 P0) — 8일 넘게 밀렸을 때만(lib/sync frozenNote). 칩보다 크게, 문장으로 */
+.frozen{margin:0 0 10px;padding:9px 12px;border-radius:10px;background:#F3E6E2;color:var(--rose-ink);font-size:13px;font-weight:700;line-height:1.45;word-break:keep-all}
+.frozen-s{margin-top:6px;font-size:12px;font-weight:700;color:var(--rose-ink);line-height:1.45;word-break:keep-all}
 
 /* 3-8. 켜고 끄는 칩 — 고객 목록 필터 · 설정 정기 휴무 요일 */
 .fchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 7px}

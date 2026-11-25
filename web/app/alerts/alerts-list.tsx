@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
+import { FrozenNote } from '@/components/frozen-note';
 import { sendCareOpen } from '@/components/screen-timer';
 import { MSG } from '@/lib/copy';
 import { smsHref, telHref, type ContactVia } from '@/lib/contact';
@@ -34,12 +35,14 @@ export default function AlertsList({
   quietDays,
   effect,
   button = 'sms',
+  frozen = null,
 }: {
   items: Item[];
   quiet: number;
   quietDays: number;
   effect: Effect | null; // 지난 4주 연락 → 그 뒤 오심·예약(lib/effect) — 연락 기록이 없으면 null
   button?: ContactButton; // 줄의 큰 버튼 — 문자 · 카톡 등(설정, v11 P1). 다른 쪽은 펼친 곳에
+  frozen?: string | null; // 자료가 8일 넘게 멈췄을 때 펼친 줄의 한 줄(lib/sync frozenNote 'row', v17 P0)
 }) {
   const router = useRouter();
   const [toast, setToast] = useState('');
@@ -230,6 +233,7 @@ export default function AlertsList({
               {isOpen ? (
                 <div className="crow-x">
                   <div className="draft">{it.draft}</div>
+                  <FrozenNote text={frozen} small />
                   {it.note ? <div className="crow-note">{it.note}</div> : null}
                   <div className="crow-acts">
                     {/* 큰 버튼이 아닌 쪽 — 문자면 카톡 등으로, 카톡 등이면 문자로(번호가 있을 때) */}

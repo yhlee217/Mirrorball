@@ -19,8 +19,9 @@ import { bookingSets, recentBookingRows } from '@/lib/bookings';
 import { withSeenVisits } from '@/lib/visits';
 import { CONTACT_QUIET_DAYS, phoneDigits, recentlyContactedIds } from '@/lib/contact';
 import { contactEffect, kstDay, type ContactRow } from '@/lib/effect';
-import { lastSynced } from '@/lib/sync';
+import { frozenNote, lastSynced } from '@/lib/sync';
 import { SyncChip } from '@/components/sync-chip';
+import { FrozenNote } from '@/components/frozen-note';
 import { kstNow } from '@/lib/kst';
 import { txKind } from '@/lib/tx';
 import { addDays, agoWords, dayLabel, daysBetween, spanWords } from '@/lib/week';
@@ -218,7 +219,9 @@ export default async function AlertsPage() {
         <SyncChip synced={synced} />
       </div>
       <div className="body">
-        <AlertsList items={items} quiet={quiet} quietDays={CONTACT_QUIET_DAYS} effect={effect} button={settings.contact_button} />
+        <FrozenNote text={frozenNote(synced, 'care')} />
+        <AlertsList items={items} quiet={quiet} quietDays={CONTACT_QUIET_DAYS} effect={effect} button={settings.contact_button}
+          frozen={frozenNote(synced, 'row')} />
       </div>
       <ScreenReady />
     </main>

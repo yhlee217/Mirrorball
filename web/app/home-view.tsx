@@ -5,6 +5,8 @@ import { dayLabel, type WeekNums } from '@/lib/week';
 import { Empty } from '@/components/empty';
 import { Help } from '@/components/help';
 import { SyncChip } from '@/components/sync-chip';
+import { FrozenNote } from '@/components/frozen-note';
+import { frozenNote } from '@/lib/sync';
 import NoShowButton from '@/components/noshow-button';
 
 type Signals = { overdue: number; due: number };
@@ -86,6 +88,7 @@ export default function HomeView({
           <SyncChip synced={synced} />
           <Link href="/settings" className="gear" aria-label="설정" title="설정">⚙</Link>
         </div>
+        <FrozenNote text={frozenNote(synced, 'home')} />
 
         <div className="sect-h">
           오늘 <span className="sect-n">{dayLabel(today)} · {count(todays) + count(past)}명</span>
@@ -94,7 +97,7 @@ export default function HomeView({
           {todays.length ? (
             todays.map((b) => <BookRow key={b.id} b={b} today={today} />)
           ) : (
-            <Empty title={past.length ? '남은 예약 없음' : '오늘 예약 없음'} />
+            <Empty title={past.length ? '남은 예약 없음' : '오늘 예약 없음'} hint={frozenNote(synced, 'today') ?? undefined} />
           )}
           {past.length ? <PastToday rows={past} /> : null}
         </div>

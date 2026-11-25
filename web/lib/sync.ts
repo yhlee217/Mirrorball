@@ -1,5 +1,6 @@
 import type { ServerClient } from './supabase/server';
 import { kstStamp } from './kst';
+import { shortDate } from './week';
 
 /**
  * 마지막 성공 수집 시각(KST 표기) — 화면이 '언제 기준'인지 밝히는 데 쓴다.
@@ -35,4 +36,22 @@ export async function lastSynced(
  */
 export function isSyncStale(s: { daysAgo: number } | null): boolean {
   return !!s && s.daysAgo >= 8;
+}
+
+/**
+ * 멈춘 자료 안내(개선 계획 v17 P0) — 8일 넘게 밀렸을 때만(isSyncStale) 그날까지의 자료라는 걸 문장으로 밝힌다.
+ * 수집을 쉬는 동안(2026-11-23~) 챙길 고객은 그 뒤 다녀가신 분도 '오실 때 지남'으로 띄운다 — 목록대로 연락하면 지난달에
+ * 오신 손님께 '오실 때 됐어요'가 간다. 켜고 끄는 값 없이 마지막 수집 날짜로 판단해, 수집이 다시 돌면 저절로 사라진다.
+ *   home  홈 맨 위 · care  챙길 고객 목록 위 · today  오늘 예약이 비었을 때 · row  챙길 고객 펼친 줄
+ */
+export function frozenNote(
+  s: { date: string; daysAgo: number } | null,
+  where: 'home' | 'care' | 'today' | 'row',
+): string | null {
+  if (!s || !isSyncStale(s)) return null;
+  const d = shortDate(s.date);
+  if (where === 'home') return `자료는 ${d}까지예요 — 그 뒤 예약 · 방문은 아직 안 보여요`;
+  if (where === 'care') return `${d} 뒤에 오셨을 수 있어요 — 연락 전에 HandSOS 에서 마지막 방문을 확인하세요`;
+  if (where === 'today') return `예약은 ${d}에 받은 것까지예요 — 오늘 예약은 HandSOS 에서 보세요`;
+  return `${d} 뒤 방문은 아직 안 보여요 — 연락 전에 HandSOS 에서 확인`;
 }
