@@ -1,0 +1,33 @@
+name: keepalive
+
+# DB 깨어 있게(개선 계획 v17 P1, 2026-11-25). 수집을 쉬는 동안(11.23~) Supabase 무료 프로젝트를 날마다 깨우는 건 매일
+# 감시(sync-health) 하나뿐이다 — 무료는 7일 동안 활동이 적으면 멈춘다. 그런데 GitHub 은 공개 저장소에 60일 동안 활동이
+# 없으면 예약 워크플로를 자동으로 끈다. 그래서 한 달에 두 번, 예약 워크플로를 모두(이것 포함) 다시 '켜기'(enable API)로
+# 건다 — 빈 커밋 없이. 켜기가 60일을 다시 세게 하는지는 공식 문서에 없고 널리 쓰이는 방식이라, 2027-01-10 확인 예약에서
+# 실제로 보고 안 되면 한 달 한 번 작은 커밋으로 바꾼다. `gh workflow enable` 은 꺼진 워크플로만 골라 이미 켜진 것엔
+# 실패할 수 있어 REST API 를 바로 부른다(켜져 있어도 204). 비밀값은 쓰지 않는다 — GITHUB_TOKEN 의 워크플로 권한만.
+#
+# ⚠ 스케줄 워크플로는 '기본 브랜치'에서만 돈다(현재 claude/charming-planck-hmgazi).
+
+"on":
+  schedule:
+    - cron: '23 2 1,15 * *'   # 매달 1일 · 15일 02:23 UTC = 11:23 KST(정시는 GitHub 가 붐벼 늦게 돈다 — 피한다)
+  workflow_dispatch: {}
+
+permissions:
+  actions: write             # 워크플로 켜기만 — 저장소 내용 · 비밀값엔 손대지 않는다
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 예약 워크플로 다시 켜기(매일 감시 · 취약점 점검 · 이것)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for wf in sync-health.yml deps-audit.yml keepalive.yml; do
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$wf/enable"
+            echo "켬: $wf"
+          done
+          gh api "repos/${{ github.repository }}/actions/workflows" --jq '.workflows[] | "\(.path) \(.state)"'
